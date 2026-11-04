@@ -1,1 +1,14 @@
-{"name":"crownlands-android","version":"1.0.0","private":true,"dependencies":{"@capacitor/core":"^6.1.0","@capacitor/android":"^6.1.0"},"devDependencies":{"@capacitor/cli":"^6.1.0"}}
+{
+ "name": "crownlands-server",
+ "version": "2.1.0",
+ "private": true,
+ "scripts": {
+  "start": "node cloud-start.js"
+ },
+ "dependencies": {
+  "ws": "^8.18.0"
+ },
+ "engines": {
+  "node": ">=18"
+ }
+}
