@@ -2673,8 +2673,9 @@ window.gxFx=()=>({pf:eq('pf'),nf:eq('nf'),mf:eq('mf')});
 /* ---------- gems ---------- */
 const GEMA=[0,1,3];
 function addGems(n,quiet){if(!n)return;M.gems+=n;SV();const b=$$('gemn');if(b){b.textContent=fmt(M.gems);const g=b.parentNode;g.classList.remove('pop');void g.offsetWidth;g.classList.add('pop')}if(!quiet)fly('+'+n+' '+GI,'gemb','#d6a3ff');sfx('gem');if($$('tre')&&$$('tre').style.display=='flex')treR()}
-window.gemAch=i=>{const g=GEMA[i];if(g)addGems(g,true);chestAdd(i,1);return` — ${g?'+'+g+' gems · ':''}${TR[i].n}`};
-window.gemTxt=i=>i==null?'Silver +1 gem · Gold +3 gems · chests':`${GEMA[i]?'+'+GEMA[i]+' gems · ':''}${TR[i].n}`;
+window.gemAch=i=>{const g=GEMA[i];if(g)addGems(g,true);const t=wpick([[80,20],[0,65,30,5],[0,0,65,30,5]][i]);chestAdd(t,1);return` — ${g?'+'+g+' gems · ':''}${TR[t].n}`};
+window.gemTxt=i=>i==null?'Silver +1 gem · Gold +3 gems · random chest':`${GEMA[i]?'+'+GEMA[i]+' gems · ':''}random chest`;
+function wpick(w){let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<w.length;i++){if((r-=w[i])<0)return i}return 0}
 function chestAdd(t,n){M.chests[t]=(M.chests[t]|0)+n;SV()}
 /* ---------- loot ---------- */
 function roll(ti){const T=TR[ti],B=Math.max(5,S.inc||5)*600,out=[],c=cap();
@@ -2733,7 +2734,7 @@ function oLoop(now){if(!O)return;const W=innerWidth,H=innerHeight,tm=(now-O.t0)/
  oraf=requestAnimationFrame(oLoop)}
 window.gxClose=function(){O=null;cancelAnimationFrame(oraf);const e=$$('cho');if(e)e.style.display='none';hud();if($$('tre')&&$$('tre').style.display=='flex')treR()};window.openCh=openCh;
 /* ---------- missions / achievements drop chests ---------- */
-const _mc=misClaim;misClaim=function(id,side){const b=S.st.missions||0;_mc(id,side);if((S.st.missions||0)>b){M.mc++;let t=side?(Math.random()<.5?1:0):M.mc%15==0?2:M.mc%5==0?1:0;chestAdd(t,1);setTimeout(()=>toast('🎁 You found a '+TR[t].n+'!'),900);if(typeof renderMis=='function')renderMis()}};
+const _mc=misClaim;misClaim=function(id,side){const b=S.st.missions||0;_mc(id,side);if((S.st.missions||0)>b){M.mc++;let t=wpick(side?[50,38,11,1]:[70,22,7,1]);chestAdd(t,1);setTimeout(()=>toast('🎁 You found a '+TR[t].n+'!'),900);if(typeof renderMis=='function')renderMis()}};
 /* ---------- gem quests ---------- */
 const GQ=[['Land Baron','Gain 1,500 tiles in total','gained',1500,15,0],['Master Builder','Construct 1,200 buildings','built',1200,20,2],['Grand Merchant','Make 1,500 trades','trades',1500,25,0],['Warlord','Win 400 battles','won',400,40,3],['Iron Wall','Repel 300 attacks','repelled',300,40,0],['Army of Legends','Train 3,000 units','trained',3000,50,4],['Quest Master','Complete 250 missions','missions',250,60,3],['Dedicated Ruler','Play on 14 different days','days',14,80,4],['Eternal Crown','Play on 40 different days','days',40,250,5]];
 const gqv=k=>k=='days'?M.days.length:S?astat(k):(META.base[k]||0);
