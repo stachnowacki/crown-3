@@ -1695,7 +1695,7 @@ if(/^[A-Z2-9]{6}$/.test(JOIN))setTimeout(()=>{MP.want=JOIN;MP.open=1;mp.on()},70
 </script><script>
 /* ===== admin tools (offline games only): unlock with a code in ☰ Menu ===== */
 (()=>{
-const ADMIN_HASH='28kohtjdck4';   // hash of the admin code (make a new one with make-admin-code.js)
+const ADMIN_HASH='bwt8kea8t2';   // hash of the admin code (make a new one with make-admin-code.js)
 const h53=(s,seed=0)=>{let h1=0xdeadbeef^seed,h2=0x41c6ce57^seed;for(let i=0,ch;i<s.length;i++){ch=s.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677)}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return(4294967296*(2097151&h2)+(h1>>>0)).toString(36)};
 const norm=s=>String(s).toUpperCase().replace(/[^A-Z0-9]/g,'');
 const A={open:0,min:0,tab:'game',paint:0,brush:null,size:1,speed:1,sig:'',on:localStorage.getItem('cl-adm')==='1'};
@@ -1718,7 +1718,7 @@ const tileAt=()=>{const s=S&&S.sel;return s?{x:s[0],y:s[1],i:s[1]*N+s[0],t:T(s[0
 const sg=()=>{const q=tileAt(),t=q&&q.t;return A.tab+A.min+'|'+(q?q.i+t.t+t.o+t.b+(t.l||0)+(t.w||0)+(t.r||0):'-')+'|'+A.paint+A.size+(A.brush?A.brush.kind+A.brush.val:'')+(window.ADM_PAUSE?1:0)+A.speed};
 const B=(l,f,on)=>`<button class="${on?'on':''}" onclick="${f}">${l}</button>`;
 function html(){
-  let h=`<div class="tabs">`+[['game','⚙ Game'],['res','💰 Stock'],['tile','🏗 Tile'],['terr','⛰ Land']].map(([k,n])=>`<button class="${A.tab==k?'on':''}" onclick="adm.tab('${k}')">${n}</button>`).join('')+`<button class="x" onclick="adm.min()" aria-label="${A.min?'Expand':'Collapse'}">${A.min?'▴':'▾'}</button><button class="x" onclick="adm.close()" aria-label="Close">✕</button></div>`;
+  let h=`<div class="tabs">`+[['game','⚙ Game'],['res','💰 Stock'],['tile','🏗 Tile'],['terr','⛰ Land'],['dev','💎 Dev']].map(([k,n])=>`<button class="${A.tab==k?'on':''}" onclick="adm.tab('${k}')">${n}</button>`).join('')+`<button class="x" onclick="adm.min()" aria-label="${A.min?'Expand':'Collapse'}">${A.min?'▴':'▾'}</button><button class="x" onclick="adm.close()" aria-label="Close">✕</button></div>`;
   if(A.min)return h+(A.paint&&A.brush?`<div class="mu" style="text-align:center">Painting: <b>${A.brush.label}</b> — tap tiles on the map</div>`:'');
   if(A.tab=='game'){
     h+=`<div class="g">${B(window.ADM_PAUSE?'▶ Resume game':'⏸ Pause game','adm.pause()',window.ADM_PAUSE)}${B('⚡ Event now','adm.event()')}</div><h4>Game speed</h4><div class="g g4">${[1,2,4,8].map(n=>B('×'+n,`adm.speed(${n})`,A.speed==n)).join('')}</div>`
@@ -1726,6 +1726,7 @@ function html(){
   else if(A.tab=='res'){
     h+=[['coins','🪙','Coins'],['wood','🪵','Wood'],['stone','🪨','Stone'],['silver','🥈','Silver'],['gold','🥇','Gold'],['diamond','💎','Diamonds'],['rp','🎓','Research']].map(([k,ic,n])=>`<div class="rw"><span>${ic} ${n}</span><input type="number" inputmode="numeric" id="adm-r-${k}" value="${Math.floor(k=='coins'?S.coins:k=='rp'?S.rp:S.res[k])}">${B('Set',`adm.setR('${k}')`)}</div>`).join('')
       +`<div class="g">${B('+1K 🪙',"adm.add('coins',1000)")}${B('+100K 🪙',"adm.add('coins',100000)")}${B('Fill all storage','adm.fill()')}${B('Empty storage','adm.empty()')}${B('+10 of each unit','adm.units()')}${B('+1000 🎓',"adm.add('rp',1000)")}</div>`}
+  else if(A.tab=='dev'){h+=window.gxDevHtml?gxDevHtml():''}
   else{
     const q=tileAt(),kinds=A.tab=='tile';
     h+=`<div class="g">${B('🖌 Paint: '+(A.paint?'ON':'off'),'adm.paint()',A.paint)}${B('Brush: '+(A.size==3?'3×3':'1 tile'),'adm.size()')}</div>`;
@@ -1755,8 +1756,8 @@ function after(){calcCB();hud();save();A.sig=sg()}
 
 window.adm={
   code(){if(S&&S.on)return toast('Admin tools only work in offline games');const d=$('dm');
-    d.innerHTML=`<div class="dbox"><b style="font-size:22px">🔑 Admin code</b><input id="adm-c" placeholder="CROWN-XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false"><div id="adm-e" class="bad"></div><button onclick="adm.try()">Unlock</button><button onclick="$('dm').style.display='none'">Cancel</button></div>`;d.style.display='flex'},
-  try(){if(h53(norm($('adm-c').value))===ADMIN_HASH){A.on=true;localStorage.setItem('cl-adm','1');$('dm').style.display='none';toast('Admin unlocked');adm.open()}else $('adm-e').textContent='Wrong code'},
+    d.innerHTML=`<div class="dbox"><b style="font-size:22px">🧑‍💻 Developer mode</b><input id="adm-c" type="password" placeholder="Password" autocapitalize="none" autocomplete="off" spellcheck="false"><div id="adm-e" class="bad"></div><button onclick="adm.try()">Unlock</button><button onclick="$('dm').style.display='none'">Cancel</button></div>`;d.style.display='flex'},
+  try(){if(h53(norm($('adm-c').value))===ADMIN_HASH){A.on=true;localStorage.setItem('cl-adm','1');$('dm').style.display='none';toast('Developer mode unlocked');adm.open()}else $('adm-e').textContent='Wrong password'},
   open(){if(S&&S.on)return toast('Admin tools only work in offline games');closeSheet();A.open=1;document.body.classList.add('adm');adr()},
   close(){A.open=0;A.paint=0;A.brush=null;document.body.classList.remove('adm');root.style.display='none'},
   tab(k){A.tab=k;A.min=0;adr()},
@@ -2634,6 +2635,8 @@ const _vmS2=vMenu;vMenu=function(){const r=_vmS2();r[1]+=mb('🏆','Ranking & re
 .mfx3{background:linear-gradient(135deg,#123a26,#16293d)!important;border:1px solid #2ee08a!important}.mfx4{background:linear-gradient(135deg,#34185e,#16293d)!important;border:1px solid #c58cff!important;box-shadow:0 0 10px #8a3cff88}
 .mfx5{border:2px solid #ffd34a!important;background:linear-gradient(135deg,#3b2c0a,#241a3d)!important;box-shadow:0 0 12px #ffd34a77}.mfx6{border:1px solid #ff5fd8!important;background:linear-gradient(135deg,#3d1236,#1a1536)!important;box-shadow:0 0 12px #ff5fd877}
 .mfx7{border:2px solid transparent!important;background:linear-gradient(#16293d,#16293d) padding-box,linear-gradient(90deg,red,orange,yellow,lime,cyan,violet,red) border-box!important}
+.nfx.nfx8{background:none;-webkit-text-fill-color:#05050a;color:#05050a!important;-webkit-text-stroke:.7px #eef4ff;text-shadow:0 0 6px #fffc,0 0 2px #fff;animation:gxD 2.2s ease-in-out infinite}@keyframes gxD{50%{text-shadow:0 0 12px #fff,0 0 3px #fff}}
+.pf.pfd{--rc:#f2f6ff;background:radial-gradient(circle at 30% 25%,#2b2b38,#000 75%);color:#eef4ff;border-color:#f2f6ff;box-shadow:0 0 9px #fffa,inset 0 0 6px #fff6;animation:gxP 2.2s ease-in-out infinite}@keyframes gxP{50%{box-shadow:0 0 16px #fff,inset 0 0 9px #fff9}}
 #cho{position:fixed;inset:0;z-index:60;display:none;background:radial-gradient(ellipse at 50% 42%,#1c1236,#05020c 75%);touch-action:manipulation}#cho canvas{position:absolute;inset:0;width:100%;height:100%}
 #cho .ct{position:absolute;left:0;right:0;top:calc(14px + env(safe-area-inset-top,0px));text-align:center;font-size:22px;font-weight:800;text-shadow:0 0 14px var(--g,#fff)}#cho .hn{position:absolute;left:0;right:0;bottom:30%;text-align:center;font-size:17px;animation:fl 1.4s infinite;color:#fff}
 #cho .rw{position:absolute;left:0;right:0;bottom:calc(76px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 10px;max-height:38%;overflow:auto}
@@ -2645,8 +2648,9 @@ const _vmS2=vMenu;vMenu=function(){const r=_vmS2();r[1]+=mb('🏆','Ranking & re
 (function(){
 'use strict';
 const M=META;M.gems|=0;M.chests=M.chests||{};M.cos=M.cos||{own:{},eq:{}};M.gq=M.gq||{};M.days=M.days||[];M.mc|=0;
+const isDev=()=>{try{return localStorage.getItem('cl-adm')==='1'}catch(e){return false}};
 const GI='<i class="gm"></i>',$$=id=>document.getElementById(id),rnd=(a,b)=>a+Math.random()*(b-a),ri=(a,b)=>Math.round(rnd(a,b)),fmt=n=>compactAmount(n);
-const SV=()=>{try{saveMeta()}catch(e){}};
+const SV=()=>{try{saveMeta()}catch(e){}try{syncFx()}catch(e){}};
 Object.assign(SFX,{cho1:[[110,.15,'square',0],[147,.15,'square',.12]],cho2:[[392,.15,'triangle',0],[523,.2,'triangle',.08],[659,.3,'triangle',.16],[784,.4,'triangle',.26]],cho3:[[523,.2,'sine',0],[659,.2,'sine',.1],[784,.2,'sine',.2],[1047,.3,'sine',.3],[1319,.5,'sine',.42],[1568,.7,'sine',.56]],gem:[[880,.08,'sine',0],[1320,.18,'sine',.07]]});
 const today=()=>new Date().toISOString().slice(0,10);if(!M.days.includes(today())){M.days.push(today());if(M.days.length>400)M.days.shift();SV()}
 /* ---------- chests ---------- */
@@ -2668,7 +2672,7 @@ add('rc',[['Crimson','#ff2f56',1],['Lime flame','#b6ff2e',1],['Aqua','#18f0ff',1
 add('au',[['Gold sparkle',1,'#ffd34a'],['Emerald pulse',1,'#2ee08a'],['Frost ring',2,'#8fe0ff'],['Violet flame',2,'#b66dff'],['Rainbow halo',3,'#fff']]);
 const CID={};CAT.forEach(c=>CID[c.id]=c);
 const own=id=>!!M.cos.own[id],eq=t=>M.cos.eq[t];
-function pfHTML(i,big){const c=CID['pf'+i];return c?`<span class="pf${big?' pfb':''}" style="--rc:${CRC[c.r]}">${c.v}</span>`:''}
+function pfHTML(i,big){if(i===12)return`<span class="pf pfd${big?' pfb':''}">♛</span>`;const c=CID['pf'+i];return c?`<span class="pf${big?' pfb':''}" style="--rc:${CRC[c.r]}">${c.v}</span>`:''}
 window.gxFx=()=>({pf:eq('pf'),nf:eq('nf'),mf:eq('mf')});
 /* ---------- gems ---------- */
 const GEMA=[0,1,3];
@@ -2746,7 +2750,7 @@ function offer(i){const o=OFF[i];if(!S)return toast('Start a game first');if(M.g
 function buyCos(id){const c=CID[id];if(own(id)||M.gems<CP[c.r])return toast('Not enough gems');M.gems-=CP[c.r];M.cos.own[id]=1;SV();sfx('gem');treR()}
 function equip(id){const c=CID[id];if(!own(id))return;if(eq(c.t)===c.i)delete M.cos.eq[c.t];else M.cos.eq[c.t]=c.i;SV();if(c.t=='rc')applyRc(1);treR()}
 function buyCh(t){const p=TR[t].p;if(!p||M.gems<p)return toast('Not enough gems');M.gems-=p;chestAdd(t,1);sfx('gem');SV();treR()}
-function applyRc(force){const i=eq('rc');if(i==null){if(force&&META.col!=null){OWN[1].c=COLS[META.col||0];CHK.clear();SPR.clear()}return}const c=CID['rc'+i].v;if(OWN[1].c!=c||force){OWN[1].c=c;CHK.clear();SPR.clear()}}
+function applyRc(force){const i=eq('rc');if(i==null){if(force&&META.col!=null){OWN[1].c=COLS[META.col||0];CHK.clear();SPR.clear()}return}const c=i==8?'#0c0c14':CID['rc'+i].v;if(OWN[1].c!=c||force){OWN[1].c=c;CHK.clear();SPR.clear()}}
 const _sc=setCol;setCol=function(i){delete M.cos.eq.rc;_sc(i)};
 Object.assign(window,{gxBuy:buyCh,gxCos:buyCos,gxEq:equip,gxGq:gqClaim,gxOff:offer,treTab:t=>{TT=t;treR()}});
 let TT='ch';
@@ -2758,7 +2762,9 @@ function treR(){const e=tre();let b='';
  else b=`<div class="mu" style="margin:6px 0">Spend gems on advantages for your current island. Works on online islands too.</div>`+OFF.map((o,i)=>`<div class="mr"><div><b>${o[0]} ${o[1]}</b><div class="mu">${i==0?'4x a daily chest of coins':i==1?'Half your storage of each material':i==2?'Rare diamonds':'A quick army boost'}</div></div><button class="buy" ${M.gems>=o[3]?'':'disabled'} onclick="gxOff(${i})">${GI} ${o[3]}</button></div>`).join('');
  e.innerHTML=`<div class="th"><b style="font-size:19px">${GI} Treasury</b><span class="gemb" style="margin-left:auto;cursor:default">${GI}<b>${fmt(M.gems)}</b></span><button class="ach-close" onclick="closeTre()" aria-label="Close" style="margin-left:6px">✕</button></div><div class="tabs" style="padding:8px 8px 4px">${[['ch','Chests'],['cos','Style'],['gq','Gem quests'],['sh','Gem shop']].map(a=>`<button class="${TT==a[0]?'on':''}" onclick="treTab('${a[0]}')">${a[1]}</button>`).join('')}</div><div class="tb">${b}</div>`}
 window.openTre=function(t){if(t)TT=t;closeSheet();closeMis();const e=tre();e.style.display='flex';treR()};window.closeTre=()=>{$$('tre').style.display='none'};
-const _vm=vMenu;vMenu=function(){const r=_vm();r[1]=`<button style="width:100%;margin:4px 0;background:linear-gradient(#5a25b0,#2a1260);border-color:#b27dff" onclick="openTre()">${GI} Treasury<small>${fmt(M.gems)} gems · ${Object.values(M.chests).reduce((a,b)=>a+b,0)} chests · styles</small></button>`+r[1];return r};
+const _vm=vMenu;vMenu=function(){const r=_vm(),d=document.createElement('div');d.innerHTML=r[1];let ks=[...d.children].filter(k=>!/Share the game|Download updated ZIP|Admin code|Admin tools/.test(k.textContent));const take=re=>{const i=ks.findIndex(k=>re.test(k.textContent));return i<0?'':ks.splice(i,1)[0].outerHTML};
+ const tre=`<button style="width:100%;margin:4px 0;background:linear-gradient(#5a25b0,#2a1260);border-color:#b27dff" onclick="openTre()">${GI} Treasury<small>${fmt(M.gems)} gems · ${Object.values(M.chests).reduce((a,b)=>a+b,0)} chests · styles</small></button>`,o=take(/Online (play|island)/),rk=take(/Ranking/),ch=take(/Chronicle/),kd=take(/Kingdom development/),ac=take(/Achievement tree/),wr=take(/War room/),vy=take(/Voyages/),hp=take(/Help & tutorial/),st=take(/Settings/),dev=mb('🧑‍💻','Developer mode',isDev()?'Admin tools · gems · chests · black effects':'Enter the password',isDev()?'adm.open()':'adm.code()');
+ r[1]=tre+o+rk+ch+kd+ac+wr+vy+ks.map(k=>k.outerHTML).join('')+hp+st+dev;return r};
 /* ---------- HUD: gem badge + rising resource effects ---------- */
 const _hud=hud;hud=function(){_hud();const tp=document.querySelector('#hud .top');if(tp&&!tp.querySelector('.gemb')){const g=document.createElement('div');g.className='gemb';g.setAttribute('role','button');g.setAttribute('aria-label','Gems and chests');g.innerHTML=GI+'<b id="gemn">'+fmt(M.gems)+'</b>';g.onclick=()=>openTre();tp.insertBefore(g,tp.lastElementChild)}applyRc()};
 function fly(txt,cls,col){if(LOW||RM)return;const h=$$('hud');if(!h||h.querySelectorAll('.gx-f').length>4)return;const t=cls=='gemb'?h.querySelector('.gemb'):h.querySelector('[data-hud-coins]');if(!t)return;const r=t.getBoundingClientRect(),hr=h.getBoundingClientRect(),d=document.createElement('div');d.className='gx-f';d.style.cssText=`left:${r.left-hr.left}px;top:${r.bottom-hr.top-4}px;color:${col}`;d.innerHTML=txt;d.addEventListener('animationend',()=>d.remove());h.style.position='relative';h.appendChild(d)}
@@ -2766,12 +2772,30 @@ let pc=null,pr={};setInterval(()=>{if(!S||document.hidden)return;if(pc!=null){co
   for(const k of RES){const d=(S.res[k]||0)-(pr[k]||0),el=document.querySelector(`[data-hud-resource="${k}"]`);if(d>Math.max(8,cap()*.06)&&el&&!LOW&&!RM){el.animate([{transform:'scale(1.18)',boxShadow:'0 0 14px #7bc0ff'},{transform:'none'}],{duration:450})}}}
  pc=S.coins;RES.forEach(k=>pr[k]=S.res[k]||0)},600);
 /* ---------- building aura (cheap ground ring, never covers the building) ---------- */
-const _dr=draw;draw=function(){_dr();const a=eq('au');if(a==null||LOW||!S||S.sel&&0)return;const ts=T0*zoom;if(ts<16)return;const cm=S.cam,x0=Math.max(0,Math.floor(cm.x/ts)),y0=Math.max(0,Math.floor(cm.y/ts)),x1=Math.min(N-1,Math.floor((cm.x+W)/ts)),y1=Math.min(N-1,Math.floor((cm.y+H)/ts)),tm=performance.now()/1000,col=a==4?`hsl(${(tm*60)%360},90%,65%)`:CID['au'+a].v;
- cx.save();cx.lineWidth=Math.max(1.5,ts*.045);cx.strokeStyle=col;let n=0;for(let y=y0;y<=y1&&n<90;y++)for(let x=x0;x<=x1;x++){const t=T(x,y);if(!t||t.o!=1||!t.b)continue;n++;const p=.5+.5*Math.sin(tm*2.4+x*.7+y*.5);cx.globalAlpha=.28+.4*p;cx.beginPath();cx.ellipse((x+.5)*ts-cm.x,(y+.9)*ts-cm.y,ts*(.36+.07*p),ts*(.1+.02*p),0,0,6.283);cx.stroke()}cx.restore()};
+/* online: share my look (picture, nickname, realm colour, aura) and show other players' */
+const FXM={},AUO=[],ORG={};let lastFx='';
+const rcCol=i=>i==8?'#0c0c14':CID['rc'+i]&&CID['rc'+i].v;
+function myFx(){const o={};for(const k of['pf','nf','rc','au'])if(Number.isInteger(M.cos.eq[k]))o[k]=M.cos.eq[k];return o}
+function syncFx(force){if(!(window.S&&S.on&&window.MPX&&MPX.open()))return;const j=JSON.stringify(myFx());if(!force&&j==lastFx)return;lastFx=j;MPX.send({t:'fx',fx:myFx()})}
+function applyOthers(){if(!window.ONL||!S||!S.on)return;let ch=0;AUO.length=0;for(const sl in FXM){const s=+sl;if(s===ONL.slot)continue;const k=MPX.L(s),f=FXM[sl];if(!OWN[k])continue;const c=f&&f.rc!=null?rcCol(f.rc):null;
+  if(c){if(!ORG[k])ORG[k]=OWN[k].c;if(OWN[k].c!=c){OWN[k].c=c;ch=1}}else if(ORG[k]){if(OWN[k].c!=ORG[k]){OWN[k].c=ORG[k];ch=1}delete ORG[k]}
+  AUO[k]=f&&f.au!=null?f.au:null}if(ch){CHK.clear();SPR.clear()}}
+const _sr=window.srvRoom;window.srvRoom=function(m){_sr&&_sr(m);try{(m.pl||[]).forEach(p=>{FXM[p.s]=p.fx||null});applyOthers();const me=(m.pl||[]).find(p=>p.s===m.slot),j=JSON.stringify(myFx());if(me&&JSON.stringify(me.fx||{})!==j&&j!='{}'||me&&!me.fx&&j!='{}'){lastFx='';syncFx(1)}}catch(e){}};
+const _dr=draw;draw=function(){_dr();if(LOW||!S)return;const mine=eq('au');const my=mine!=null&&!(mine==5&&!isDev());if(S.on&&window.ONL&&Math.random()<.02)applyOthers();if(!my&&!(S.on&&AUO.some(v=>v!=null)))return;const ts=T0*zoom;if(ts<16)return;const cm=S.cam,x0=Math.max(0,Math.floor(cm.x/ts)),y0=Math.max(0,Math.floor(cm.y/ts)),x1=Math.min(N-1,Math.floor((cm.x+W)/ts)),y1=Math.min(N-1,Math.floor((cm.y+H)/ts)),tm=performance.now()/1000;
+ cx.save();let n=0;for(let y=y0;y<=y1&&n<120;y++)for(let x=x0;x<=x1;x++){const t=T(x,y);if(!t||!t.o||!t.b)continue;const a=t.o==1?(my?mine:null):S.on?AUO[t.o]:null;if(a==null)continue;n++;const col=a==4?`hsl(${(tm*60)%360},90%,65%)`:a==5?'#f4f8ff':CID['au'+a].v,p=.5+.5*Math.sin(tm*2.4+x*.7+y*.5),ex=(x+.5)*ts-cm.x,ey=(y+.9)*ts-cm.y,rx=ts*(.36+.07*p),ry=ts*(.1+.02*p);
+  if(a==5){cx.globalAlpha=.8;cx.strokeStyle='#000';cx.lineWidth=ts*.1;cx.beginPath();cx.ellipse(ex,ey,rx,ry,0,0,6.283);cx.stroke();cx.globalAlpha=.55+.45*p}else cx.globalAlpha=.28+.4*p;
+  cx.strokeStyle=col;cx.lineWidth=Math.max(1.5,ts*(a==5?.03:.045));cx.beginPath();cx.ellipse(ex,ey,rx,ry,0,0,6.283);cx.stroke()}cx.restore()};
 /* ---------- chat: send & show cosmetics ---------- */
 if(window.MPX){const _s=MPX.send;MPX.send=function(o){if(o&&o.t=='chat'){const f=gxFx(),x={};for(const k of['pf','nf','mf'])if(f[k]!=null)x[k]=f[k];if(Object.keys(x).length)o.fx=x}return _s.call(MPX,o)}}
-const _cl=chatLine;chatLine=function(m){let s=_cl(m),f=m.fx;if(m.s===(window.ONL&&ONL.slot)&&window.gxFx){const q=gxFx();f=Object.assign({},f,q)}if(!f)return s;const ok=(k,n)=>Number.isInteger(f[k])&&f[k]>=0&&f[k]<n;if(ok('mf',8))s=s.replace('<div style="align-self','<div class="mfx'+f.mf+'" style="align-self');if(ok('nf',8))s=s.replace('<b style="color:','<b class="nfx nfx'+f.nf+'" style="color:');if(ok('pf',12))s=s.replace('<div style="font-size:12px">','<div style="font-size:12px">'+pfHTML(f.pf));return s};
+const _cl=chatLine;chatLine=function(m){let s=_cl(m),f=m.fx;if(m.s===(window.ONL&&ONL.slot)&&window.gxFx){const q=gxFx();f=Object.assign({},f,q)}if(!f)return s;const ok=(k,n)=>Number.isInteger(f[k])&&f[k]>=0&&f[k]<n;if(ok('mf',8))s=s.replace('<div style="align-self','<div class="mfx'+f.mf+'" style="align-self');if(ok('nf',9))s=s.replace('<b style="color:','<b class="nfx nfx'+f.nf+'" style="color:');if(ok('pf',13))s=s.replace('<div style="font-size:12px">','<div style="font-size:12px">'+pfHTML(f.pf));return s};
 addEventListener('keydown',e=>{if(e.key=='Escape'&&O)gxClose()});
+window.gxDevHtml=function(){const e=t=>M.cos.eq[t],B=(l,f,on)=>`<button class="${on?'on':''}" onclick="${f}">${l}</button>`;return`<h4>${GI} Gems · ${fmt(M.gems)}</h4><div class="g g4">${[10,100,1000,10000].map(n=>B('+'+n,`gxDev('g',${n})`)).join('')}</div><div class="g">${B('Reset gems',"gxDev('g',0)")}</div><h4>Chests (x = owned)</h4><div class="g">${TR.map((t,i)=>B('+1 '+t.n.replace(' Chest','')+' ('+(M.chests[i]|0)+')',`gxDev('c',${i})`)).join('')}${B('+1 of each',"gxDev('c',-1)")}${B('+10 Wooden',"gxDev('c',-2)")}</div><h4>Black developer effects</h4><div class="g">${B('Nickname',"gxDev('e','nf')",e('nf')==8)}${B('Picture',"gxDev('e','pf')",e('pf')==12)}${B('Island',"gxDev('e','au')",e('au')==5)}${B('All on',"gxDev('e','all')")}${B('All off',"gxDev('e','off')")}</div>`};
+window.gxDev=function(k,v){if(!isDev())return;const E=M.cos.eq;if(k=='g'){if(v==0){M.gems=0;SV()}else addGems(v,true)}
+ else if(k=='c'){if(v==-1)TR.forEach((t,i)=>chestAdd(i,1));else if(v==-2)chestAdd(0,10);else chestAdd(v,1)}
+ else{const on=(t,i)=>E[t]==i,set=(t,i)=>{E[t]=i},del=t=>{delete E[t]};
+  if(v=='nf')on('nf',8)?del('nf'):set('nf',8);else if(v=='pf')on('pf',12)?del('pf'):set('pf',12);else if(v=='au'){if(on('au',5)){del('au');del('rc')}else{set('au',5);set('rc',8)}}
+  else if(v=='all'){set('nf',8);set('pf',12);set('au',5);set('rc',8)}else{del('nf');del('pf');del('au');del('rc')}SV();applyRc(1)}
+ const b=$$('gemn');if(b)b.textContent=fmt(M.gems);adm.tab('dev')};
 window.__gx={M,TR,CAT,roll:ti=>roll(ti),addGems,GQ,chestAdd};
 setTimeout(()=>{try{hud()}catch(e){}},50);
 })();
