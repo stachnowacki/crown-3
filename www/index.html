@@ -1038,7 +1038,7 @@ const TN=['Bronze','Silver','Gold'],TC=['#cd7f32','#c0c0c0','#ffd23f'],SL={gaine
 const astat=k=>{const b=META.base[k]||0;if(k.startsWith('lv_'))return Math.max(b,maxLv(+k.slice(3)));if(k=='maxres')return Math.max(b,...RES.map(r=>S.st.max[r]||0));if(k=='defeated')return b+S.st.def.length;if(k=='perfect')return Math.max(b,V.cities>=5&&V.forts>=5&&V.tiles>=60?1:0);return b+(S.st[k]||0)};
 const earned=()=>Object.keys(META.ach).length;
 function foldStats(){const b=META.base;for(const k of ['gained','built','trades','won','repelled','missions','trained','techs','events'])b[k]=(b[k]||0)+(S.st[k]||0);b.defeated=(b.defeated||0)+S.st.def.length;b.maxres=Math.max(b.maxres||0,...RES.map(r=>S.st.max[r]||0));b.perfect=Math.max(b.perfect||0,V.cities>=5&&V.forts>=5&&V.tiles>=60?1:0);b.games=(b.games||0)+1;saveMeta()}
-function achTick(){let ch=0;for(const a of ACH)a[5].forEach((g,i)=>{const id=a[0]+i;if(!META.ach[id]&&astat(a[4])>=g){META.ach[id]=1;ch=1;NQ.push(`🏆 Achievement: ${a[2]} (${TN[i]}) — cosmetic reward`);sfx('ach')}});if(ch){saveMeta();if($('achievement-screen')&&$('achievement-screen').style.display!='none')renderAchievements()}}
+function achTick(){let ch=0;for(const a of ACH)a[5].forEach((g,i)=>{const id=a[0]+i;if(!META.ach[id]&&astat(a[4])>=g){META.ach[id]=1;ch=1;NQ.push(`🏆 Achievement: ${a[2]} (${TN[i]}) ${window.gemAch?gemAch(i):""}`);sfx('ach')}});if(ch){saveMeta();if($('achievement-screen')&&$('achievement-screen').style.display!='none')renderAchievements()}}
 function setCol(i){if(earned()<COLT[i])return;META.col=i;OWN[1].c=COLS[i];saveMeta();shK='';renderSheet()}
 function setOpt(k,v){SET[k]=v;saveSet()}
 /* --- state, wrappers --- */
@@ -1153,7 +1153,7 @@ function vAch(){const cats=['All','Expansion','Economy','Military','Defense','Ch
   h+=`<b>Realm colour (cosmetic only)</b>`+COLS.map((c,i)=>{const un=earned()>=COLT[i];return `<span class="sw ${META.col==i?'on':''}" style="background:${un?c:'#333'}" onclick="${un?`setCol(${i})`:`toast('Unlocks at ${COLT[i]} achievement tiers')`}"></span>`}).join('');
   h+=`<div class="tabs" style="padding:6px 0">`+cats.map(c=>`<button class="${achCat==c?'on':''}" onclick="achCat='${c}';shK='';renderSheet()">${c}</button>`).join('')+`</div><div class="tabs" style="padding:0 0 6px">`+[['all','All'],['prog','In progress'],['done','Done']].map(([k,n])=>`<button class="${achSt==k?'on':''}" onclick="achSt='${k}';shK='';renderSheet()">${n}</button>`).join('')+`</div>`;
   for(const a of ACH){if(achCat!='All'&&a[1]!=achCat)continue;const v=astat(a[4]),got=a[5].filter((g,i)=>META.ach[a[0]+i]).length,tgt=a[5][Math.min(got,a[5].length-1)],st=got==a[5].length?'done':got||v>0?'prog':'lock';if(achSt!='all'&&st!=achSt)continue;
-    h+=`<div class="mi ${st=='done'?'ready':''}"><div class="mh"><span>${a[6]}</span><b>${a[2]}</b><em>${got?TN[got-1]:'Locked'}</em></div><div class="mu">${a[3].replace('{n}',tgt)}</div><div class="bar"><i style="width:${Math.min(100,v/tgt*100)}%"></i></div><div class="mf"><span>Progress: ${Math.min(v,tgt)}/${tgt}</span><span>${a[5].map((g,i)=>`<span class="bd" style="background:${META.ach[a[0]+i]?TC[i]:'#555'}">${TN[i][0]}</span>`).join('')}🎨 cosmetic</span></div></div>`}
+    h+=`<div class="mi ${st=='done'?'ready':''}"><div class="mh"><span>${a[6]}</span><b>${a[2]}</b><em>${got?TN[got-1]:'Locked'}</em></div><div class="mu">${a[3].replace('{n}',tgt)}</div><div class="bar"><i style="width:${Math.min(100,v/tgt*100)}%"></i></div><div class="mf"><span>Progress: ${Math.min(v,tgt)}/${tgt}</span><span>${a[5].map((g,i)=>`<span class="bd" style="background:${META.ach[a[0]+i]?TC[i]:'#555'}">${TN[i][0]}</span>`).join('')}${window.gemTxt?gemTxt():""}</span></div></div>`}
   return['🏆 Achievements',h]}
 function vSet(){const t=(k,l)=>`<button class="${SET[k]?'on':''}" style="width:100%;margin:4px 0" onclick="setOpt('${k}',${!SET[k]});shK='';renderSheet()">${l}: ${SET[k]?'ON':'OFF'}</button>`;
   return['⚙️ Settings',`<b>Music volume</b><input type="range" min="0" max="1" step=".05" value="${SET.mus}" oninput="setOpt('mus',+this.value)"><b>Effects volume</b><input type="range" min="0" max="1" step=".05" value="${SET.sfx}" oninput="setOpt('sfx',+this.value)">`+t('mute','Mute everything')+t('rm','Reduce animations (also skips battle effects)')+t('lowfx','Low-effects mode (faster on weak phones)')+`<p class="mu">Music and sounds are generated in the app, so no audio files are needed. Settings are saved on this device.</p>`]}
@@ -1387,7 +1387,7 @@ function renderAchievements(){const art=$('ach-art');if(!art)return;const hadSel
       family.forEach((n,i)=>{const from=i?family[i-1]:{x:ax,y:ay},lit=i?family[i-1].got:n.prevGot;paths.push(`<path class="ach-link ${lit?'lit':''}" style="--branch:${color}" d="M${from.x} ${from.y} L${n.x} ${n.y}"/>`);const pct=Math.min(100,n.value/n.g*100),label=`${n.a[2]} — ${TN[n.i]} tier, ${n.status=='got'?'unlocked':n.status=='next'?'available':'locked'}, progress ${Math.min(n.value,n.g)} of ${n.g}`;nodes.push(`<button type="button" class="ach-node ${n.status} ${achSel==n.id?'selected':''}" style="left:${n.x}px;top:${n.y}px;--node-color:${TC[n.i]};--progress:${pct}%" onclick="selectAchievement('${n.id}')" aria-label="${label}" title="${n.a[2]} · ${TN[n.i]}: ${Math.min(n.value,n.g)}/${n.g}">${n.status=='lock'?'🔒':n.a[6]}<i class="ach-tier">${TN[n.i][0]}</i></button>`)});prior=prevGot;order++})});
     nodes.push(`<button type="button" class="ach-category" style="left:${ax}px;top:${ay}px;--branch:${color}" onclick="selectAchievement('${(list[0]||[])[0]||''}0')" aria-label="${name} achievement branch">${ic}<small>${name}</small></button>`)});
   const center=`<button type="button" class="ach-center" style="left:${cx}px;top:${cy}px" aria-label="Your realm, achievement tree starting point">🏰</button>`;art.innerHTML=`<svg class="ach-wires" viewBox="0 0 1200 1200" aria-hidden="true">${paths.join('')}</svg>${center}${nodes.join('')}`;
-  selected=rows.find(n=>n.id==achSel)||selected||rows[0];if(!selected){$('ach-detail').innerHTML='<p class="mu">Your achievements will appear here.</p>';return}achSel=selected.id;const value=selected.value,pct=Math.min(100,value/selected.g*100),status=selected.got?'Unlocked':selected.prevGot?'In progress':'Locked';$('ach-detail').innerHTML=`<div class="mi ${selected.got?'ready':''}"><div class="mh"><span>${selected.a[6]}</span><b>${selected.a[2]} · ${TN[selected.i]}</b><em>${status}</em></div><div class="mu">${selected.a[3].replace('{n}',selected.g)}</div><div class="bar"><i style="width:${pct}%"></i></div><div class="ach-progress"><span class="mu">Progress: ${Math.min(value,selected.g)}/${selected.g}</span><span class="mu">🎨 Cosmetic realm reward</span></div></div>`;
+  selected=rows.find(n=>n.id==achSel)||selected||rows[0];if(!selected){$('ach-detail').innerHTML='<p class="mu">Your achievements will appear here.</p>';return}achSel=selected.id;const value=selected.value,pct=Math.min(100,value/selected.g*100),status=selected.got?'Unlocked':selected.prevGot?'In progress':'Locked';$('ach-detail').innerHTML=`<div class="mi ${selected.got?'ready':''}"><div class="mh"><span>${selected.a[6]}</span><b>${selected.a[2]} · ${TN[selected.i]}</b><em>${status}</em></div><div class="mu">${selected.a[3].replace('{n}',selected.g)}</div><div class="bar"><i style="width:${pct}%"></i></div><div class="ach-progress"><span class="mu">Progress: ${Math.min(value,selected.g)}/${selected.g}</span><span class="mu">${window.gemTxt?gemTxt(selected.i):""}</span></div></div>`;
   requestAnimationFrame(()=>centerAchievementTree(hadSelection?selected.x:600,hadSelection?selected.y:600,hadSelection?'smooth':'auto'))}
 function vAch(){return['🏆 Achievement tree','<p class="mu">The achievement tree is open in its own screen.</p>']}
 /* --- events about buildings and mechanics, protected by strongholds --- */
@@ -2607,5 +2607,173 @@ function MP_online(){return window.ONL&&ONL.sc?Object.values(ONL.sc).filter(p=>p
 function chatAdd(m,live){if(CHAT.log.some(q=>q.id==m.id))return;CHAT.log.push(m);if(CHAT.log.length>120)CHAT.log.shift();if(CHAT.open)chatRender();else if(live&&m.s!=ONL.slot){CHAT.unread++;chatBtn();toast('💬 '+m.n+': '+m.m.slice(0,50))}}
 
 const _vmS2=vMenu;vMenu=function(){const r=_vmS2();r[1]+=mb('🏆','Ranking & rewards',RK.ir&&RK.ir.n>=2?'Island #'+RK.ir.rank+' of '+RK.ir.n:'Score, world ranking, daily chest',"openSheet('rank')")+mb('⚔️','War room','Where attack and defence come from',"openSheet('war')");return r};
+</script>
+<style id="gx-css">
+.gm{display:inline-block;width:1em;height:.9em;vertical-align:-.12em;position:relative;clip-path:polygon(24% 0,76% 0,100% 34%,50% 100%,0 34%);background:linear-gradient(135deg,#f6e4ff 0,#c27bff 26%,#7a2be0 52%,#3a0a8c 100%);filter:drop-shadow(0 0 3px #b66dffd0)}
+.gm::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,#fff3 0 24%,transparent 24% 50%,#0003 50% 76%,transparent 76%),linear-gradient(180deg,transparent 34%,#0002 34%)}
+.gm::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 38%,#fffb 49%,transparent 60%);transform:translateX(-130%);animation:gmS 3.4s infinite}
+@keyframes gmS{55%,100%{transform:translateX(130%)}}
+.gemb{display:flex;align-items:center;gap:6px;font-size:18px;font-weight:800;color:#ecd8ff;background:linear-gradient(#4b1d8f,#25104d);border:1px solid #b27dff;border-radius:20px;padding:2px 12px 2px 9px;box-shadow:0 0 12px #8a3cff88;text-shadow:0 0 8px #b66dff;cursor:pointer}
+.gemb.pop{animation:gPop .5s}@keyframes gPop{40%{transform:scale(1.25);box-shadow:0 0 26px #d6a3ff}}
+.gx-f{position:absolute;pointer-events:none;font-weight:800;font-size:16px;z-index:5;text-shadow:0 1px 4px #000;animation:gxF 1.1s ease-out forwards;will-change:transform,opacity}
+@keyframes gxF{0%{opacity:0;transform:translateY(8px) scale(.7)}15%{opacity:1;transform:translateY(0) scale(1.15)}100%{opacity:0;transform:translateY(-30px) scale(1)}}
+#tre{position:fixed;inset:0;z-index:36;display:none;flex-direction:column;background:radial-gradient(ellipse at 50% 0,#3d1a73,#0b1620 62%);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+#tre .th{display:flex;align-items:center;gap:10px;padding:10px 12px;background:linear-gradient(#2a1458,#170c33);border-bottom:1px solid #8a5cd0}
+#tre .tb{flex:1;overflow:auto;padding:6px 10px 20px}
+.tg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.tc{border:2px solid var(--rc,#3a638a);border-radius:14px;padding:8px;text-align:center;background:linear-gradient(160deg,#162a40,#0d1826);box-shadow:0 0 10px color-mix(in srgb,var(--rc,#000),transparent 70%)}
+.tc img,.tc canvas{width:84px;height:84px;display:block;margin:0 auto 2px}.tc small{display:block}.tc button{width:100%;text-align:center;margin-top:4px;min-height:38px}
+.tc.eq{box-shadow:0 0 16px var(--rc);background:linear-gradient(160deg,#2c2150,#150f2a)}
+.pf{display:inline-flex;align-items:center;justify-content:center;width:1.7em;height:1.7em;border-radius:50%;font-size:15px;background:radial-gradient(circle at 30% 25%,var(--rc),#14202e 80%);border:2px solid var(--rc);margin-right:4px;vertical-align:middle;box-shadow:0 0 8px var(--rc)}
+.pfb{width:52px;height:52px;font-size:28px;margin:4px auto}
+.nfx{-webkit-background-clip:text;background-clip:text;color:transparent!important;background-size:220% 100%;animation:gxN 3.2s linear infinite}@keyframes gxN{to{background-position:220% 0}}
+.nfx0{background-image:linear-gradient(90deg,#ffe27a,#fff7cf,#e8a317,#ffe27a)}.nfx1{background-image:linear-gradient(90deg,#ff6a00,#ffd000,#ff3d00,#ff6a00)}.nfx2{background-image:linear-gradient(90deg,#9be8ff,#fff,#4aa8ff,#9be8ff)}.nfx3{background-image:linear-gradient(90deg,#2ee08a,#d7ffe9,#0aa860,#2ee08a)}
+.nfx4{background-image:linear-gradient(90deg,#c58cff,#f1ddff,#7a2be0,#c58cff);filter:drop-shadow(0 0 3px #b66dff)}.nfx5{background-image:linear-gradient(90deg,#41e0c4,#7b8cff,#ff7bd0,#41e0c4);filter:drop-shadow(0 0 3px #7b8cff)}
+.nfx6{background-image:linear-gradient(90deg,#8a3cff,#ffd34a,#ff5fd8,#8a3cff);filter:drop-shadow(0 0 4px #c58cff)}.nfx7{background-image:linear-gradient(90deg,red,orange,yellow,lime,cyan,violet,red);filter:drop-shadow(0 0 3px #fff8)}
+.mfx0{border:1px solid #ffd34a!important}.mfx1{background:linear-gradient(135deg,#3a1d12,#16293d)!important;border:1px solid #ff8a3d!important;box-shadow:0 0 8px #ff6a0066}.mfx2{background:linear-gradient(135deg,#12344a,#16293d)!important;border:1px solid #8fe0ff!important;box-shadow:0 0 8px #4aa8ff66}
+.mfx3{background:linear-gradient(135deg,#123a26,#16293d)!important;border:1px solid #2ee08a!important}.mfx4{background:linear-gradient(135deg,#34185e,#16293d)!important;border:1px solid #c58cff!important;box-shadow:0 0 10px #8a3cff88}
+.mfx5{border:2px solid #ffd34a!important;background:linear-gradient(135deg,#3b2c0a,#241a3d)!important;box-shadow:0 0 12px #ffd34a77}.mfx6{border:1px solid #ff5fd8!important;background:linear-gradient(135deg,#3d1236,#1a1536)!important;box-shadow:0 0 12px #ff5fd877}
+.mfx7{border:2px solid transparent!important;background:linear-gradient(#16293d,#16293d) padding-box,linear-gradient(90deg,red,orange,yellow,lime,cyan,violet,red) border-box!important}
+#cho{position:fixed;inset:0;z-index:60;display:none;background:radial-gradient(ellipse at 50% 42%,#1c1236,#05020c 75%);touch-action:manipulation}#cho canvas{position:absolute;inset:0;width:100%;height:100%}
+#cho .ct{position:absolute;left:0;right:0;top:calc(14px + env(safe-area-inset-top,0px));text-align:center;font-size:22px;font-weight:800;text-shadow:0 0 14px var(--g,#fff)}#cho .hn{position:absolute;left:0;right:0;bottom:30%;text-align:center;font-size:17px;animation:fl 1.4s infinite;color:#fff}
+#cho .rw{position:absolute;left:0;right:0;bottom:calc(76px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 10px;max-height:38%;overflow:auto}
+.rcd{min-width:92px;padding:8px 10px;border-radius:14px;text-align:center;background:linear-gradient(160deg,#1d3250,#0e1a2c);border:2px solid var(--rc);box-shadow:0 0 16px var(--rc);opacity:0;animation:rcIn .55s cubic-bezier(.2,1.4,.4,1) forwards}.rcd span{display:block;font-size:30px;line-height:1.1}.rcd b{font-size:13px}
+@keyframes rcIn{0%{opacity:0;transform:translateY(40px) scale(.4) rotate(-8deg)}100%{opacity:1;transform:none}}
+#cho .bt{position:absolute;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;justify-content:center}#cho .bt button{min-width:140px;min-height:50px;text-align:center;font-size:16px}
+</style>
+<script>
+(function(){
+'use strict';
+const M=META;M.gems|=0;M.chests=M.chests||{};M.cos=M.cos||{own:{},eq:{}};M.gq=M.gq||{};M.days=M.days||[];M.mc|=0;
+const GI='<i class="gm"></i>',$$=id=>document.getElementById(id),rnd=(a,b)=>a+Math.random()*(b-a),ri=(a,b)=>Math.round(rnd(a,b)),fmt=n=>compactAmount(n);
+const SV=()=>{try{saveMeta()}catch(e){}};
+Object.assign(SFX,{cho1:[[110,.15,'square',0],[147,.15,'square',.12]],cho2:[[392,.15,'triangle',0],[523,.2,'triangle',.08],[659,.3,'triangle',.16],[784,.4,'triangle',.26]],cho3:[[523,.2,'sine',0],[659,.2,'sine',.1],[784,.2,'sine',.2],[1047,.3,'sine',.3],[1319,.5,'sine',.42],[1568,.7,'sine',.56]],gem:[[880,.08,'sine',0],[1320,.18,'sine',.07]]});
+const today=()=>new Date().toISOString().slice(0,10);if(!M.days.includes(today())){M.days.push(today());if(M.days.length>400)M.days.shift();SV()}
+/* ---------- chests ---------- */
+const TR=[
+{n:'Wooden Chest',r:'Common',p:0,mul:.8,rf:.05,ds:[0,0],ar:[['inf',10,10,.5]],gm:[0,0,0],co:[0,0],pal:['#8b5a2b','#c68642','#4a2a10','#caa45a','#ffcf80'],info:'Coins, a little material, sometimes 10 infantry'},
+{n:'Iron Chest',r:'Uncommon',p:6,mul:2,rf:.12,ds:[0,0],ar:[['inf',15,25,.8],['arc',8,15,.5]],gm:[.12,1,1],co:[.08,0],pal:['#6b7683','#aab4c2','#39424d','#d5dbe3','#9fd0ff'],info:'More coins, two materials, infantry and archers'},
+{n:'Silver Chest',r:'Rare',p:20,mul:5,rf:.25,ds:[0,1],ar:[['cav',8,14,.8],['arc',15,25,.8]],gm:[.3,1,3],co:[.18,1],pal:['#9fb4c8','#eaf4ff','#5d7389','#ffffff','#bfe4ff'],info:'Cavalry, archers, three materials, gems, rare skins'},
+{n:'Golden Chest',r:'Epic',p:60,mul:14,rf:.45,ds:[1,3],ar:[['sie',3,6,.8],['cav',15,25,.9]],gm:[.5,3,8],co:[.35,2],pal:['#e0a21a','#ffe17a','#8a5200','#fff2b0','#ffd34a'],info:'Siege engines, diamonds, gems, epic cosmetics'},
+{n:'Royal Chest',r:'Mythic',p:160,mul:35,rf:.75,ds:[4,9],ar:[['inf',40,70,1],['cav',25,40,1],['sie',8,14,1]],gm:[.8,10,25],co:[.6,2],pal:['#6a2bd1','#b57bff','#2c0d6e','#ffd34a','#c58cff'],info:'A war host, many diamonds, lots of gems, epic skins'},
+{n:'Legendary Chest',r:'Legendary',p:700,mul:100,rf:1,ds:[15,30],ar:[['inf',100,160,1],['arc',60,100,1],['cav',50,80,1],['sie',20,35,1]],gm:[1,60,140],co:[1,3],pal:['#1a1030','#4a3478','#07030f','#ff5fd8','#ff9ae8'],info:'Vast riches, an army, a mountain of gems, a legendary cosmetic'}];
+const RCOL=['#c9b08a','#9fb4c8','#d8e2ee','#ffd23f','#b86bff','#ff5fd8'],CRC=['#9fb4c8','#4aa8ff','#b86bff','#ffd23f'],CRN=['Common','Rare','Epic','Legendary'],CP=[12,35,90,220];
+/* ---------- cosmetics ---------- */
+const CT={pf:'Profile pictures',nf:'Nickname effects',mf:'Message effects',rc:'Realm colours',au:'Building auras'};
+const CAT=[];const add=(t,a)=>a.forEach((x,i)=>CAT.push({id:t+i,t,i,n:x[0],r:x[1],v:x[2]}));
+add('pf',[['🦊',0],['🐺',0],['🦉',0],['🦌',1],['🦁',1],['🦅',1],['🐲',2],['🧙',2],['🛡️',2],['👑',3],['🔱',3],['🌌',3]].map(([e,r])=>[({'🦊':'Fox','🐺':'Wolf','🦉':'Owl','🦌':'Stag','🦁':'Lion','🦅':'Eagle','🐲':'Dragon','🧙':'Archmage','🛡️':'Warden','👑':'Sovereign','🔱':'Sea King','🌌':'Cosmos'})[e],r,e]));
+add('nf',[['Gold shimmer',0],['Ember',1],['Frost',1],['Emerald',1],['Amethyst glow',2],['Aurora',2],['Royal pulse',3],['Rainbow',3]].map(a=>[a[0],a[1],'Aa']));
+add('mf',[['Gold edge',0],['Ember bubble',1],['Frost bubble',1],['Forest bubble',1],['Amethyst bubble',2],['Gilded bubble',2],['Rose glow',3],['Rainbow border',3]].map(a=>[a[0],a[1],'💬']));
+add('rc',[['Crimson','#ff2f56',1],['Lime flame','#b6ff2e',1],['Aqua','#18f0ff',1],['Sunset','#ff7a18',1],['Royal violet','#9d4dff',2],['Rose gold','#ffb199',2],['Ghost white','#f4f8ff',2],['Void magenta','#ff2bd6',3]].map(a=>[a[0],a[2],a[1]]));
+add('au',[['Gold sparkle',1,'#ffd34a'],['Emerald pulse',1,'#2ee08a'],['Frost ring',2,'#8fe0ff'],['Violet flame',2,'#b66dff'],['Rainbow halo',3,'#fff']]);
+const CID={};CAT.forEach(c=>CID[c.id]=c);
+const own=id=>!!M.cos.own[id],eq=t=>M.cos.eq[t];
+function pfHTML(i,big){const c=CID['pf'+i];return c?`<span class="pf${big?' pfb':''}" style="--rc:${CRC[c.r]}">${c.v}</span>`:''}
+window.gxFx=()=>({pf:eq('pf'),nf:eq('nf'),mf:eq('mf')});
+/* ---------- gems ---------- */
+const GEMA=[0,1,3];
+function addGems(n,quiet){if(!n)return;M.gems+=n;SV();const b=$$('gemn');if(b){b.textContent=fmt(M.gems);const g=b.parentNode;g.classList.remove('pop');void g.offsetWidth;g.classList.add('pop')}if(!quiet)fly('+'+n+' '+GI,'gemb','#d6a3ff');sfx('gem');if($$('tre')&&$$('tre').style.display=='flex')treR()}
+window.gemAch=i=>{const g=GEMA[i];if(g)addGems(g,true);const t=wpick([[80,20],[0,65,30,5],[0,0,65,30,5]][i]);chestAdd(t,1);return` — ${g?'+'+g+' gems · ':''}${TR[t].n}`};
+window.gemTxt=i=>i==null?'Silver +1 gem · Gold +3 gems · random chest':`${GEMA[i]?'+'+GEMA[i]+' gems · ':''}random chest`;
+function wpick(w){let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<w.length;i++){if((r-=w[i])<0)return i}return 0}
+function chestAdd(t,n){M.chests[t]=(M.chests[t]|0)+n;SV()}
+/* ---------- loot ---------- */
+function roll(ti){const T=TR[ti],B=Math.max(5,S.inc||5)*600,out=[],c=cap();
+ const co=Math.round(B*T.mul*rnd(.8,1.25));S.coins+=co;out.push({ic:'🪙',tx:fmt(co),r:ti});
+ const ks=['wood','stone','silver','gold'].sort(()=>Math.random()-.5).slice(0,Math.min(4,1+ti));
+ ks.forEach(k=>{const a=Math.max(5,Math.round(c*T.rf*rnd(.8,1.1)));S.res[k]=Math.min(c,(S.res[k]||0)+a);out.push({ic:ICON[k],tx:fmt(a),r:ti})});
+ if(T.ds[1]){const d=ri(T.ds[0],T.ds[1]);if(d){S.res.diamond=(S.res.diamond||0)+d;out.push({ic:'💎',tx:d,r:Math.max(ti,2)})}}
+ T.ar.forEach(([k,a,b,p])=>{if(Math.random()<p){const n=ri(a,b);S.army[k]=(S.army[k]||0)+n;out.push({ic:({inf:'🗡️',arc:'🏹',cav:'🐎',sie:'🏰'})[k],tx:n+' '+({inf:'infantry',arc:'archers',cav:'cavalry',sie:'siege'})[k],r:ti})}});
+ if(Math.random()<T.gm[0]){const g=ri(T.gm[1],T.gm[2]);addGems(g,true);out.push({ic:GI,tx:g+' gems',r:Math.max(ti,3),big:1})}
+ if(Math.random()<T.co[0]){const mx=Math.floor(T.co[1]),lo=Math.max(0,mx-1),pool=CAT.filter(x=>!own(x.id)&&x.r<=mx&&x.r>=lo);
+  if(pool.length){const x=pool[ri(0,pool.length-1)];M.cos.own[x.id]=1;SV();out.push({ic:x.t=='rc'?`<i class="pf" style="--rc:${x.v}">&nbsp;</i>`:x.t=='pf'?x.v:x.t=='au'?'✨':x.v,tx:x.n+' · '+CRN[x.r],r:x.r+2,big:1})}
+  else{const g=ri(3,8);addGems(g,true);out.push({ic:GI,tx:g+' gems',r:3})}}
+ S.army=S.army;hud();save();return out}
+/* ---------- chest drawing ---------- */
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+function drawChest(c,ti,X,Y,s,lid,tm){const P=TR[ti].pal,h=s/2,bh=s*.5,trim=ti==5?`hsl(${(tm*90)%360},95%,66%)`:P[3];
+ c.save();c.translate(X,Y);c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(0,bh*.62,s*.64,s*.1,0,0,7);c.fill();
+ let g=c.createLinearGradient(0,-bh*.5,0,bh*.55);g.addColorStop(0,P[1]);g.addColorStop(.3,P[0]);g.addColorStop(1,P[2]);
+ rr(c,-h,-bh*.5,s,bh*1.05,s*.06);c.fillStyle=g;c.fill();c.lineWidth=s*.022;c.strokeStyle=P[2];c.stroke();
+ if(ti==0){c.strokeStyle='#0004';c.lineWidth=s*.012;for(let i=1;i<4;i++){c.beginPath();c.moveTo(-h,-bh*.5+i*bh*.26);c.lineTo(h,-bh*.5+i*bh*.26);c.stroke()}}
+ if(ti==2){c.fillStyle='#fff5';c.beginPath();c.moveTo(-h*.7,-bh*.5);c.lineTo(-h*.2,-bh*.5);c.lineTo(-h*.55,bh*.55);c.lineTo(-h*.95,bh*.55);c.fill()}
+ c.fillStyle=trim;[-.62,.62].forEach(f=>{rr(c,f*h-s*.055,-bh*.5,s*.11,bh*1.05,s*.015);c.fill()});
+ if(ti==1)[-.62,.62].forEach(f=>[-.4,.4].forEach(v=>{c.fillStyle='#2a323b';c.beginPath();c.arc(f*h,v*bh*.6+bh*.05,s*.018,0,7);c.fill()}));
+ if(ti==4){[-1,1].forEach(f=>{c.fillStyle=ti==4?'#ff5fd8':'#fff';c.beginPath();c.arc(f*h*.9,bh*.46,s*.04,0,7);c.fill()})}
+ rr(c,-s*.07,-bh*.12,s*.14,bh*.34,s*.02);c.fillStyle=ti==5?trim:'#ffe9a0';c.fill();c.fillStyle='#2a1a00';c.beginPath();c.arc(0,bh*.02,s*.022,0,7);c.fill();c.fillRect(-s*.01,bh*.02,s*.02,bh*.12);
+ if(lid>0){const ig=c.createRadialGradient(0,-bh*.5,2,0,-bh*.5,s*.7);ig.addColorStop(0,'#fff');ig.addColorStop(.3,P[4]);ig.addColorStop(1,'#0000');c.globalCompositeOperation='lighter';c.globalAlpha=Math.min(1,lid*1.4);c.fillStyle=ig;c.fillRect(-s,-s*.9,s*2,s);c.globalCompositeOperation='source-over';c.globalAlpha=1}
+ c.save();c.translate(-h,-bh*.5);c.rotate(-lid*1.3);c.translate(0,-lid*s*.04);
+ c.beginPath();c.moveTo(0,0);c.lineTo(0,-s*.1);c.quadraticCurveTo(0,-s*.34,h,-s*.34);c.quadraticCurveTo(s,-s*.34,s,-s*.1);c.lineTo(s,0);c.closePath();
+ g=c.createLinearGradient(0,-s*.34,0,0);g.addColorStop(0,P[1]);g.addColorStop(1,P[0]);c.fillStyle=g;c.fill();c.lineWidth=s*.022;c.strokeStyle=P[2];c.stroke();
+ c.fillStyle=trim;[.19,.81].forEach(f=>{c.fillRect(s*f-s*.05,-s*.33,s*.1,s*.33)});
+ if(ti==3||ti==4||ti==5){c.fillStyle=ti==5?'#fff':ti==4?'#ffd34a':'#fff2b0';c.beginPath();if(ti==4){c.moveTo(-s*.12+h,-s*.2);c.lineTo(h-s*.1,-s*.3);c.lineTo(h-s*.04,-s*.24);c.lineTo(h,-s*.34);c.lineTo(h+s*.04,-s*.24);c.lineTo(h+s*.1,-s*.3);c.lineTo(h+s*.12,-s*.2)}else for(let i=0;i<10;i++){const a=i*Math.PI/5-Math.PI/2,r=i%2?s*.04:s*.09;c.lineTo(h+Math.cos(a)*r,-s*.22+Math.sin(a)*r)}c.closePath();c.fill()}
+ c.restore();c.restore()}
+const IMG=new Map();function chestURL(ti){let u=IMG.get(ti);if(!u){const k=document.createElement('canvas');k.width=k.height=168;const c=k.getContext('2d');c.setTransform(1,0,0,1,0,0);const g=c.createRadialGradient(84,100,5,84,100,80);g.addColorStop(0,TR[ti].pal[4]+'66');g.addColorStop(1,'#0000');c.fillStyle=g;c.fillRect(0,0,168,168);drawChest(c,ti,84,92,110,0,0);u=k.toDataURL();IMG.set(ti,u)}return u}
+/* ---------- opening scene ---------- */
+let O=null,oc,ox,oraf=0;
+function oEl(){let e=$$('cho');if(e)return e;e=document.createElement('div');e.id='cho';e.innerHTML='<canvas></canvas><div class="ct" id="cht"></div><div class="hn" id="chh">Tap the chest to open it</div><div class="rw" id="chr"></div><div class="bt" id="chb"></div>';document.body.appendChild(e);oc=e.querySelector('canvas');ox=oc.getContext('2d');e.addEventListener('pointerdown',ev=>{if(O&&O.ph=='idle'&&ev.target.tagName!='BUTTON')oGo()});return e}
+function openCh(ti){if(!S){toast('Start a game first');return}if(!(M.chests[ti]>0))return;const e=oEl();e.style.display='block';const d=Math.min(1.5,devicePixelRatio||1);oc.width=innerWidth*d;oc.height=innerHeight*d;ox.setTransform(d,0,0,d,0,0);
+ O={ti,ph:'in',t0:performance.now(),pt:[],fl:0,lid:0,loot:null};e.style.setProperty('--g',TR[ti].pal[4]);$$('cht').innerHTML=TR[ti].n+`<div style="font-size:13px;color:${RCOL[ti]}">${TR[ti].r}</div>`;$$('chh').style.display='none';$$('chr').innerHTML='';$$('chb').innerHTML='';cancelAnimationFrame(oraf);oraf=requestAnimationFrame(oLoop)}
+function oGo(){if(!(M.chests[O.ti]>0))return;chestAdd(O.ti,-1);O.loot=roll(O.ti);O.ph='shake';O.t1=performance.now();sfx('cho1');buzz();$$('chh').style.display='none'}
+function burst(n,col){const l=LOW||RM?.5:1;for(let i=0;i<n*l&&O.pt.length<170;i++){const a=rnd(0,6.28),v=rnd(120,520);O.pt.push({x:innerWidth/2,y:innerHeight*.42,vx:Math.cos(a)*v,vy:Math.sin(a)*v-160,l:rnd(.7,1.5),a:1,c:col[ri(0,col.length-1)],r:rnd(2,5)})}}
+function oLoop(now){if(!O)return;const W=innerWidth,H=innerHeight,tm=(now-O.t0)/1000,ti=O.ti,P=TR[ti].pal,dt=Math.min(.05,(now-(O.last||now))/1000);O.last=now;ox.clearRect(0,0,W,H);
+ const cxp=W/2,cyp=H*.42,s=Math.min(W*.5,230)*(1+ti*.04);let sh=0,sc=1,y=cyp;
+ if(O.ph=='in'){const k=Math.min(1,tm/.7);y=cyp-(1-k)*H*.5+(k<1?0:0);sc=1;if(k>=1){O.ph='idle';$$('chh').style.display='block';sfx('cho1')}else y=cyp-(1-k*k)*H*.45}
+ if(O.ph=='idle'){sh=Math.sin(tm*14)*2.2;sc=1+Math.sin(tm*3)*.015}
+ if(O.ph=='shake'){const k=(now-O.t1)/900;sh=Math.sin(tm*60)*(3+k*14);sc=1+k*.1;if(k>=1){O.ph='open';O.t2=now;O.fl=1;burst(40+ti*22,[P[4],P[3],'#fff',P[1]]);sfx(ti>=5?'cho3':'cho2');buzz();$$('chb').innerHTML=''}}
+ if(O.ph=='open'||O.ph=='done'){const k=Math.min(1,(now-O.t2)/450);O.lid=1-Math.pow(1-k,3);sc=1.08-.08*k;if(O.ph=='open'&&now-O.t2>500){O.ph='done';O.rv=0;O.rt=now}
+  if(O.ph=='done'&&O.rv<O.loot.length&&now-O.rt>(O.rv?260:350)){const it=O.loot[O.rv++],d=document.createElement('div');d.className='rcd';d.style.cssText=`--rc:${RCOL[Math.min(5,it.r)]};${it.big?'min-width:120px':''}`;d.innerHTML=`<span>${it.ic}</span><b>${it.tx}</b>`;$$('chr').appendChild(d);$$('chr').scrollTop=1e5;O.rt=now;if(it.big){burst(18,['#d6a3ff','#fff','#ff9ae8']);sfx('gem')}else sfx('claim');
+   if(O.rv==O.loot.length)setTimeout(()=>{if(!O)return;const n=M.chests[ti]|0;$$('chb').innerHTML=`<button onclick="gxClose()">Collect</button>`+(n>0?`<button onclick="openCh(${ti})" style="background:linear-gradient(#7a3fd1,#3d1a73)">Open another (${n})</button>`:'')},300)}}
+ /* rays */
+ const ra=(O.ph=='open'||O.ph=='done'?.9:.28+ti*.05)*Math.min(1,tm*1.5);if(!LOW){ox.save();ox.translate(cxp,cyp);ox.rotate(tm*.25);ox.globalCompositeOperation='lighter';const n=ti>=3?14:10;for(let i=0;i<n;i++){ox.rotate(6.283/n);const g=ox.createLinearGradient(0,0,0,-H);g.addColorStop(0,P[4]);g.addColorStop(1,'#0000');ox.globalAlpha=ra*.28;ox.fillStyle=g;ox.beginPath();ox.moveTo(0,0);ox.lineTo(-s*.2,-H);ox.lineTo(s*.2,-H);ox.fill()}ox.restore()}
+ const gg=ox.createRadialGradient(cxp,cyp,10,cxp,cyp,s*(1.1+Math.sin(tm*3)*.06));gg.addColorStop(0,P[4]+'aa');gg.addColorStop(1,'#0000');ox.globalCompositeOperation='lighter';ox.globalAlpha=ra+.15;ox.fillStyle=gg;ox.fillRect(0,0,W,H);ox.globalCompositeOperation='source-over';ox.globalAlpha=1;
+ ox.save();ox.translate(cxp+sh,y);ox.scale(sc,sc);drawChest(ox,ti,0,0,s,O.lid,tm);ox.restore();
+ ox.globalCompositeOperation='lighter';for(let i=O.pt.length-1;i>=0;i--){const p=O.pt[i];p.l-=dt;if(p.l<=0){O.pt.splice(i,1);continue}p.vy+=520*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;ox.globalAlpha=Math.min(1,p.l);ox.fillStyle=p.c;ox.fillRect(p.x-p.r/2,p.y-p.r/2,p.r,p.r)}ox.globalCompositeOperation='source-over';ox.globalAlpha=1;
+ if(O.ti>=4&&O.ph!='in'&&!LOW&&Math.random()<.4&&O.pt.length<150)O.pt.push({x:cxp+rnd(-s/2,s/2),y:cyp+s*.2,vx:rnd(-20,20),vy:rnd(-220,-120),l:rnd(.5,1),c:P[4],r:rnd(2,4)});
+ if(O.fl>0){ox.fillStyle=`rgba(255,255,255,${O.fl})`;ox.fillRect(0,0,W,H);O.fl=Math.max(0,O.fl-dt*2.4)}
+ oraf=requestAnimationFrame(oLoop)}
+window.gxClose=function(){O=null;cancelAnimationFrame(oraf);const e=$$('cho');if(e)e.style.display='none';hud();if($$('tre')&&$$('tre').style.display=='flex')treR()};window.openCh=openCh;
+/* ---------- missions / achievements drop chests ---------- */
+const _mc=misClaim;misClaim=function(id,side){const b=S.st.missions||0;_mc(id,side);if((S.st.missions||0)>b){M.mc++;let t=wpick(side?[50,38,11,1]:[70,22,7,1]);chestAdd(t,1);setTimeout(()=>toast('🎁 You found a '+TR[t].n+'!'),900);if(typeof renderMis=='function')renderMis()}};
+/* ---------- gem quests ---------- */
+const GQ=[['Land Baron','Gain 1,500 tiles in total','gained',1500,15,0],['Master Builder','Construct 1,200 buildings','built',1200,20,2],['Grand Merchant','Make 1,500 trades','trades',1500,25,0],['Warlord','Win 400 battles','won',400,40,3],['Iron Wall','Repel 300 attacks','repelled',300,40,0],['Army of Legends','Train 3,000 units','trained',3000,50,4],['Quest Master','Complete 250 missions','missions',250,60,3],['Dedicated Ruler','Play on 14 different days','days',14,80,4],['Eternal Crown','Play on 40 different days','days',40,250,5]];
+const gqv=k=>k=='days'?M.days.length:S?astat(k):(META.base[k]||0);
+function gqClaim(i){const q=GQ[i];if(M.gq[i]||gqv(q[2])<q[3])return;M.gq[i]=1;if(q[5]>0||q[5]===0)chestAdd(q[5],1);addGems(q[4]);SV();sfx('ach');treR()}
+/* ---------- gems → advantages ---------- */
+const OFF=[['💰','Coin purse','6 gems',6,()=>{const c=Math.max(5,S.inc||5)*600*4;S.coins+=c;return '+'+fmt(c)+' coins'}],['📦','Material crate','10 gems',10,()=>{const c=cap();['wood','stone','silver','gold'].forEach(k=>S.res[k]=Math.min(c,(S.res[k]||0)+Math.round(c*.5)));return 'Materials +50% of storage'}],['💎','Diamond pouch','14 gems',14,()=>{S.res.diamond=(S.res.diamond||0)+6;return '+6 diamonds'}],['⚔️','War band','12 gems',12,()=>{S.army.inf+=30;S.army.arc+=15;S.army.cav+=8;return '+30 infantry, 15 archers, 8 cavalry'}]];
+function offer(i){const o=OFF[i];if(!S)return toast('Start a game first');if(M.gems<o[3])return toast('Not enough gems');M.gems-=o[3];const t=o[4]();SV();hud();save();fly(t,'gemb','#d6a3ff');treR()}
+/* ---------- shop / equip ---------- */
+function buyCos(id){const c=CID[id];if(own(id)||M.gems<CP[c.r])return toast('Not enough gems');M.gems-=CP[c.r];M.cos.own[id]=1;SV();sfx('gem');treR()}
+function equip(id){const c=CID[id];if(!own(id))return;if(eq(c.t)===c.i)delete M.cos.eq[c.t];else M.cos.eq[c.t]=c.i;SV();if(c.t=='rc')applyRc(1);treR()}
+function buyCh(t){const p=TR[t].p;if(!p||M.gems<p)return toast('Not enough gems');M.gems-=p;chestAdd(t,1);sfx('gem');SV();treR()}
+function applyRc(force){const i=eq('rc');if(i==null){if(force&&META.col!=null){OWN[1].c=COLS[META.col||0];CHK.clear();SPR.clear()}return}const c=CID['rc'+i].v;if(OWN[1].c!=c||force){OWN[1].c=c;CHK.clear();SPR.clear()}}
+const _sc=setCol;setCol=function(i){delete M.cos.eq.rc;_sc(i)};
+Object.assign(window,{gxBuy:buyCh,gxCos:buyCos,gxEq:equip,gxGq:gqClaim,gxOff:offer,treTab:t=>{TT=t;treR()}});
+let TT='ch';
+function tre(){let e=$$('tre');if(e)return e;e=document.createElement('div');e.id='tre';document.body.appendChild(e);return e}
+function treR(){const e=tre();let b='';
+ if(TT=='ch')b=`<div class="mu" style="margin:6px 0">Earn chests from missions and achievements, or buy them with gems. Higher chests hold far better prizes.</div><div class="tg">`+TR.map((t,i)=>`<div class="tc" style="--rc:${RCOL[i]}"><img src="${chestURL(i)}" alt=""><b style="color:${RCOL[i]}">${t.n}</b><small class="mu">${t.r}</small><small class="mu" style="min-height:48px;font-size:11px">${t.info}</small><b>x${M.chests[i]|0}</b><button ${M.chests[i]>0?'':'disabled'} onclick="openCh(${i})">Open</button>${t.p?`<button class="buy" ${M.gems>=t.p?'':'disabled'} onclick="gxBuy(${i})">Buy ${GI} ${t.p}</button>`:'<small class="mu">Mission reward only</small>'}</div>`).join('')+'</div>';
+ else if(TT=='cos')b=Object.keys(CT).map(t=>`<b style="display:block;margin:10px 0 4px">${CT[t]}</b><div class="tg">`+CAT.filter(c=>c.t==t).map(c=>{const o=own(c.id),on=eq(t)===c.i,col=t=='rc'?c.v:CRC[c.r];return`<div class="tc ${on?'eq':''}" style="--rc:${CRC[c.r]}">${t=='pf'?pfHTML(c.i,1):t=='rc'?`<span class="pf pfb" style="--rc:${c.v}">&nbsp;</span>`:t=='nf'?`<div class="pfb" style="width:auto;height:34px;font-size:22px;font-weight:800"><span class="nfx nfx${c.i}">Nickname</span></div>`:t=='mf'?`<div class="mfx${c.i}" style="border-radius:12px;padding:6px;margin:4px 0;background:#16293d;font-size:12px">Hello 👋</div>`:`<div class="pfb" style="font-size:26px">✨</div>`}<b>${c.n}</b><small style="color:${CRC[c.r]}">${CRN[c.r]}</small>${o?`<button onclick="gxEq('${c.id}')">${on?'Unequip':'Equip'}</button>`:`<button class="buy" ${M.gems>=CP[c.r]?'':'disabled'} onclick="gxCos('${c.id}')">${GI} ${CP[c.r]}</button>`}</div>`}).join('')+'</div>').join('');
+ else if(TT=='gq')b=`<div class="mu" style="margin:6px 0">Long-term goals that take days. Progress carries over between games and works offline.</div>`+GQ.map((q,i)=>{const v=Math.min(q[3],gqv(q[2])),d=!!M.gq[i],rd=!d&&v>=q[3];return`<div class="mi ${rd?'ready':''}" style="${d?'opacity:.6':''}"><div class="mh"><span>${GI}</span><b>${q[0]}</b><em>${d?'Claimed':rd?'Ready!':'Active'}</em></div><div class="mu">${q[1]}</div><div class="bar"><i style="width:${v/q[3]*100}%;background:linear-gradient(90deg,#7a2be0,#e0a3ff)"></i></div><div class="mf"><span>${fmt(v)}/${fmt(q[3])}</span><span>${GI} ${q[4]}${q[5]!=null?' + '+TR[q[5]].n:''}</span></div>${rd?`<button style="width:100%;text-align:center;margin-top:6px" onclick="gxGq(${i})">Claim</button>`:''}</div>`}).join('');
+ else b=`<div class="mu" style="margin:6px 0">Spend gems on advantages for your current island. Works on online islands too.</div>`+OFF.map((o,i)=>`<div class="mr"><div><b>${o[0]} ${o[1]}</b><div class="mu">${i==0?'4x a daily chest of coins':i==1?'Half your storage of each material':i==2?'Rare diamonds':'A quick army boost'}</div></div><button class="buy" ${M.gems>=o[3]?'':'disabled'} onclick="gxOff(${i})">${GI} ${o[3]}</button></div>`).join('');
+ e.innerHTML=`<div class="th"><b style="font-size:19px">${GI} Treasury</b><span class="gemb" style="margin-left:auto;cursor:default">${GI}<b>${fmt(M.gems)}</b></span><button class="ach-close" onclick="closeTre()" aria-label="Close" style="margin-left:6px">✕</button></div><div class="tabs" style="padding:8px 8px 4px">${[['ch','Chests'],['cos','Style'],['gq','Gem quests'],['sh','Gem shop']].map(a=>`<button class="${TT==a[0]?'on':''}" onclick="treTab('${a[0]}')">${a[1]}</button>`).join('')}</div><div class="tb">${b}</div>`}
+window.openTre=function(t){if(t)TT=t;closeSheet();closeMis();const e=tre();e.style.display='flex';treR()};window.closeTre=()=>{$$('tre').style.display='none'};
+const _vm=vMenu;vMenu=function(){const r=_vm();r[1]=`<button style="width:100%;margin:4px 0;background:linear-gradient(#5a25b0,#2a1260);border-color:#b27dff" onclick="openTre()">${GI} Treasury<small>${fmt(M.gems)} gems · ${Object.values(M.chests).reduce((a,b)=>a+b,0)} chests · styles</small></button>`+r[1];return r};
+/* ---------- HUD: gem badge + rising resource effects ---------- */
+const _hud=hud;hud=function(){_hud();const tp=document.querySelector('#hud .top');if(tp&&!tp.querySelector('.gemb')){const g=document.createElement('div');g.className='gemb';g.setAttribute('role','button');g.setAttribute('aria-label','Gems and chests');g.innerHTML=GI+'<b id="gemn">'+fmt(M.gems)+'</b>';g.onclick=()=>openTre();tp.insertBefore(g,tp.lastElementChild)}applyRc()};
+function fly(txt,cls,col){if(LOW||RM)return;const h=$$('hud');if(!h||h.querySelectorAll('.gx-f').length>4)return;const t=cls=='gemb'?h.querySelector('.gemb'):h.querySelector('[data-hud-coins]');if(!t)return;const r=t.getBoundingClientRect(),hr=h.getBoundingClientRect(),d=document.createElement('div');d.className='gx-f';d.style.cssText=`left:${r.left-hr.left}px;top:${r.bottom-hr.top-4}px;color:${col}`;d.innerHTML=txt;d.addEventListener('animationend',()=>d.remove());h.style.position='relative';h.appendChild(d)}
+let pc=null,pr={};setInterval(()=>{if(!S||document.hidden)return;if(pc!=null){const dc=S.coins-pc;if(dc>Math.max(25,(S.inc||0)*4+pc*.04)){fly('+'+fmt(dc)+' 🪙','','#ffe9a0');const c=document.querySelector('[data-hud-coins]');if(c){c.style.transition='none';c.style.textShadow='0 0 14px #ffd34a';setTimeout(()=>c.style.textShadow='',500)}}
+  for(const k of RES){const d=(S.res[k]||0)-(pr[k]||0),el=document.querySelector(`[data-hud-resource="${k}"]`);if(d>Math.max(8,cap()*.06)&&el&&!LOW&&!RM){el.animate([{transform:'scale(1.18)',boxShadow:'0 0 14px #7bc0ff'},{transform:'none'}],{duration:450})}}}
+ pc=S.coins;RES.forEach(k=>pr[k]=S.res[k]||0)},600);
+/* ---------- building aura (cheap ground ring, never covers the building) ---------- */
+const _dr=draw;draw=function(){_dr();const a=eq('au');if(a==null||LOW||!S||S.sel&&0)return;const ts=T0*zoom;if(ts<16)return;const cm=S.cam,x0=Math.max(0,Math.floor(cm.x/ts)),y0=Math.max(0,Math.floor(cm.y/ts)),x1=Math.min(N-1,Math.floor((cm.x+W)/ts)),y1=Math.min(N-1,Math.floor((cm.y+H)/ts)),tm=performance.now()/1000,col=a==4?`hsl(${(tm*60)%360},90%,65%)`:CID['au'+a].v;
+ cx.save();cx.lineWidth=Math.max(1.5,ts*.045);cx.strokeStyle=col;let n=0;for(let y=y0;y<=y1&&n<90;y++)for(let x=x0;x<=x1;x++){const t=T(x,y);if(!t||t.o!=1||!t.b)continue;n++;const p=.5+.5*Math.sin(tm*2.4+x*.7+y*.5);cx.globalAlpha=.28+.4*p;cx.beginPath();cx.ellipse((x+.5)*ts-cm.x,(y+.9)*ts-cm.y,ts*(.36+.07*p),ts*(.1+.02*p),0,0,6.283);cx.stroke()}cx.restore()};
+/* ---------- chat: send & show cosmetics ---------- */
+if(window.MPX){const _s=MPX.send;MPX.send=function(o){if(o&&o.t=='chat'){const f=gxFx(),x={};for(const k of['pf','nf','mf'])if(f[k]!=null)x[k]=f[k];if(Object.keys(x).length)o.fx=x}return _s.call(MPX,o)}}
+const _cl=chatLine;chatLine=function(m){let s=_cl(m),f=m.fx;if(m.s===(window.ONL&&ONL.slot)&&window.gxFx){const q=gxFx();f=Object.assign({},f,q)}if(!f)return s;const ok=(k,n)=>Number.isInteger(f[k])&&f[k]>=0&&f[k]<n;if(ok('mf',8))s=s.replace('<div style="align-self','<div class="mfx'+f.mf+'" style="align-self');if(ok('nf',8))s=s.replace('<b style="color:','<b class="nfx nfx'+f.nf+'" style="color:');if(ok('pf',12))s=s.replace('<div style="font-size:12px">','<div style="font-size:12px">'+pfHTML(f.pf));return s};
+addEventListener('keydown',e=>{if(e.key=='Escape'&&O)gxClose()});
+window.__gx={M,TR,CAT,roll:ti=>roll(ti),addGems,GQ,chestAdd};
+setTimeout(()=>{try{hud()}catch(e){}},50);
+})();
 </script>
 </body></html>
