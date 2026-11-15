@@ -368,7 +368,7 @@ const seaAdj=(x,y)=>D4.some(([a,b])=>ok(x+a,y+b)&&T(x+a,y+b).t=='w'&&!T(x+a,y+b)
 function near(x,y,o){let n=0;for(let b=-2;b<=2;b++)for(let a=-2;a<=2;a++)if((a||b)&&ok(x+a,y+b)){const t=T(x+a,y+b);if(t.o==o&&t.b==3)n+=fx.fnear(lv(t))}return n}
 function def(x,y){const t=T(x,y);return Math.round(8+(t.b==3?fx.fdef(lv(t)):0)+(t.b==1?fx.cdef(t.l):0)+12*near(x,y,t.o))}
 const power=()=>Math.round(18+S.tiles.reduce((n,t)=>n+(t.o==1&&t.b==3?fx.fatk(lv(t)):0)+(t.o==1&&t.b==1?fx.catk(t.l):0),0));
-const chance=(x,y)=>Math.max(0,Math.min(1,(1.3-def(x,y)/power())/.6));
+const chance=(x,y)=>winP(power(),def(x,y));
 const sp=()=>Math.min(.06,portLv()*.015+rt('spr')),bid=r=>S.price[r]*(1-.06*DF().sp+sp()),ask=r=>S.price[r]*(1+.08*DF().sp-sp());
 
 /* ===== world generation ===== */
@@ -416,7 +416,7 @@ function act(a){
   else if(a=='port'){if(!canPay(PC)||t.b||!cities(1).some(q=>q.l>=3))return;pay(PC);t.b=4;S.st.built++;toast('Port built — trade flows!')}
   else if(a=='up'){const l=lv(t);c=UPC[t.b](t,l);if(l>=MAXL[t.b]||!canPay(c))return;pay(c);t.l=l+1;S.st.upgrades++;toast('Upgraded to level '+t.l)}
   else if(a=='atk'){c={coins:40};if(!canPay(c)||!adj(x,y,1))return;pay(c);
-    if(power()*rnd(.7,1.3)>def(x,y)){const loot=Math.round((25+(t.b==1?60*t.l:0))*(1+rt('loot')));S.coins+=loot;t.o=1;S.st.gained++;S.st.won++;toast('Victory! Looted 🪙'+compactAmount(loot));kingdomCheck()}else{S.st.lostB++;toast('Attack repelled')}}
+    if(Math.random()<chance(x,y)){const loot=Math.round((25+(t.b==1?60*t.l:0))*(1+rt('loot')));S.coins+=loot;t.o=1;S.st.gained++;S.st.won++;toast('Victory! Looted 🪙'+compactAmount(loot));kingdomCheck()}else{S.st.lostB++;toast('Attack repelled')}}
   buzz();save();last='';render();hud()}
 function sel(v){S.sel=v;render()}
 
@@ -438,7 +438,7 @@ let n10=0;
 function tick(){if(window.ADM_PAUSE&&S&&!S.on)return;
   const dt=.1,c=cap(),d=DF();S.time+=dt;S.st.hold+=dt;let inc=0;
   for(const t of S.tiles){if(t.o!=1)continue;if(t.b==1)inc+=fx.inc(t.l)*(t.off>S.time?.4:1);else if(t.b==4){if(!(t.off>S.time))inc+=(1.5+.45*(lv(t)-1))*(1+rt('pinc'))}else if(t.b==2&&!(t.off>S.time)){const r=MR[t.t];S.res[r]=Math.min(c,S.res[r]+RATE[r]*fx.mine(lv(t))*d.rinc*fxm('prod')*(1+rt('prod')+(r=='wood'||r=='stone'?rt('bulk'):rt('ore')))*dt)}}
-  inc=(inc+bonusInc())*d.inc*fxm('inc')*(1+rt('inc'))*bmul();const nu=UPK;S.inc=inc-nu;S.coins=Math.max(0,S.coins+(inc-nu)*dt);n10++;
+  inc=(inc+bonusInc())*d.inc*fxm('inc')*(1+rt('inc'))*bmul()*(1+(window.RKB||0));const nu=UPK;S.inc=inc-nu;S.coins=Math.max(0,S.coins+(inc-nu)*dt);n10++;
   if(n10%10==0){marketTick();secTick()}if(n10%30==0)aiTick();if(n10%50==0)save();
   if(n10%5==0){hud();if(n10%20==0)render();misTick();if(mOpen)renderMarket();if(misOpen)renderMis()}updateHudAmounts()}
 
@@ -601,8 +601,8 @@ function render(){
       if(t.t=='g'&&seaAdj(x,y)){const ok2=cities(1).some(q=>q.l>=3);h+=btn('Build port ⚓',PC,ok2&&canPay(PC),"act('port')",ok2?'':'needs a level 3 city')}
     }else if(k==4)h+=`<span class="mu">⚓ Better market prices, +150 storage, +🪙1.5/s.</span>`;
     else if(k>=5){}else{const l=lv(t);if(l<MAXL[k]){c=UPC[k](t,l);h+=btn(`Upgrade to Lv${l+1}`,c,canPay(c),"act('up')")}else h+=`<span class="mu">Maximum level reached.</span>`}
-  }else{const a=adj(x,y,1);c={coins:40};h+=btn(`Attack (${Math.round(chance(x,y)*100)}% win)`,c,a&&canPay(c),"act('atk')",a?'':'must touch your land')}
-  h+=`</div><span class="mu">Defense ${def(x,y)} · your attack power ${power()}</span>`;
+  }else{const a=adj(x,y,1);c={coins:40};h+=btn(`Quick raid (${Math.round(chance(x,y)*100)}% win)`,c,a&&canPay(c),"act('atk')",a?'':'must touch your land')}
+  h+=`</div>${warLine(x,y)}<div class="mu">Quick raid power ${power()} (from your cities and strongholds)</div>`;
   if(h!==last){const old=p.querySelector('.lad'),sc=old&&ladK==x+','+y?old.scrollLeft:-1;last=h;p.innerHTML=h;paintIcons();const l=p.querySelector('.lad');if(l){if(sc>=0)l.scrollLeft=sc;else{const cu=l.querySelector('.cur');if(cu)l.scrollLeft=cu.offsetLeft-l.clientWidth/2+cu.clientWidth/2}}ladK=x+','+y}
   p.style.display='block'}
 function spark(r){const h=S.hist[r],mn=Math.min(...h),mx=Math.max(...h),d=mx-mn||1;return `<svg width="90" height="26" viewBox="0 0 90 26"><polyline fill="none" stroke="${RC[r]}" stroke-width="2" points="${h.map((v,i)=>(i*90/Math.max(1,h.length-1)).toFixed(1)+','+(24-(v-mn)/d*22).toFixed(1)).join(' ')}"/></svg>`}
@@ -798,8 +798,8 @@ function fxAdd(x,y,k,d){if(RM)return;FXL.push({x,y,k,t:performance.now()+(d||0)}
 function resolve(k,att,i,tac){
   const x=i%N,y=(i/N)|0,t=T(x,y),dk=t.o,dc=compOf(dk,i),M={frontal:[1.2,1.25],cautious:[.85,.65],siege:[1,.9]}[tac]||[1,1];
   const fort=fortV(x,y)*(tac=='siege'?.5:1),du=strength(dc,att,false,x,y,tac);
-  const A=strength(att,dc,true,x,y,tac,k==1)*M[0]*(k==1?1+rt('atk'):1)*rnd(.9,1.1)*(k==1?(window.SEAB||1):1),D=(du+fort)*rnd(.9,1.1)*(window.guardX?guardX(dk):1),win=A>D,r=A/D;
-  const a0={...att},d0={...dc},fa=win?Math.max(.2,Math.min(.8,.25+.5/r)):Math.min(.95,Math.max(.5,.5+.4*(1-r))),fd=win?.55:Math.max(.05,Math.min(.4,.1+.3*r));
+  const A=strength(att,dc,true,x,y,tac,k==1)*M[0]*(k==1?1+rt('atk'):1)*(k==1?(window.SEAB||1):1),D=(du+fort)*(window.guardX?guardX(dk):1),pw=winP(A,D),win=Math.random()<pw,r=A/Math.max(1,D),sa=Math.max(1,D)/(Math.max(1,A)+Math.max(1,D)),sd=1-sa;
+  const a0={...att},d0={...dc},fa=win?clampN(.08+.5*sa,.08,.6):clampN(.3+.55*sa,.35,.9),fd=win?clampN(.3+.55*sd,.35,.9):clampN(.08+.5*sd,.08,.6);
   const la=cut(att,fa*M[1]),ld=cut(dc,fd),why=[],st=t.b==1||t.b==3||t.w;
   if(fort>du*.8)why.push(win?'Attackers overcame strong fortifications':'Fortifications favoured the defender');
   if('mSGD'.includes(t.t))why.push('Defenders held mountain terrain (+30%)');else if(t.t=='f')why.push('Forest cover helped the defender (+15%)');
@@ -813,7 +813,7 @@ function resolve(k,att,i,tac){
   if(dk==1){if(win){addTo(S.army,dc);delete S.gar[i]}else if(sum(dc))S.gar[i]=dc;else delete S.gar[i]}
   else if(S.ai[dk])for(const u in UN)S.ai[dk][u]=Math.max(0,(S.ai[dk][u]||0)-ld[u]);
   addTo(k==1?S.army:S.ai[k],att);
-  const rep={k,dk,x,y,tac,win,A:Math.round(A),D:Math.round(D),fort:Math.round(fort),a0,d0,la,ld,why:why.slice(0,4),loot:0};
+  const rep={k,dk,x,y,tac,win,p:Math.round(pw*100),A:Math.round(A),D:Math.round(D),fort:Math.round(fort),a0,d0,la,ld,why:why.slice(0,4),loot:0};
   if(win){t.o=k;if(k==1){S.st.gained++;S.st.won++;rep.loot=Math.round((25+(t.b==1?60*t.l:0))*(1+rt('loot')));S.coins+=rep.loot;kingdomCheck();fxAdd(x,y,'cap',350)}else if(dk==1){S.st.lost++;S.st.hold=0;fxAdd(x,y,'lost',350)}}
   else{if(k==1){S.st.lostB++;fxAdd(x,y,'hit',350)}else if(dk==1){S.st.repelled++;fxAdd(x,y,'hit',350)}}
   fxAdd(x,y,'battle');sfx('battle');
@@ -838,7 +838,7 @@ function aiPick(){const p=tally(),m=Math.max(p.inf,p.arc,p.cav);let u='inf';if(m
 const uval=u=>{const c=UN[u].cost;let v=c.coins;RES.forEach(r=>{if(c[r])v+=c[r]*BASE[r]});return v};
 function aiAttack(k,mine,d){const a=S.ai[k],tg=[];mine.forEach(i=>{const x=i%N,y=(i/N)|0;D4.forEach(([p,q])=>{if(ok(x+p,y+q)&&T(x+p,y+q).o==1)tg.push((y+q)*N+x+p)})});if(!tg.length||sum(a)<2)return;
   const i=tg[rnd(0,tg.length)|0],x=i%N,y=(i/N)|0,comp={};for(const u in UN)comp[u]=Math.floor((a[u]||0)*.7);if(sum(comp)<2)return;
-  const t=T(x,y),fort=t.b==1||t.b==3||t.w,dc=compOf(1,i),A=strength(comp,dc,true,x,y,'frontal')*1.2,D=strength(dc,comp,false,x,y,'')+fortV(x,y),p=Math.max(0,Math.min(1,(A/D-.75)/.5));
+  const t=T(x,y),fort=t.b==1||t.b==3||t.w,dc=compOf(1,i),A=strength(comp,dc,true,x,y,'frontal')*1.2,D=strength(dc,comp,false,x,y,'')+fortV(x,y),p=winP(A,D);
   if(p<(d.ai>=2?.45:.6))return;
   const tac=fort&&comp.sie?'siege':p>.8?'frontal':'cautious';
   if(S.sieges.some(g=>g.idx==i))return;
@@ -1129,10 +1129,10 @@ function drawFX(ts,cm){const now=performance.now();cx.textAlign='center';cx.text
   for(const g of S.sieges){const x=(g.idx%N)*ts-cm.x+ts/2,y=((g.idx/N)|0)*ts-cm.y+ts/2,p=Math.min(1,(S.time-g.t0)/g.dur);cx.strokeStyle=g.k==1?'#6ee7a0':'#ff7b7b';cx.lineWidth=4;cx.beginPath();cx.arc(x,y,ts*.5,-Math.PI/2,-Math.PI/2+p*6.283);cx.stroke();cx.font=`${ts*.35}px sans-serif`;cx.fillText('🏰',x,y)}}
 /* --- sheets --- */
 var lastSH=null,TAPT=0;
-function openSheet(n){SH=n;shK='';lastSH=null;closeMis();closeM();if(n!='cat'&&n!='battle'&&n!='sea')S.sel=null;render();$('sh').style.display='flex';renderSheet();if(n=='army')hint('army','Recruit here, garrison cities and strongholds from their tile panel, and attack rival tiles that touch your land.')}
+function openSheet(n){SH=n;shK='';lastSH=null;closeMis();closeM();if(n!='cat'&&n!='battle'&&n!='sea'&&n!='war')S.sel=null;render();$('sh').style.display='flex';renderSheet();if(n=='army')hint('army','Recruit here, garrison cities and strongholds from their tile panel, and attack rival tiles that touch your land.')}
 function closeSheet(){SH=null;shK='';lastSH=null;$('sh').style.display='none';render()}
 function setSend(v){SEND=v;shK='';renderSheet()}
-function renderSheet(){if(!SH)return;const v={menu:vMenu,army:vArmy,dev:vDev,chron:vChron,ach:vAch,set:vSet,help:vHelp,cat:vCat,battle:vBattle,sea:vSea,report:vReport}[SH]();
+function renderSheet(){if(!SH)return;const v={menu:vMenu,army:vArmy,dev:vDev,chron:vChron,ach:vAch,set:vSet,help:vHelp,cat:vCat,battle:vBattle,sea:vSea,rank:vRank,war:vWar,report:vReport}[SH]();
   const h=`<div class="mh" style="padding:10px"><b style="font-size:18px">${v[0]}</b><button onclick="closeSheet()" style="margin-left:auto;text-align:center" aria-label="Close">✕</button></div><div id="shl">${v[1]}</div>`;
   if(h!==shK){const o=$('shl'),sc=o&&lastSH===SH?o.scrollTop:0;shK=h;lastSH=SH;$('sh').innerHTML=h;const n=$('shl');if(n)n.scrollTop=sc}}
 const mb=(ic,t,s,f)=>`<button style="width:100%;margin:4px 0" onclick="${f}">${ic} ${t}<small>${s}</small></button>`;
@@ -1165,18 +1165,18 @@ function vCat(){const s=S.sel;if(!s)return['Buildings','<p class="mu">Select a t
   return['🏛️ Buildings · ('+x+','+y+')',h]}
 function vBattle(){const s=S.sel;if(!s)return['Attack','<p class="mu">Select a rival tile first.</p>'];const [x,y]=s,t=T(x,y);if(t.o<2||!adj(x,y,1))return['Attack','<p class="mu">Select a rival tile that touches your land.</p>'];
   const i=y*N+x,att={};for(const u in UN)att[u]=Math.floor((S.army[u]||0)*SEND);const fort=t.b==1||t.b==3||t.w,dc=compOf(t.o,i),ex=intel(x,y);
-  const pv=tac=>{const f=fortV(x,y)*(tac=='siege'?.5:1),A=strength(att,dc,true,x,y,tac,1)*{frontal:1.2,cautious:.85,siege:1}[tac]*(1+rt('atk')),D=strength(dc,att,false,x,y,tac)+f;return{A,D,p:Math.max(0,Math.min(1,(A/D-.75)/.5))}};
-  const rk=p=>p>.8?'<span class="ok">Low risk</span>':p>.5?'Medium risk':'<span class="bad">High risk</span>';
+  const pv=tac=>{const f=fortV(x,y)*(tac=='siege'?.5:1),A=strength(att,dc,true,x,y,tac,1)*{frontal:1.2,cautious:.85,siege:1}[tac]*(1+rt('atk')),D=strength(dc,att,false,x,y,tac)+f;return{A,D,p:winP(A,D)}};
+  const rk=p=>`<span class="${p>.7?'ok':p<.4?'bad':''}">${Math.round(p*100)}% win</span>`;
   let h=`<div class="mh"><b>${OWN[t.o].n}</b><span class="mu">${NAME[t.t]}${t.b?' · '+BN[t.b]:''}${fort?' · fortified':''}</span></div><div class="mu">Sending: <button class="${SEND==1?'on':''}" style="padding:4px 10px" onclick="setSend(1)">All</button> <button class="${SEND==.5?'on':''}" style="padding:4px 10px" onclick="setSend(.5)">Half</button> ${UL(att)}</div>`;
-  h+=`<div class="mu">Enemy force: ${ex?UL(dc)+' (exact — watchtower intel)':'unknown — build a Watchtower within 5 tiles for exact numbers'} · fortification ${fortV(x,y)}</div>`;
+  h+=`<div class="mu">Enemy force: ${ex?UL(dc)+' (exact — watchtower intel)':'unknown — build a Watchtower within 5 tiles for exact numbers'} · fortification ${fortV(x,y)}</div><details><summary class="mu">Where do these numbers come from?</summary>${battleExplain(att,x,y,'frontal')}</details><div class="mu">Results are a dice roll weighted by the power ratio — a small edge is never a sure win.</div>`;
   if(!sum(att))h+=`<p class="bad">You have no ready units. Recruit in the Army panel.</p>`;
   const tac=[['frontal','Frontal assault','+20% attack, +25% losses'],['cautious','Cautious attack','−15% attack, −35% losses'],['siege','Siege','25s to prepare, halves fortification, needs siege engines']];
   tac.forEach(([k,n,d])=>{const r=pv(k),lo=Math.round(r.D*.75),hi=Math.round(r.D*1.25),dis=!sum(att)||(k=='siege'&&(!att.sie||!fort));
     h+=`<div class="mi"><div class="mh"><b>${n}</b><em>${rk(r.p)}</em></div><div class="mu">${d}</div><div class="mf"><span>Your power ${Math.round(r.A)}</span><span>Enemy ${ex?Math.round(r.D):lo+'–'+hi}</span></div><button style="width:100%;text-align:center;margin-top:6px" ${dis?'disabled':''} onclick="launch('${k}')">${k=='siege'?'Begin siege':'Attack'}<small>${k=='siege'&&!fort?'Target is not fortified':k=='siege'&&!att.sie?'No siege engines in the force':''}</small></button></div>`});
-  h+=`<p class="mu">Prefer no army? Use the quick Raid on the tile panel (40🪙, uses only your base attack power).</p>`;
+  h+=`<p class="mu">Prefer no army? Use the quick Raid on the tile panel (40🪙) — it only uses the base power of your cities and strongholds.</p>`;
   return['⚔️ Attack ('+x+','+y+')',h]}
 function vReport(){const r=S.rep;if(!r)return['Battle','<p class="mu">No battle yet.</p>'];
-  return[r.win?'🏆 Victory':'💀 Attack failed',`<div class="mu">${OWN[r.k].n} → ${OWN[r.dk].n} at (${r.x},${r.y}) · tactic: ${r.tac}</div><div class="mf"><span>Attacker power ${r.A}</span><span>Defender ${r.D} (fortifications ${r.fort})</span></div><div class="mf"><span>Attackers ${UL(r.a0)} · lost ${UL(r.la)}</span></div><div class="mf"><span>Defenders ${UL(r.d0)} · lost ${UL(r.ld)}</span></div>${r.loot?`<div class="ok">Looted 🪙${compactAmount(r.loot)}</div>`:''}<b>Why</b>${r.why.map(w=>`<div class="mu">• ${w}</div>`).join('')}`]}
+  return[r.win?'🏆 Victory':'💀 Attack failed',`<div class="mu">${OWN[r.k].n} → ${OWN[r.dk].n} at (${r.x},${r.y}) · tactic: ${r.tac}</div><div class="mf"><span>Win chance was ${r.p!=null?r.p+'%':'—'}</span></div><div class="mf"><span>Attacker power ${r.A}</span><span>Defender ${r.D} (fortifications ${r.fort})</span></div><div class="mf"><span>Attackers ${UL(r.a0)} · lost ${UL(r.la)}</span></div><div class="mf"><span>Defenders ${UL(r.d0)} · lost ${UL(r.ld)}</span></div>${r.loot?`<div class="ok">Looted 🪙${compactAmount(r.loot)}</div>`:''}<b>Why</b>${r.why.map(w=>`<div class="mu">• ${w}</div>`).join('')}`]}
 
 /* ===== v4: performance caches, bar glyphs, multi-claim, live market, 15-level buildings, achievement tree, new events ===== */
 const EM={...ICON};ICON.silver='<i class="gb sv"></i>';ICON.gold='<i class="gb gd"></i>';
@@ -1315,7 +1315,7 @@ function sell(r,f){mkEnsure();const n=Math.floor(S.res[r]*f);if(!n)return;S.coin
 function buy(r){mkEnsure();const n=Math.min(10,cap()-Math.floor(S.res[r]));if(n<=0)return toast('Storage is full');const c=Math.ceil(n*ask(r));if(c>S.coins)return toast('Not enough coins');S.coins-=c;S.res[r]+=n;S.st.trades++;S.mk[r]=Math.max(0,S.mk[r]-n);S.price[r]*=1+Math.min(.25,n*IMP[r]*.4);fin()}
 function mkWhy(r){let me=0,ai=0;for(const q of S.tiles)if(MR[q.t]==r){if(q.o==1)me++;else if(q.o>1)ai++}const m=S.mk[r]/M0[r];return `${m<.8?'<span class="bad">Shortage</span>':m>1.25?'<span class="ok">Surplus</span>':'Balanced'} · stock ${Math.round(S.mk[r])} · rivals hold ${ai} source tile${ai==1?'':'s'}, you hold ${me}`}
 function renderMarket(){mkEnsure();
-  const h=`<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:22px">Market</b><span class="pill" style="padding:4px 10px" data-market-coins>🪙 ${compactAmount(S.coins)}</span><button onclick="closeM()">Close</button></div>${S.news?`<div class="news">${S.news}</div>`:''}<div class="mu" style="margin:4px 0">Prices follow real supply and demand: rivals sell what their land produces; what you hoard stays off the market, and what you sell floods it.</div>`+
+  const h=`<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:22px">Market</b><span class="pill" style="padding:4px 10px" data-market-coins>🪙 ${compactAmount(S.coins)}</span><button onclick="closeM()">Close</button></div>${S.news?`<div class="news">${S.news}</div>`:''}${mktNote()}`+
   RES.map(r=>{const hh=S.hist[r],pr=hh[Math.max(0,hh.length-6)],ch=(S.price[r]/pr-1)*100,up=ch>=0,a=ask(r),can=S.coins>=a*10&&S.res[r]<cap();return `<div class="mr"><div><b>${ICON[r]} ${r[0].toUpperCase()+r.slice(1)}</b> <span class="mu" data-market-resource="${r}">you hold ${compactAmount(S.res[r])}</span><br><span style="font-size:17px">Buy ${a.toFixed(1)} · Sell ${bid(r).toFixed(1)}</span> <span class="${up?'ok':'bad'}">${up?'▲':'▼'} ${Math.abs(ch).toFixed(1)}%</span><br>${spark(r)}<div class="mu" style="font-size:12px">${mkWhy(r)}</div></div><div class="row"><button class="buy" ${can?'':'disabled'} onclick="buy('${r}')">Buy 10</button><button onclick="sell('${r}',.25)">Sell ¼</button><button onclick="sell('${r}',1)">Sell all</button></div></div>`}).join('')+
   `<div style="margin-top:12px"><button onclick="showDiff()">New game</button></div>`;
   if(h!==lastM){lastM=h;{const m=$('market'),sc=m.scrollTop;m.innerHTML=h;m.scrollTop=sc}}}
@@ -1512,9 +1512,11 @@ function onMsg(e){let m;try{m=JSON.parse(e.data)}catch(x){return}
   else if(m.t=='room'){MP.room=m;
     if(m.started){if(!window.ONL)startOn(m);else{m.pl.forEach(p=>{ONL.names[p.s]=p.n;ONL.off[p.s]=!p.on});if(m.init){syncOut();applyInit(m.init)}}badge()}
     else{MP.v='lobby';MP.open=1}
+    try{window.srvRoom&&window.srvRoom(m)}catch(e){console.error(e)}
     ui()}
   else if(!S||!S.on)return;
   else if(m.t=='snap'||m.t=='tiles')applyTiles(m.d);
+  else if(m.t=='mkt'||m.t=='tr'||m.t=='chat'||m.t=='lb'){try{window.srvMsg&&window.srvMsg(m)}catch(e){console.error(e)}}
   else if(m.t=='tally')setTallyIn(m.from,m.r=='c'?'c':'h',m.u)
   else if(m.t=='shield'){SHD[m.s]=m.until;const mins=Math.max(1,Math.ceil((m.until-Date.now())/6e4)),k=L(m.s);
     if(m.s==ONL.slot){toast(`🛡 Your realm is shielded for ${mins} min`);chron('🛡️',`Your realm is shielded for ${mins} min`)}else toast(`🛡 ${OWN[k].n} is shielded for ${mins} min`)}
@@ -1543,7 +1545,7 @@ newGame=function(d){
     if(!ONL.act.includes(g)){S.tiles.forEach(t=>{if(t.o==k){t.o=0;t.b=0;t.l=0}});if(!S.st.def.includes(k))S.st.def.push(k)}
     else OWN[k].n=ONL.names[g]||OWN[k].n}
   LAST=S.tiles.map(sig);home()};
-function applyInit(I){Object.assign(SHD,I.shield||{});applyTiles(I.snap||[]);for(const s in I.tal||{}){const v=I.tal[s];if(v&&'inf' in v)setTallyIn(+s,'h',v);else for(const r in v||{})setTallyIn(+s,r,v[r])}(I.pend||[]).forEach(h=>h.t=='hit'?onHit(h):onSiege(h))}
+function applyInit(I){try{window.srvInit&&window.srvInit(I)}catch(e){console.error(e)}Object.assign(SHD,I.shield||{});applyTiles(I.snap||[]);for(const s in I.tal||{}){const v=I.tal[s];if(v&&'inf' in v)setTallyIn(+s,'h',v);else for(const r in v||{})setTallyIn(+s,r,v[r])}(I.pend||[]).forEach(h=>h.t=='hit'?onHit(h):onSiege(h))}
 function upSave(){if(!S||!S.on||!MP.ws||MP.ws.readyState!=1)return;const d={};for(const k in S)if(!['tiles','cam','sel','ai','on','rl'].includes(k))d[k]=S[k];if(S.rl){d.rl={};for(const k in S.rl){const r=Object.assign({},S.rl[k]);delete r.tiles;d.rl[k]=r}}d.ts=Date.now();wsend({t:'save',d})}
 setInterval(upSave,15000);addEventListener('pagehide',upSave);
 let hid=0;document.addEventListener('visibilitychange',()=>{
@@ -1606,7 +1608,7 @@ aiAttack=function(k,mine,d){const a=S.ai[k],tg=[];
   mine.forEach(i=>{const x=i%N,y=(i/N)|0;D4.forEach(([p,q])=>{if(ok(x+p,y+q)){const o=T(x+p,y+q).o;if(o&&o!=k)tg.push((y+q)*N+x+p)}})});
   if(!tg.length||sum(a)<2)return;
   const i=tg[rnd(0,tg.length)|0],x=i%N,y=(i/N)|0,t=T(x,y),dk=t.o,comp={};for(const u in UN)comp[u]=Math.floor((a[u]||0)*.7);if(sum(comp)<2)return;
-  const fort=t.b==1||t.b==3||t.w,dc=compOf(dk,i),A=strength(comp,dc,true,x,y,'frontal')*1.2,D=strength(dc,comp,false,x,y,'')+fortV(x,y),p=Math.max(0,Math.min(1,(A/D-.75)/.5));
+  const fort=t.b==1||t.b==3||t.w,dc=compOf(dk,i),A=strength(comp,dc,true,x,y,'frontal')*1.2,D=strength(dc,comp,false,x,y,'')+fortV(x,y),p=winP(A,D);
   if(p<(dk==1?(d.ai>=2?.45:.6):.65)||S.sieges.some(g=>g.idx==i))return;
   const tac=fort&&comp.sie?'siege':p>.8?'frontal':'cautious';for(const u in UN)a[u]-=comp[u];
   tac=='siege'?startSiege(k,comp,i):resolve(k,comp,i,tac)};
@@ -1670,7 +1672,7 @@ if(!EVT._x){EVT._x=1;
 
 const _vm=vMenu;
 vMenu=function(){const r=_vm();r[1]=mb('📤','Share the game','Send friends the install link'+(MP.room?' + island key':''),"mp.share()")+mb('🌐',S&&S.on?'Online island':'Online play',S&&S.on?'Island key, players, leave':'Account, invite key, up to 5 players',"mp.menu()")+r[1];return r};
-window.MPX={L:s=>L(s),sig:t=>sig(t),syncOut:()=>syncOut(),setLast:a=>{LAST=a}};
+window.MPX={send:o=>wsend(o),open:()=>!!(MP.ws&&MP.ws.readyState==1),srv:()=>({url:MP.url,key:MP.key}),L:s=>L(s),sig:t=>sig(t),syncOut:()=>syncOut(),setLast:a=>{LAST=a}};
 window.mp={
   menu(){MP.open=1;MP.err='';MP.v=MP.room&&!MP.room.started?'lobby':'mode';ui()},
   close(){MP.open=0;ui()},
@@ -1941,7 +1943,7 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
     for(const i of unique){const t=S.tiles[i],x=i%N,y=(i/N)|0,defence=def(x,y),valuable=(t.b===1?4:t.b===2?3:t.b===5?2:t.b===7?2:t.b===3?1:0),nearby=cnt(x,y,2,q=>q.o===1&&q.b>0),score=(style==='conqueror'?-defence*.12+valuable*.5:style==='merchant'?valuable*1.5+(t.b===5?3:0)-defence*.08:style==='warden'?-defence*.1+(t.b===1?1:0):style==='opportunist'?valuable*1.1-defence*.2+nearby*.15:style==='scholar'?valuable*.7-defence*.1:0)+Math.random()*.9;
       if(score>bestScore){bestScore=score;best=i}}
     const x=best%N,y=(best/N)|0,comp={};for(const u in UN)comp[u]=Math.floor((a[u]||0)*.7);if(sum(comp)<2)return;
-    const t=T(x,y),fort=t.b===1||t.b===3||t.w,dc=compOf(1,best),A=strength(comp,dc,true,x,y,'frontal')*1.2,D=strength(dc,comp,false,x,y,'')+fortV(x,y),chanceNow=Math.max(0,Math.min(1,(A/D-.75)/.5));
+    const t=T(x,y),fort=t.b===1||t.b===3||t.w,dc=compOf(1,best),A=strength(comp,dc,true,x,y,'frontal')*1.2,D=strength(dc,comp,false,x,y,'')+fortV(x,y),chanceNow=winP(A,D);
     const threshold=style==='conqueror'?.4:style==='opportunist'?.43:style==='warden'?.68:style==='merchant'?.7:.58;if(chanceNow<threshold*(d.ai>=2?.85:1))return;
     const tac=fort&&comp.sie?'siege':chanceNow>.8?'frontal':'cautious';if(S.sieges.some(g=>g.idx===best))return;
     for(const u in UN)a[u]-=comp[u];if(tac==='siege')startSiege(k,comp,best);else resolve(k,comp,best,tac);
@@ -2171,11 +2173,7 @@ function renderVoy(fresh){const f=fl(),h=here(),dock=f[h],box=$('nl'),dest=h=='h
       +`<div class="mu">${h=='h'?'Your army guards the first camp: natives live in the New Land. Only the soldiers you bring will defend you there.':'Cargo and soldiers are unloaded at home.'} Hold + or − to add faster.</div></div>`;
     foot=`<div class="vfoot"><div class="cbar"><i style="width:${pct}%"></i></div><div class="mu">Cargo space ${Math.round(used)}/${cap}</div><button style="width:100%;margin-top:6px" ${voyBusy?'disabled':''} onclick="sailNow()">⛵ Set sail<small>Everything you load leaves this island${colExists()?'':' · the New Land is generated for you'}</small></button></div>`}
   else if(ok2)H+=`<div class="mi"><b>No galleon docked here</b><div class="mu">${h=='h'?'Build one at the shipyard above.':'Ships you left at home are not here. Wait for a galleon.'}</div></div>`;
-  if(ok2&&colExists()){const au=S.auto||{},cvs=S.convoys||[],nowT=Date.now(),lab=r=>r=='h'?'🏠 Home → 🏝️ New Land':'🏝️ New Land → 🏠 Home';
-    let A='<div class="mi"><b>🔁 Automatic shipping</b><div class="mu">The fleet repeats a saved load by itself whenever the ships are docked and the stock is there. About 75 s each way, no cinematic and you do not have to travel.</div>';
-    for(const r of ['h','c']){const o=au[r];if(o)A+=`<div class="mf"><span>${lab(r)}: ${o.n}⛵ ${cargoTxt(o.c)} ${o.on?'<span class="ok">ON</span>':'<span class="bad">paused</span>'}</span></div><div style="display:flex;gap:8px"><button style="flex:1;text-align:center" onclick="autoToggle('${r}')">${o.on?'Pause':'Resume'}</button><button style="flex:1;text-align:center" onclick="autoDel('${r}')">Remove</button></div>`}
-    A+=dock>0?`<button style="width:100%;margin-top:6px" onclick="autoSet()">🔁 Repeat the load above automatically from ${h=='h'?'home':'the New Land'}</button>`:'<div class="mu">Dock at least one ship here and load cargo above to create an order.</div>';
-    cvs.forEach(c=>{A+=`<div class="mu">⛵ ${c.del?'returning':'sailing'} ${lab(c.from)}: ${cargoTxt(c.c)} · ${Math.max(0,Math.ceil(((c.del?c.ret:c.arr)-nowT)/1000))}s</div>`});H+=A+'</div>'}
+  H+=autoHtml();
   H+=`<button onclick="closeVoy()">Close</button>`+foot+`</div>`;box.innerHTML=H;const nb=box.firstElementChild;if(nb&&sc)nb.scrollTop=sc}
 async function sailNow(){if(voyBusy)return;const f=fl(),h=here(),to=h=='h'?'c':'h';if(!unlocked()||VP.ships>f[h]||VP.ships<1)return;
   if(vpSpace()>VP.ships*CAP+1e-9)return toast('Too much cargo');for(const k of Object.keys(SP))if((VP[k]||0)>vpHave(k))return toast('Not enough '+k);
@@ -2189,25 +2187,72 @@ async function sailNow(){if(voyBusy)return;const f=fl(),h=here(),to=h=='h'?'c':'
     if(to=='c'&&!S.cSeen){S.cSeen=1;if(!S.on)rivers();calcWD();CHK.clear();SPR.clear();home()}
     chron('⛵',to=='c'?'Landfall in the New Land':'Returned home');save()})}catch(e){console.error(e)}
   voyBusy=false;hud();render();toast(to=='c'?'🏝️ Land ho! Tribes of the New Land watch from the hills. Claim land and build with what you carried.':'🏠 Welcome home!')}
-/* ---------- automatic shipping: convoys that sail on their own ---------- */
-const ONEWAY=75e3,RESK=['wood','stone','silver','gold','diamond'],UNK=['inf','arc','cav','sie'];
+/* ---------- automatic shipping v2: clear status, "ship everything" and partial loads ---------- */
+const ONEWAY=75e3,RESK=['wood','stone','silver','gold','diamond'],UNK=['inf','arc','cav','sie'],AKEYS=['coins',...RESK,...UNK],MINFILL=.12;
 const cargoTxt=c=>{const o=[];for(const k of['coins',...RESK])if(c[k])o.push((ICON[k]||'')+compactAmount(c[k]));for(const k of UNK)if(c[k])o.push(UNAME[k].split(' ')[0]+c[k]);return o.join(' ')||'—'};
-const stockOf=(R,k)=>k=='coins'?R.coins:UNK.includes(k)?(R.army[k]||0):(R.res[k]||0);
-function autoSet(){const h=here();if(!unlocked()||!colExists())return toast('Automatic shipping needs the New Land');const c={};for(const k of Object.keys(SP))if(VP[k])c[k]=VP[k];if(!Object.keys(c).length)return toast('Load some cargo first');if(vpSpace()>VP.ships*CAP+1e-9)return toast('Too much cargo');
-  S.auto=S.auto||{};S.auto[h]={on:1,n:VP.ships,c,next:0};toast('🔁 Automatic shipping saved');save();renderVoy()}
-function autoToggle(r){const o=S.auto&&S.auto[r];if(o){o.on=o.on?0:1;save();renderVoy()}}
-function autoDel(r){if(S.auto)delete S.auto[r];save();renderVoy()}
+const stockOf=(R,k)=>k=='coins'?Math.floor(R.coins):UNK.includes(k)?Math.floor(R.army[k]||0):Math.floor(R.res[k]||0);
+const shoreName=r=>r=='h'?'🏠 Home':'🏝️ New Land';
+function autoNorm(o){if(!o)return o;if(!o.items){o.items={};for(const k in(o.c||{}))o.items[k]={m:'fix',a:o.c[k]};delete o.c}if(o.part==null)o.part=0;if(o.n==null)o.n=1;return o}
+function autoPlan(r){const o=autoNorm(S.auto&&S.auto[r]);if(!o)return{st:'none'};if(!o.on)return{st:'paused',msg:'⏸ Paused'};
+  if(!colExists()||!unlocked())return{st:'lock',msg:'🔒 Needs the New Land'};const R=r==(S.realm=='c'?'c':'h')?S:(S.rl&&S.rl[r]);if(!R)return{st:'lock',msg:'🔒 Realm not available'};
+  const f=fl(),docked=f[r]||0,away=(S.convoys||[]).filter(c=>c.from==r&&!c.del||c.from==r&&c.del).length;
+  const want=o.n=='all'?Math.max(1,docked):o.n;
+  if(docked<1||docked<want){const back=(S.convoys||[]).filter(c=>c.from==r).map(c=>c.ret).sort((a,b)=>a-b)[0];
+    return{st:'ships',msg:`⛵ Waiting for ships: ${docked} docked at ${shoreName(r)}, need ${o.n=='all'?'1':want}`+(back?` · next back in ${Math.max(0,Math.ceil((back-Date.now())/1000))}s`:' · build or return a galleon')}}
+  const n=o.n=='all'?docked:want,cap=n*CAP,load={};let fixSp=0,missing=[],allSp=0;const all={};
+  for(const k of AKEYS){const it=o.items[k];if(!it||it.m=='off')continue;const have=stockOf(R,k);
+    if(it.m=='fix'){const take=Math.min(it.a,have);if(take<it.a&&!o.part){missing.push(`${ICON[k]||UNAME[k].split(' ')[0]} ${compactAmount(it.a-take)} more`);continue}if(take>0){load[k]=take;fixSp+=SP[k]*take}}
+    else{const take=Math.max(0,have-(it.keep||0));if(take>0){all[k]=take;allSp+=SP[k]*take}}}
+  if(missing.length)return{st:'stock',msg:'📦 Waiting for stock: need '+missing.slice(0,3).join(', ')+(missing.length>3?'…':'')+(o.part?'':' · turn on "ship what is available" to go anyway')};
+  if(fixSp>cap+1e-9)return{st:'big',msg:'⚠️ The fixed amounts do not fit on '+n+' ship'+(n>1?'s':'')+' — add ships or lower amounts'};
+  const free=Math.max(0,cap-fixSp),fct=allSp>free?(free/allSp):1;for(const k in all){const q=Math.floor(all[k]*fct);if(q>0)load[k]=(load[k]||0)+q}
+  let sp=0;for(const k in load)sp+=SP[k]*load[k];
+  if(!Object.keys(load).length)return{st:'empty',msg:'📦 Nothing to ship yet (everything is below your "keep" limits or empty)'};
+  const fixedOnly=Object.keys(o.items).every(k=>!o.items[k]||o.items[k].m!='all');
+  if(!(fixedOnly&&!o.part)&&sp<cap*MINFILL)return{st:'small',msg:`📦 Cargo too small: ${Math.round(sp/cap*100)}% of ${n} ship${n>1?'s':''} (needs ${Math.round(MINFILL*100)}%)`};
+  return{st:'ready',msg:'✅ Ready: '+cargoTxt(load)+' on '+n+' ship'+(n>1?'s':''),load,n,R}}
+function autoLaunch(r,pl){const{load,n,R}=pl,f=fl(),o=S.auto[r];R.coins-=load.coins||0;for(const k of RESK)if(load[k])R.res[k]-=load[k];for(const k of UNK)if(load[k])R.army[k]-=load[k];
+  f[r]-=n;const now=Date.now();(S.convoys=S.convoys||[]).push({from:r,to:r=='h'?'c':'h',n,c:Object.assign({},load),arr:now+ONEWAY,ret:now+2*ONEWAY,del:0});o.next=now+4000;o.last={t:now,txt:cargoTxt(load)};if(r==(S.realm=='c'?'c':'h'))toast('🔁 Convoy sailed: '+cargoTxt(load))}
 function autoTick(){if(!S||voyBusy||VYON)return;const now=Date.now(),f=fl();let ch=0;
   for(const c of(S.convoys||[]).slice()){
-    if(!c.del&&now>=c.arr){const D=c.to==here()?S:(S.rl&&S.rl[c.to]);if(D){D.coins+=c.c.coins||0;for(const k of RESK)if(c.c[k])D.res[k]=(D.res[k]||0)+c.c[k];for(const k of UNK)if(c.c[k])D.army[k]=(D.army[k]||0)+c.c[k];c.del=1;ch=1;if(c.to==here())toast('🔁 Convoy arrived: '+cargoTxt(c.c));chron('🔁','Convoy delivered '+cargoTxt(c.c))}}
+    if(!c.del&&now>=c.arr){const D=c.to==(S.realm=='c'?'c':'h')?S:(S.rl&&S.rl[c.to]);if(D){D.coins+=c.c.coins||0;for(const k of RESK)if(c.c[k])D.res[k]=(D.res[k]||0)+c.c[k];for(const k of UNK)if(c.c[k])D.army[k]=(D.army[k]||0)+c.c[k];c.del=1;ch=1;if(c.to==(S.realm=='c'?'c':'h'))toast('🔁 Convoy arrived: '+cargoTxt(c.c));chron('🔁','Convoy delivered '+cargoTxt(c.c))}}
     if(c.del&&now>=c.ret){f[c.from]+=c.n;S.convoys=S.convoys.filter(q=>q!==c);ch=1}}
-  if(colExists()&&unlocked())for(const r of['h','c']){const o=S.auto&&S.auto[r];if(!o||!o.on||now<(o.next||0)||f[r]<o.n)continue;const R=r==here()?S:(S.rl&&S.rl[r]);if(!R)continue;
-    if(!Object.keys(o.c).every(k=>stockOf(R,k)>=o.c[k]))continue;
-    R.coins-=o.c.coins||0;for(const k of RESK)if(o.c[k])R.res[k]-=o.c[k];for(const k of UNK)if(o.c[k])R.army[k]-=o.c[k];
-    f[r]-=o.n;(S.convoys=S.convoys||[]).push({from:r,to:r=='h'?'c':'h',n:o.n,c:Object.assign({},o.c),arr:now+ONEWAY,ret:now+2*ONEWAY,del:0});o.next=now+5000;ch=1;if(r==here())toast('🔁 Convoy sailed: '+cargoTxt(o.c))}
+  for(const r of['h','c']){const o=S.auto&&S.auto[r];if(!o)continue;const pl=autoPlan(r);if(o.why!==pl.st){o.why=pl.st;ch=1;if(['stock','big','small','empty'].includes(pl.st)&&o.sawOk)toast('🔁 '+shoreName(r)+' shipping stopped — '+pl.msg.replace(/^[^ ]+ /,''))}if(pl.st=='ready')o.sawOk=1;
+    if(pl.st=='ready'&&now>=(o.next||0)){autoLaunch(r,pl);ch=1}}
   if(ch){save();hud();if($('nl').style.display=='flex')renderVoy()}}
+/* order editor */
+let AE=null;const aeDef=()=>{const it={};return{on:1,n:1,part:0,items:it,next:0}};
+function aeOpen(r){const o=autoNorm(S.auto&&S.auto[r]);AE={r,o:o?JSON.parse(JSON.stringify(o)):aeDef(),isNew:!o};renderVoy()}
+function aeCancel(){AE=null;renderVoy()}
+function aeSave(){const o=AE.o;if(!Object.keys(o.items).some(k=>o.items[k]&&o.items[k].m!='off'))return toast('Pick at least one thing to ship');o.on=1;o.next=0;S.auto=S.auto||{};S.auto[AE.r]=o;AE=null;toast('🔁 Automatic shipping saved');save();autoTick();renderVoy()}
+function aeSet(k,m){const o=AE.o;if(m=='off')delete o.items[k];else{const old=o.items[k]||{};o.items[k]={m,a:old.a||STEP[k]*(k=='coins'?2:1)||1,keep:old.keep||0}}renderVoy()}
+function aeAdj(k,field,d){const it=AE.o.items[k];if(!it)return false;const st=STEP[k]||1;it[field]=Math.max(0,(it[field]||0)+d*st);renderVoy();return true}
+function aeShips(d){const o=AE.o;if(d==='all'){o.n=o.n=='all'?1:'all'}else{const mx=Math.max(1,MAXS);o.n=Math.max(1,Math.min(mx,(o.n=='all'?fl()[AE.r]||1:o.n)+d))}renderVoy()}
+function aePart(){AE.o.part=AE.o.part?0:1;renderVoy()}
+function autoSend(r){const o=S.auto&&S.auto[r];if(!o)return;const pl=autoPlan(r);if(pl.st=='ready'){autoLaunch(r,pl);save();hud();renderVoy()}else toast(pl.msg||'Cannot sail now')}
+function autoToggle(r){const o=S.auto&&S.auto[r];if(o){o.on=o.on?0:1;save();renderVoy()}}
+function autoDel(r){if(S.auto)delete S.auto[r];save();renderVoy()}
+function autoSet(){const h=S.realm=='c'?'c':'h';aeOpen(h)}
+function autoHtml(){if(!(unlocked()&&colExists()))return'';const au=S.auto||{},cvs=S.convoys||[],nowT=Date.now(),cur=S.realm=='c'?'c':'h';
+  let A='<div class="mi"><b>🔁 Automatic shipping</b><div class="mu">A fleet repeats your orders by itself (about 75 s each way, no cinematic). It can ship fixed amounts, or <b>everything</b> above a limit you choose, and it tells you exactly what it is waiting for.</div>';
+  if(AE){const o=AE.o,r=AE.r,docked=fl()[r]||0,cap=(o.n=='all'?Math.max(1,docked):o.n)*CAP;
+    A+=`<div class="mf"><b>Order: ${shoreName(r)} → ${shoreName(r=='h'?'c':'h')}</b></div><div class="vrow"><span>⛵ Ships <small class="mu">${docked} docked</small></span><span class="vb"><button onclick="aeShips(-1)">−</button> <b>${o.n=='all'?'All':o.n}</b> <button onclick="aeShips(1)">+</button> <button class="${o.n=='all'?'on':''}" onclick="aeShips('all')">All docked</button></span></div>`;
+    for(const k of AKEYS){const it=o.items[k],nm=RNAME[k]||(UN[k].ic+' '+UN[k].n),m=it?it.m:'off';
+      A+=`<div class="vrow"><span>${nm}</span><span class="vb"><button class="${m=='off'?'on':''}" onclick="aeSet('${k}','off')">Off</button><button class="${m=='fix'?'on':''}" onclick="aeSet('${k}','fix')">Amount</button><button class="${m=='all'?'on':''}" onclick="aeSet('${k}','all')">All</button></span></div>`;
+      if(m=='fix')A+=`<div class="vrow" style="padding-left:14px"><span class="mu">per trip</span><span class="vb"><button data-ak="${k}" data-af="a" data-ad="-1">−</button> <b>${compactAmount(it.a)}</b> <button data-ak="${k}" data-af="a" data-ad="1">+</button></span></div>`;
+      if(m=='all')A+=`<div class="vrow" style="padding-left:14px"><span class="mu">keep at least</span><span class="vb"><button data-ak="${k}" data-af="keep" data-ad="-1">−</button> <b>${compactAmount(it.keep||0)}</b> <button data-ak="${k}" data-af="keep" data-ad="1">+</button></span></div>`}
+    A+=`<div class="vrow"><span>Ship what is available <small class="mu">even if below the amounts</small></span><span class="vb"><button class="${o.part?'on':''}" onclick="aePart()">${o.part?'ON':'OFF'}</button></span></div>`;
+    A+=`<div style="display:flex;gap:8px;margin-top:6px"><button style="flex:1;text-align:center" onclick="aeCancel()">Cancel</button><button style="flex:1;text-align:center" class="buy" onclick="aeSave()">Save order</button></div>`}
+  else{for(const r of['h','c']){const o=autoNorm(au[r]);if(!o)continue;const pl=autoPlan(r);
+      A+=`<div class="mf" style="display:block"><b>${shoreName(r)} → ${shoreName(r=='h'?'c':'h')}</b> · ${o.n=='all'?'all docked ships':o.n+'⛵'}${o.part?' · partial loads':''}<br><small class="mu">${Object.keys(o.items).filter(k=>o.items[k]&&o.items[k].m!='off').map(k=>{const it=o.items[k],nm=(ICON[k]||UN[k].ic);return it.m=='all'?`${nm} all${it.keep?' (keep '+compactAmount(it.keep)+')':''}`:`${nm} ${compactAmount(it.a)}`}).join(' · ')}</small><br><span class="${pl.st=='ready'?'ok':pl.st=='paused'?'mu':''}">${pl.msg||''}</span>${o.last?`<br><small class="mu">Last trip: ${o.last.txt} · ${Math.max(0,Math.round((nowT-o.last.t)/60000))} min ago</small>`:''}</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px"><button style="flex:1;text-align:center" onclick="aeOpen('${r}')">Edit</button><button style="flex:1;text-align:center" onclick="autoToggle('${r}')">${o.on?'Pause':'Resume'}</button><button style="flex:1;text-align:center" ${pl.st=='ready'?'':'disabled'} onclick="autoSend('${r}')">Send now</button><button style="flex:1;text-align:center" onclick="autoDel('${r}')">✕</button></div>`}
+    const have=['h','c'].filter(r=>au[r]);A+=['h','c'].filter(r=>!au[r]).map(r=>`<button style="width:100%;margin-top:6px" onclick="aeOpen('${r}')">➕ New order: ${shoreName(r)} → ${shoreName(r=='h'?'c':'h')}</button>`).join('')||'';
+    cvs.forEach(c=>{A+=`<div class="mu">⛵ ${c.del?'returning':'sailing'} ${shoreName(c.from)} → ${shoreName(c.to)}: ${cargoTxt(c.c)} · ${Math.max(0,Math.ceil(((c.del?c.ret:c.arr)-nowT)/1000))}s</div>`})}
+  return A+'</div>'}
+document.addEventListener('pointerdown',e=>{const b=e.target.closest&&e.target.closest('#nl [data-ak]');if(!b||!AE)return;e.preventDefault();const k=b.dataset.ak,f=b.dataset.af,d=+b.dataset.ad,go=()=>{if(aeAdj(k,f,d)===false)vStop()};vStop();go();vHold={t:setTimeout(()=>{if(vHold)vHold.i=setInterval(go,70)},380)}});
 setInterval(autoTick,2000);
-setInterval(()=>{if($('nl').style.display=='flex'&&(S.convoys||[]).length)renderVoy()},4000);
+setInterval(()=>{if($('nl').style.display=='flex'&&!AE&&(S.convoys||[]).length)renderVoy()},4000);
+function autoSub(){const au=S.auto||{},ks=Object.keys(au);if(!ks.length)return'';const bad=ks.some(r=>{const p=autoPlan(r);return['stock','big','small','empty'].includes(p.st)});return' · 🔁 '+ks.length+' order'+(ks.length>1?'s':'')+(bad?' ⚠️ waiting':'')}
 /* ---------- online New Land: one shared island, a landing spot for every player side by side ---------- */
 function withSeed(sd,fn){const R=Math.random;let a=sd>>>0;Math.random=()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};try{return fn()}finally{Math.random=R}}
 function colBase(){const act=ONL.act.slice().sort((a,b)=>a-b),dd=S.diff==null?1:S.diff,sd=((ONL.seed>>>0)^0x9e3779b9)>>>0;
@@ -2242,8 +2287,8 @@ function seaBtn(x,y,t){if(!(t.o>1&&t.t!='w'&&!adj(x,y,1)&&seaAdj(x,y)))return'';
 function vSea(){const s=S.sel;if(!s)return['Attack by sea','<p class="mu">Select a rival coastal tile first.</p>'];const[x,y]=s,t=T(x,y),f=fl(),docked=f[here()]||0;
   if(!(t.o>1&&t.t!='w'&&!adj(x,y,1)&&seaAdj(x,y)))return['Attack by sea','<p class="mu">Select a rival coastal tile that does not touch your land.</p>'];
   SEAN=Math.max(1,Math.min(SEAN,docked||1));const n=SEAN,i=y*N+x,att=seaForce(n),fort=t.b==1||t.b==3||t.w,dc=compOf(t.o,i),ex=intel(x,y),mul=seaMul(n),rt0=seaRoute(x,y),ac=Math.round(20+4*sum(att)+30*n);
-  const pv=tac=>{const fv=fortV(x,y),A=strength(att,dc,true,x,y,tac,1)*{frontal:1.2,cautious:.85}[tac]*(1+rt('atk'))*mul,D=strength(dc,att,false,x,y,tac)+fv;return{A,D,p:Math.max(0,Math.min(1,(A/D-.75)/.5))}};
-  const rk=p=>p>.8?'<span class="ok">Low risk</span>':p>.5?'Medium risk':'<span class="bad">High risk</span>';
+  const pv=tac=>{const fv=fortV(x,y),A=strength(att,dc,true,x,y,tac,1)*{frontal:1.2,cautious:.85}[tac]*(1+rt('atk'))*mul,D=strength(dc,att,false,x,y,tac)+fv;return{A,D,p:winP(A,D)}};
+  const rk=p=>`<span class="${p>.7?'ok':p<.4?'bad':''}">${Math.round(p*100)}% win</span>`;
   let h=`<div class="mh"><b>${OWN[t.o].n}</b><span class="mu">${NAME[t.t]}${t.b?' · '+BN[t.b]:''}${fort?' · fortified':''}</span></div>
   <div class="mu">⛵ Ships: <button style="padding:4px 12px" onclick="SEAN=Math.max(1,SEAN-1);shK='';renderSheet()">−</button> <b>${n}</b>/${docked} <button style="padding:4px 12px" onclick="SEAN=Math.min(${docked},SEAN+1);shK='';renderSheet()">+</button> · carries ${n*CAP} space · sending <button class="${SEND==1?'on':''}" style="padding:4px 10px" onclick="setSend(1)">All</button> <button class="${SEND==.5?'on':''}" style="padding:4px 10px" onclick="setSend(.5)">Half</button></div>
   <div class="mu">Landing force: ${UL(att)} · ship guns +${Math.round(Math.min(6,n)*12)}%, landing penalty −15%</div>
@@ -2395,16 +2440,172 @@ const _snap=snap;snap=function(){_snap();const st=S.st;let cT=st.cT||0,cM=st.cM|
   V.voyages=st.voy||0;V.colTiles=cT;V.colMines=cM;V.colCity=cC;V.colDef=st.cD||0;V.colWon=(st.cw0||0)+(S.realm=='c'?st.won-(st.wb||0):0)};
 /* ---------- misc hooks ---------- */
 const _ng=newGame;newGame=function(d){N=56;nlApplyTables('h');_ng(d);delete S.rl;S.realm='h'};
-const _vm=vMenu;vMenu=function(){const r=_vm();if((S.gal||colExists()||S.nlOk))r[1]+=mb('⛵','Voyages',S.realm=='c'?'Sail home · move cargo and soldiers':'Shipyard, fleet and expeditions','openVoy()');return r};
+const _vm=vMenu;vMenu=function(){const r=_vm();if((S.gal||colExists()||S.nlOk))r[1]+=mb('⛵','Voyages',(S.realm=='c'?'Sail home · move cargo and soldiers':'Shipyard, fleet and expeditions')+autoSub(),'openVoy()');return r};
 const _hud=hud;hud=function(){_hud();if(S&&S.realm=='c'){const e=document.querySelector('#hud .land');if(e&&!e.dataset.c){e.dataset.c=1;e.textContent='🏝️ '+e.textContent}}};
 const st0=document.createElement('style');st0.textContent=`#nl{position:fixed;inset:0;display:none;z-index:32;background:#000c;align-items:center;justify-content:center}#nl .dbox{max-height:92%}.vrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--ln)}.vrow button{min-height:38px;min-width:42px;text-align:center;padding:4px 8px}.cbar{height:10px;border-radius:6px;background:#0b1620;border:1px solid var(--ln);overflow:hidden;margin:4px 0}.cbar i{display:block;height:100%;background:linear-gradient(90deg,#2d9a5b,#ffcf4a)}#voy{position:fixed;inset:0;z-index:80;background:transparent;touch-action:none;transition:opacity .4s}body.voyage>*:not(#wrap):not(#voy):not(script):not(style),body.voyage #wrap>:not(#c){opacity:0!important;pointer-events:none!important;transition:opacity .4s}.vfoot{position:sticky;bottom:-14px;margin:0 -14px -14px;padding:10px 14px;background:#102338;border-top:1px solid var(--ln);z-index:2}.vb{white-space:nowrap}.vrow button{touch-action:manipulation;min-width:46px}#voy canvas{position:absolute;inset:0;width:100%;height:100%}#voyT{position:absolute;left:0;right:0;top:calc(14% + env(safe-area-inset-top,0px));text-align:center;font:800 24px/1.3 "Trebuchet MS",system-ui,sans-serif;color:#fff;text-shadow:0 2px 12px #000a;transition:opacity .35s;pointer-events:none;padding:0 16px}#voyS{position:absolute;right:14px;bottom:calc(18px + env(safe-area-inset-bottom,0px));min-height:42px}`;document.head.appendChild(st0);
 const nlEl=document.createElement('div');nlEl.id='nl';document.body.appendChild(nlEl);
-Object.assign(window,{autoSet,autoToggle,autoDel,autoTick,mkPath,pathAt,onlRestore,onlSwapFix,genColonyOn,colBase,vSea,seaLaunch,seaArrive,seaRoute,colBuild,oceanSet,dockSpot,seaPath,nlSet:(k,v)=>{VP[k]=v},nlSail:()=>sailNow(),openVoy,closeVoy,vpAdj,vpAuto,buildShip,sailNow,swapRealm,genColony});
+Object.assign(window,{aeAdj,autoPlan,cargoTxt,autoSet,autoToggle,autoDel,autoTick,aeOpen,aeCancel,aeSave,aeSet,aeShips,aePart,autoSend,mkPath,pathAt,onlRestore,onlSwapFix,genColonyOn,colBase,vSea,seaLaunch,seaArrive,seaRoute,colBuild,oceanSet,dockSpot,seaPath,nlSet:(k,v)=>{VP[k]=v},nlSail:()=>sailNow(),openVoy,closeVoy,vpAdj,vpAuto,buildShip,sailNow,swapRealm,genColony});
 })();
 
 /* ---- stability: keep scroll positions and block ghost clicks ---- */
 {const _r=render;let lk='';render=function(){const p=$('panel'),k=S&&S.sel?S.sel.join(','):'',sc=(k&&k===lk&&p.style.display!='none')?p.scrollTop:0;_r();lk=k;if(sc)p.scrollTop=sc}}
 cv.addEventListener('pointerup',()=>{TAPT=performance.now()},true);cv.addEventListener('pointercancel',()=>{TAPT=performance.now()},true);
 document.addEventListener('click',e=>{if(performance.now()-TAPT<450&&e.target.closest&&e.target.closest('#panel,#sh,#mis,#market,#msb')){e.preventDefault();e.stopPropagation()}},true);
+
+const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* ===== war: one place that explains where attack and defence come from ===== */
+const clampN=(v,a,b)=>Math.max(a,Math.min(b,v));
+const winP=(A,D)=>{A=Math.max(1,A);D=Math.max(1,D);return 1/(1+Math.pow(D/A,3.2))};
+function strengthEx(comp,foe,att,x,y,tac,pl){const t=T(x,y),ft=sum(foe)||1,it=comp.inf||0,ar=comp.arc||0,st=t.b==1||t.b==3||t.w,rows=[];let v=0;
+  for(const u in UN){const n=comp[u]||0;if(!n)continue;const U=UN[u],notes=[];let m=1;for(const f in foe)m+=(foe[f]/ft)*((U.cnt[f]||1)-1);
+    const base=n*(att?U.atk:U.def*.6+U.atk*.4);let a=base*m;if(Math.abs(m-1)>.02)notes.push((m>1?'+':'−')+Math.abs(Math.round((m-1)*100))+'% matchup');
+    if(u=='arc'){const f=it>=ar*.3?1.3:.8;a*=f;notes.push(f>1?'+30% behind infantry':'−20% no infantry cover')}
+    if(u=='cav'&&att){const f=t.t=='g'?1.25:t.t=='f'?.7:'mSGD'.includes(t.t)?.55:1;if(f!=1){a*=f;notes.push((f>1?'+':'−')+Math.abs(Math.round((f-1)*100))+'% terrain')}}
+    if(u=='sie'){const f=att?(st||tac=='siege'?2.4:.6):.3;a*=f;notes.push(f>1?'×2.4 vs fortified':'weak here (×'+f+')')}
+    if(!att&&u=='inf'){a*=1.25;notes.push('+25% defending')}
+    if(pl&&att){const b=1+rt('a'+u);if(b!=1){a*=b;notes.push('+'+Math.round((b-1)*100)+'% research')}}
+    rows.push({u,n,base:Math.round(base),val:Math.round(a),notes});v+=a}
+  return{total:att?v:v*1.5,sub:v,rows}}
+function defParts(x,y){const t=T(x,y),rows=[['Base ground',8]];let d=8;
+  if(t.b==3){const v=fx.fdef(lv(t));d+=v;rows.push(['🏰 Stronghold Lv'+lv(t),v])}
+  if(t.b==1){const c=fx.cdef(t.l);d+=c;rows.push(['🏙️ City Lv'+t.l,c]);const w=12*(t.w||0)*(t.o==1?1+rt('wall'):1);if(w){d+=w;rows.push(['🧱 Walls Lv'+t.w,Math.round(w)])}}
+  const nr=12*near(x,y,t.o);if(nr){d+=nr;rows.push(['🏰 Strongholds within 2 tiles',Math.round(nr)])}
+  if(t.o==1){const tw=towerDef(x,y),ba=2*bl(9);if(tw){d+=tw;rows.push(['🗼 Watchtowers close by',Math.round(tw)])}if(ba){d+=ba;rows.push(['🏛️ Barracks',ba])}}
+  const mults=[];if('mSGD'.includes(t.t))mults.push(['⛰️ Mountain terrain',1.3]);else if(t.t=='f')mults.push(['🌲 Forest cover',1.15]);
+  if(t.o==1){const r1=1+rt('dfn');if(Math.abs(r1-1)>.001)mults.push(['🎓 Research',r1]);const e1=fxm('def');if(Math.abs(e1-1)>.001)mults.push(['✨ Active effects',e1])}
+  let tot=d;mults.forEach(m=>tot*=m[1]);mults.push(['Fortification scale',1.6]);tot*=1.6;return{rows,mults,total:Math.round(tot),raw:d}}
+function battleCalc(att,x,y,tac,sea){const t=T(x,y),dk=t.o,dc=compOf(dk,y*N+x),M={frontal:[1.2,1.25],cautious:[.85,.65],siege:[1,.9]}[tac]||[1,1],fort=fortV(x,y)*(tac=='siege'?.5:1),du=strength(dc,att,false,x,y,tac);
+  const A=strength(att,dc,true,x,y,tac,1)*M[0]*(1+rt('atk'))*(sea||1),D=(du+fort)*(window.guardX?guardX(dk):1);return{A,D,p:winP(A,D),dc,fort,du}}
+function readyComp(){const c={};for(const u in UN)c[u]=Math.floor((S.army[u]||0)*SEND);return c}
+function warLine(x,y){const t=T(x,y);if(!t||!t.o||t.t=='w')return'';const i=y*N+x;
+  if(t.o==1){const f=fortV(x,y),g=compOf(1,i),gs=Math.round(strength(g,{},false,x,y,'')),tot=f+gs;return`<div class="mu">🛡 Defense <b>${tot}</b> = fortification ${f} + garrison ${gs} <a href="#" onclick="openSheet('war');return false">how?</a></div>`}
+  const ready=readyComp();if(adj(x,y,1)&&sum(ready)){const r=battleCalc(ready,x,y,'');return`<div class="mu">🛡 Enemy defense <b>${Math.round(r.D)}</b> · ⚔️ your ready army <b>${Math.round(r.A)}</b> → <b>${Math.round(r.p*100)}%</b> win <a href="#" onclick="openSheet('war');return false">how?</a></div>`}
+  const f=fortV(x,y),g=Math.round(strength(compOf(t.o,i),{},false,x,y,''));return`<div class="mu">🛡 Enemy defense about <b>${f+g}</b> (fortification ${f} + garrison ~${g}) <a href="#" onclick="openSheet('war');return false">how?</a></div>`}
+function exRows(ex){return ex.rows.map(r=>`<div class="mf"><span>${UN[r.u].ic} ${r.n}× ${UN[r.u].n}${r.notes.length?'<br><small class="mu">'+r.notes.join(' · ')+'</small>':''}</span><b>${r.val}</b></div>`).join('')||'<div class="mu">No units.</div>'}
+function dfRows(d){return d.rows.map(r=>`<div class="mf"><span>${r[0]}</span><b>+${r[1]}</b></div>`).join('')+d.mults.map(m=>`<div class="mf"><span>${m[0]}</span><b>×${(+m[1]).toFixed(2)}</b></div>`).join('')+`<div class="mf"><span><b>Fortification total</b></span><b>${d.total}</b></div>`}
+function battleExplain(att,x,y,tac){const t=T(x,y),dc=compOf(t.o,y*N+x),a=strengthEx(att,dc,true,x,y,tac,1),d=strengthEx(dc,att,false,x,y,tac),f=defParts(x,y),tm={frontal:1.2,cautious:.85,siege:1}[tac]||1;
+  return`<div class="mi"><b>⚔️ Attack — your units</b>${exRows(a)}<div class="mf"><span>× tactic ${tm} × research ${(1+rt('atk')).toFixed(2)}</span><b>${Math.round(a.total*tm*(1+rt('atk')))}</b></div></div>
+  <div class="mi"><b>🛡 Defense — fortification</b>${dfRows(f)}</div><div class="mi"><b>🛡 Defense — garrison units (×1.5 when defending)</b>${exRows(d)}<div class="mf"><span>Garrison total</span><b>${Math.round(d.total)}</b></div></div>`}
+function vWar(){const s=S.sel;let h=`<div class="mi"><b>How war works</b>
+  <div class="mu">⚔️ <b>Attack</b> comes from your <b>ready units</b> (Army panel): each unit's attack value, adjusted by matchups (infantry beat cavalry, cavalry beat archers, archers beat infantry), terrain, research and your tactic.</div>
+  <div class="mu">🛡 <b>Defense</b> of a tile = its <b>fortification</b> (city, stronghold, walls, strongholds and watchtowers nearby, terrain, research) + the <b>garrison units</b> stationed there. Garrison units defend ×1.5.</div>
+  <div class="mu">🎲 The result is a roll weighted by the power ratio: equal power = 50%, 25% stronger ≈ 67%, twice as strong ≈ 90%. It is never certain, and both sides lose units — the winner loses less.</div></div>`;
+  const ready=readyComp(),ex=strengthEx(ready,{},true,s?s[0]:0,s?s[1]:0,'',1);
+  if(s){const[x,y]=s,t=T(x,y);
+    if(t.o==1){const f=defParts(x,y),g=compOf(1,y*N+x),gx=strengthEx(g,{},false,x,y,'');h+=`<div class="mi"><b>🛡 Defense of your tile (${x},${y})</b>${dfRows(f)}</div><div class="mi"><b>Garrison units here</b>${exRows(gx)}<div class="mf"><span>Garrison total (×1.5)</span><b>${Math.round(gx.total)}</b></div><div class="mu">Total defense ${f.total+Math.round(gx.total)}. Garrison units from the tile panel; build strongholds nearby and walls to raise it.</div></div>`}
+    else if(t.o>1&&t.t!='w'){const att=adj(x,y,1)?ready:ready;h+=`<div class="mi"><b>Target: ${OWN[t.o].n} (${x},${y})</b>`+(adj(x,y,1)?'':'<div class="mu">Not touching your land — only a sea landing can reach it.</div>')+`</div>`+battleExplain(att,x,y,'');
+      const r=battleCalc(att,x,y,'');h+=`<div class="mi ready"><b>Result of comparing the two sides</b><div class="mf"><span>Your attack</span><b>${Math.round(r.A)}</b></div><div class="mf"><span>Their defense</span><b>${Math.round(r.D)}</b></div><div class="mf"><span>Win chance (no tactic)</span><b>${Math.round(r.p*100)}%</b></div></div>`}
+    else h+=`<p class="mu">Select one of your tiles or a rival tile to see its numbers.</p>`}
+  else h+=`<p class="mu">Select one of your tiles or a rival tile on the map, then open this page again for its full breakdown.</p>`;
+  h+=`<div class="mi"><b>Your ready army</b>${exRows(ex)}<div class="mf"><span>Total attack (vs nothing)</span><b>${Math.round(ex.total*(1+rt('atk')))}</b></div><div class="mu">Research attack bonus ${Math.round(rt('atk')*100)}%. Garrisoned units are not counted — they defend their tile.</div></div>`;
+  return['⚔️ War room',h]}
+/* ===== shared market (online) ===== */
+const MKT={live:0,id:0,pend:{},busy:0,feed:[]};
+const _mt0=marketTick;marketTick=function(){if(S.on&&MKT.live)return;_mt0()};
+const _sell0=sell,_buy0=buy;
+sell=function(r,f){if(!(S.on&&MKT.live))return _sell0(r,f);const n=Math.floor(S.res[r]*f);if(!n)return;mktReq('sell',r,n)};
+buy=function(r){if(!(S.on&&MKT.live))return _buy0(r);const n=Math.min(10,cap()-Math.floor(S.res[r]));if(n<=0)return toast('Storage is full');if(Math.ceil(n*ask(r))>S.coins)return toast('Not enough coins');mktReq('buy',r,n)};
+function mktReq(side,r,n){if(MKT.busy)return;const id=++MKT.id;MKT.pend[id]={side,r,n};MKT.busy=1;MPX.send({t:'trade',id,r,side,n});setTimeout(()=>{if(MKT.pend[id]){delete MKT.pend[id];MKT.busy=0;toast('The market did not answer')}},3500)}
+function mktNote(){if(S.on&&MKT.live){const ago=t=>{const s=Math.max(0,Math.round((Date.now()-t)/1000));return s<60?s+'s':Math.round(s/60)+'m'};
+  return`<div class="mu" style="margin:4px 0">🌍 <b>Shared island market.</b> Everyone on this island trades at the same prices. Big sales push the price down for everybody, and whoever holds a lot of one resource has an edge.</div>`+(MKT.feed.length?`<div class="mu" style="font-size:12px">${MKT.feed.slice(-4).reverse().map(f=>`${escH(f.n)} ${f.s=='sell'?'sold':'bought'} ${f.q} ${ICON[f.r]} · ${ago(f.at)} ago`).join('<br>')}</div>`:'')}
+  return`<div class="mu" style="margin:4px 0">Prices follow real supply and demand: rivals sell what their land produces; what you hoard stays off the market, and what you sell floods it.</div>`}
+/* ===== progress score and ranking ===== */
+const SC_W=[['🗺️','Land',14],['💰','Economy',14],['🏗️','Development',14],['⚔️','Military',14],['🛡️','Defence',10],['💎','Wealth',10],['🎓','Research',12],['🏆','Conquest & exploration',12]];
+function scoreOf(){let tiles=0,dev=0,inc=0,fort=0,mil=0,wealth=0;const realms=[S];if(S.rl)for(const k in S.rl)if(S.rl[k]&&S.rl[k].tiles&&S.rl[k]!==S)realms.push(S.rl[k]);
+  const addU=c=>{for(const u in UN)mil+=((c||{})[u]||0)*(UN[u].atk+UN[u].def)*(1+UN[u].hp/40)};
+  realms.forEach((R,ri)=>{const nl=R.n&&R.n>56;for(const t of R.tiles){if(t.o!=1)continue;tiles+=nl?1.3:1;if(!t.b)continue;const l=t.l||1;
+      if(t.b==1){dev+=l;inc+=fx.inc(l);fort+=fx.cdef(l)+12*(t.w||0)}else if(t.b==2){dev+=l;const r=MR[t.t];if(r)inc+=RATE[r]*fx.mine(l)*BASE[r]}else if(t.b==3){dev+=l;fort+=fx.fdef(l)}else if(t.b==4){dev+=l;inc+=1.5+.45*(l-1)}else dev+=l}
+    addU(R.army);for(const i in R.gar||{})addU(R.gar[i]);for(const g of R.sieges||[])if(g.k==1)addU(g.comp);
+    wealth+=(R.coins||0);for(const r of RES)wealth+=((R.res||{})[r]||0)*BASE[r]});
+  const st=S.st||{},conq=(st.won||0)*4+Math.min(st.gained||0,300)*.4+(st.voy||0)*6;
+  const sat=(x,k)=>100*(1-Math.exp(-x/k)),f=[sat(tiles,200),sat(inc,40),sat(dev,250),sat(mil,4000),sat(fort,2500),Math.min(100,Math.log10(1+wealth/50)/5*100),(Object.keys(S.tech||{}).length/Math.max(1,TECH.length))*100,sat(conq,120)];
+  const dm=[.85,1,1.1,1.2,1.3][S.diff==null?1:S.diff]||1,s=Math.round(SC_W.reduce((a,w,i)=>a+w[2]*f[i],0)/10*dm);
+  return{s,p:f.map(v=>Math.round(v)),d:S.diff==null?1:S.diff,dm}}
+const RK={isl:[],world:null,me:null,total:0,bonus:0,tier:5,lbErr:'',lbAt:0};
+const MEDAL=['🥇','🥈','🥉'];
+const ISL_B=[.06,.04,.03,.02,.01],ISL_T=[0,1,2,3,4];
+function worldTier(r){return r==1?0:r<=3?1:r<=10?2:r<=25?3:r<=50?4:5}
+function worldBonus(r){return r==1?.08:r<=3?.06:r<=10?.04:r<=25?.02:0}
+function islandRank(){if(!(S.on&&window.ONL&&ONL.sc))return null;const arr=Object.keys(ONL.sc).map(s=>({s:+s,v:ONL.sc[s].s||0})).sort((a,b)=>b.v-a.v||a.s-b.s);const i=arr.findIndex(q=>q.s==ONL.slot);return i<0?null:{rank:i+1,n:arr.length,arr}}
+function rkRecalc(){const ir=islandRank();let b=0,t=5;if(ir&&ir.n>=2){b+=ISL_B[ir.rank-1]||0;t=Math.min(t,ISL_T[ir.rank-1]??5)}
+  if(RK.me&&RK.me.rank){b+=worldBonus(RK.me.rank);t=Math.min(t,worldTier(RK.me.rank))}RK.bonus=Math.min(.1,b);RK.tier=t;window.RKB=RK.bonus;RK.ir=ir}
+window.srvRoom=function(m){if(!window.ONL)return;ONL.sc=ONL.sc||{};m.pl.forEach(p=>{ONL.sc[p.s]={s:p.sc||0,p:p.sp||null,n:p.n,on:p.on}});rkRecalc();chatBtn()};
+function sendScore(){const sc=scoreOf();RK.mine=sc;if(S.on&&window.ONL)MPX.send({t:'score',s:{s:sc.s,p:sc.p,d:sc.d}});else lbSubmit(sc)}
+/* the world ranking uses a short-lived second connection when you play offline */
+const LB={ws:null,busy:0};
+function lbConn(cb){const c=MPX.srv();if(!c.key||!/^wss?:\/\/.{3,}/.test(c.url)){RK.lbErr=c.key?'Set the server address in the Online menu first.':'Log in through the Online menu to join the world ranking.';cb&&cb(false);return}
+  if(LB.busy)return;LB.busy=1;let ws;try{ws=new WebSocket(c.url)}catch(e){LB.busy=0;RK.lbErr='Cannot reach the server';cb&&cb(false);return}
+  const done=ok=>{LB.busy=0;try{ws.close()}catch(e){}cb&&cb(ok)};const to=setTimeout(()=>{RK.lbErr='The server did not answer';done(false)},9000);
+  ws.onopen=()=>ws.send(JSON.stringify({t:'resume',k:c.key,lb:1}));ws.onerror=()=>{clearTimeout(to);RK.lbErr='Cannot reach the server';done(false)};
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
+    if(m.t=='auth'){if(!m.ok){clearTimeout(to);RK.lbErr='Session expired — log in again through the Online menu.';return done(false)}ws.send(JSON.stringify({t:'gscore',s:scoreOf()}));ws.send(JSON.stringify({t:'lb'}))}
+    else if(m.t=='lb'){clearTimeout(to);lbGot(m);done(true)}}}
+function lbSubmit(sc){if(S.on)return;const c=MPX.srv();if(!c.key)return;lbConn(null)}
+function lbGot(m){RK.world=m.top||[];RK.total=m.total||0;RK.me=m.me;RK.lbErr='';RK.lbAt=Date.now();rkRecalc();hud();if(SH=='rank')renderSheet()}
+function lbRefresh(){if(S.on&&MPX.open()){MPX.send({t:'lb'});return}lbConn(null)}
+const _srvMsg0=window.srvMsg;
+window.srvMsg=function(m){
+  if(m.t=='mkt'){MKT.live=1;if(S.on){S.price=m.price;S.mk=Object.assign(S.mk||{},m.mk);S.hist=m.hist;if(m.news&&m.news!==S.news){S.news=m.news;if(!mOpen)toast(m.news)}else if(!m.news)S.news=''}MKT.feed=m.feed||[];lastM='';if(mOpen)renderMarket();return}
+  if(m.t=='tr'){const q=MKT.pend[m.id];if(!q)return;delete MKT.pend[m.id];MKT.busy=0;const r=q.r;
+    if(q.side=='sell'){const n=Math.min(q.n,Math.floor(S.res[r]));if(n>0){S.coins+=Math.floor(n*m.mid*(1-.06*DF().sp+sp()));S.res[r]-=n}}
+    else{const c=Math.ceil(q.n*m.mid*(1+.08*DF().sp-sp()));if(c>S.coins){toast('The price moved — not enough coins');return}S.coins-=c;S.res[r]+=q.n}
+    S.st.trades++;fin();return}
+  if(m.t=='chat'){chatAdd(m.msg,true);return}
+  if(m.t=='lb'){lbGot(m);return}};
+window.srvInit=function(I){if(I.mkt)srvMsg(I.mkt);if(I.chat){CHAT.log=I.chat.slice(-80);CHAT.seen=CHAT.log.length?CHAT.log[CHAT.log.length-1].id:0;chatRender()}};
+/* rewards: a small income bonus plus a daily chest, bigger near the top but never zero */
+const CH_MULT=[2.2,1.8,1.5,1.25,1.1,1],CH_DIA=[3,2,1,0,0,0];
+function chestReady(){return !S.rw||Date.now()-S.rw.at>20*36e5}
+function chestLoot(){const t=RK.tier,m=CH_MULT[t],inc=Math.max(5,S.inc||5);return{coins:Math.round(inc*600*m),wood:Math.round(120*m),stone:Math.round(90*m),silver:Math.round(10*m),diamond:CH_DIA[t]}}
+function claimChest(){if(!chestReady())return;const l=chestLoot();S.coins+=l.coins;for(const k of['wood','stone','silver','diamond'])S.res[k]=(S.res[k]||0)+l[k];S.rw={at:Date.now()};toast('🎁 Daily chest: 🪙'+compactAmount(l.coins)+' 🪵'+l.wood+' 🪨'+l.stone+' 🥈'+l.silver+(l.diamond?' 💎'+l.diamond:''));chron('🎁','Opened the daily rank chest');buzz();save();hud();renderSheet()}
+function scBars(p){return SC_W.map((w,i)=>`<div class="mf" style="gap:8px"><span style="min-width:140px">${w[0]} ${w[1]} <small class="mu">${w[2]}%</small></span><span style="flex:1;height:8px;background:#0b1620;border-radius:6px;overflow:hidden;align-self:center"><i style="display:block;height:100%;width:${p[i]}%;background:linear-gradient(90deg,#2f6aa3,#ffd23f)"></i></span><b>${p[i]}</b></div>`).join('')}
+let rkTab='isl';
+function vRank(){const sc=RK.mine=scoreOf();rkRecalc();const on=S.on&&window.ONL,tab=on?rkTab:'world';
+  let h=on?`<div class="row2" style="display:flex;gap:8px;margin-bottom:6px"><button style="flex:1;text-align:center" class="${tab=='isl'?'on':''}" onclick="rkTab='isl';shK='';renderSheet()">🏝️ This island</button><button style="flex:1;text-align:center" class="${tab=='world'?'on':''}" onclick="rkTab='world';shK='';renderSheet();lbRefresh()">🌍 World</button></div>`:'';
+  h+=`<div class="mi ready"><div class="mh"><b>Your progress score</b><em style="font-size:20px">${sc.s}</em></div><div class="mu">A balanced index of land, economy, buildings, army, defence, wealth, research and conquest — each factor saturates, so no single thing wins alone.${sc.dm!=1?` Difficulty bonus ×${sc.dm}.`:''}</div>${scBars(sc.p)}</div>`;
+  if(tab=='isl'){const ir=RK.ir;h+=`<div class="mi"><b>🏝️ Island ranking</b>`;
+    if(!ir)h+=`<div class="mu">Scores appear a few seconds after everyone is online.</div>`;else{h+=ir.arr.map((q,i)=>{const p=ONL.sc[q.s],mine=q.s==ONL.slot,nm=escH(p.n||('Player '+q.s)),b=ir.n>=2?(ISL_B[i]||0):0;return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${nm}${p.on?'':' <small class="mu">(away)</small>'}${b?` <small class="ok">+${Math.round(b*100)}% income</small>`:''}</span><b>${q.v}</b></div>`}).join('');if(ir.n<2)h+=`<div class="mu">Island rewards start when at least two players are on the island.</div>`}h+=`</div>`}
+  else{h+=`<div class="mi"><b>🌍 World ranking</b> <small class="mu">best island of every logged-in account — solo or online</small>`;
+    if(RK.lbErr)h+=`<div class="bad">${RK.lbErr}</div>`;
+    if(RK.world){h+=RK.world.slice(0,30).map((q,i)=>{const mine=RK.me&&q.s==RK.me.s&&q.m==RK.me.m&&(RK.me.rank==i+1);return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${escH(q.n)} <small class="mu">${q.m=='solo'?'🏝️ solo':'⚔️ online'}</small></span><b>${q.s}</b></div>`}).join('');
+      if(RK.me&&RK.me.rank>30)h+=`<div class="mf" style="color:#ffd23f"><span>#${RK.me.rank} You</span><b>${RK.me.s}</b></div>`;h+=`<div class="mu">${RK.total} players ranked</div>`}
+    else if(!RK.lbErr)h+=`<div class="mu">Loading…</div>`;h+=`<button style="width:100%;margin-top:6px" onclick="lbRefresh()">↻ Refresh</button></div>`}
+  const b=Math.round(RK.bonus*100),l=chestLoot();
+  h+=`<div class="mi"><b>🎁 Rewards</b><div class="mu">${b?`Your rank gives <b class="ok">+${b}% coin income</b> right now.`:'Rank in the top places to earn a coin-income bonus.'} Island: 🥇+6% 🥈+4% 🥉+3% · 4th +2% · 5th +1%. World: top 1 +8%, top 3 +6%, top 10 +4%, top 25 +2% (bonuses add up to a maximum of +10%).</div>
+   <div class="mu">Everyone gets a daily chest; higher ranks open a bigger one (up to ×2.2 and diamonds for the top 3).</div>
+   <button style="width:100%;margin-top:6px" ${chestReady()?'':'disabled'} onclick="claimChest()">🎁 Open daily chest<small>${chestReady()?`🪙${compactAmount(l.coins)} 🪵${l.wood} 🪨${l.stone} 🥈${l.silver}${l.diamond?' 💎'+l.diamond:''}`:'Ready in '+Math.ceil((20*36e5-(Date.now()-S.rw.at))/36e5)+' h'}</small></button></div>`;
+  if(!on)h+=`<div class="mu">Solo islands are ranked in the World tab as long as you are logged in (Menu → Online play).</div>`+`<div class="mi"><b>🌍 World ranking</b>${RK.lbErr?`<div class="bad">${RK.lbErr}</div>`:''}</div>`;
+  return['🏆 Ranking & rewards',h]}
+setInterval(()=>{if(!S)return;if(S.on&&window.ONL&&MPX.open())sendScore();else if(!S.on&&MPX.srv().key&&Date.now()-(RK.subAt||0)>120000){RK.subAt=Date.now();sendScore();lbRefresh()}},20000);
+setTimeout(()=>{if(S&&S.on&&MPX.open()){sendScore();MPX.send({t:'lb'})}},4000);
+const _hud0=hud;hud=function(){_hud0();const top=document.querySelector('#hud .top');if(top&&!top.querySelector('.rkc')){const b=RK.ir&&RK.ir.n>=2?(MEDAL[RK.ir.rank-1]||'#'+RK.ir.rank):RK.me?'🌍#'+RK.me.rank:'🏆';const e=document.createElement('span');e.className='land rkc';e.style.cursor='pointer';e.textContent=b+(RK.bonus?' +'+Math.round(RK.bonus*100)+'%':'');e.onclick=()=>openSheet('rank');top.appendChild(e)}};
+/* ===== island chat ===== */
+const CHAT={log:[],open:0,unread:0,seen:0,loc:null};
+function chatBtn(){let b=$('chatb');if(!(S&&S.on)){if(b)b.style.display='none';return}
+  if(!b){b=document.createElement('button');b.id='chatb';b.style.cssText='position:absolute;left:8px;top:44px;z-index:2;background:#000b;border:1px solid var(--ln);border-radius:10px;padding:4px 10px;font-weight:700;min-height:0;text-align:center';b.onclick=()=>chatToggle();$('wrap').appendChild(b)}
+  {const mb0=$('mpb');b.style.top='8px';b.style.left=(mb0&&mb0.offsetWidth?mb0.offsetWidth+16:8)+'px';b.style.zIndex=3}b.style.display='block';b.innerHTML='💬'+(CHAT.unread?` <span style="background:#ff4d4d;border-radius:9px;padding:0 6px;font-size:12px">${CHAT.unread}</span>`:'')}
+function chatPanel(){let p=$('chatp');if(p)return p;p=document.createElement('div');p.id='chatp';
+  p.style.cssText='position:fixed;left:8px;right:8px;bottom:calc(76px + env(safe-area-inset-bottom,0px));height:min(52vh,420px);border:2px solid #3a638a;border-radius:18px;background:#102338f5;z-index:6;display:none;flex-direction:column;padding:8px;gap:6px;user-select:text;-webkit-user-select:text';
+  p.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><b>💬 Island chat</b><small class="mu" id="chatwho"></small><button onclick="chatToggle()" style="margin-left:auto;min-height:34px;width:34px;padding:0;text-align:center" aria-label="Close">✕</button></div>
+   <div id="chatl" style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:4px;font-size:14px"></div>
+   <div id="chatq" style="display:flex;gap:6px;overflow-x:auto"></div><div id="chatloc"></div>
+   <div style="display:flex;gap:6px"><button onclick="chatPin()" style="min-height:44px;padding:0 10px;text-align:center" aria-label="Attach selected tile">📍</button><input id="chati" maxlength="200" placeholder="Message the island…" autocomplete="off" style="flex:1;min-width:0;font:inherit;color:var(--tx);background:#0b1620;border:1px solid #3a638a;border-radius:12px;padding:8px 10px;user-select:text;-webkit-user-select:text"><button onclick="chatSend()" style="min-height:44px;padding:0 14px;text-align:center" class="buy">Send</button></div>`;
+  document.body.appendChild(p);$('chati').addEventListener('keydown',e=>{if(e.key=='Enter'){e.preventDefault();chatSend()}});
+  $('chatq').innerHTML=['👋 Hi!','⚔️ Attack here!','🛡️ Need help here','🤝 Trade?','👍','GG'].map(t=>`<button onclick="chatQuick(this)" style="min-height:34px;padding:2px 10px;white-space:nowrap;text-align:center;font-weight:600">${t}</button>`).join('');return p}
+function chatToggle(){if(!(S&&S.on))return;const p=chatPanel();CHAT.open=!CHAT.open;p.style.display=CHAT.open?'flex':'none';if(CHAT.open){CHAT.unread=0;chatRender();chatBtn()}}
+function chatTag(){if(!S.sel)return null;const[x,y]=S.sel,t=T(x,y),own=t.o?OWN[t.o].n:'Unclaimed',what=(t.b?BN[t.b]||'building':NAME[t.t]||'land');return{r:S.realm=='c'?'c':'h',x,y,t:(own+' · '+what).slice(0,40)}}
+function chatPin(){const l=chatTag();if(!l)return toast('Tap a tile on the map first, then press 📍');CHAT.loc=l;chatLocUi()}
+function chatLocUi(){const e=$('chatloc');if(!e)return;e.innerHTML=CHAT.loc?`<div class="mf" style="background:#1f3c58;border-radius:10px;padding:4px 8px"><span>📍 (${CHAT.loc.x},${CHAT.loc.y}) ${CHAT.loc.r=='c'?'New Land':'Home'} · ${escH(CHAT.loc.t)}</span><button onclick="CHAT.loc=null;chatLocUi()" style="min-height:26px;padding:0 8px">✕</button></div>`:''}
+function chatQuick(b){const l=CHAT.loc||(/Attack|help/.test(b.textContent)?chatTag():null);chatSend(b.textContent,l)}
+function chatSend(txt,loc){const i=$('chati');const m=(txt!=null?txt:i.value).trim();if(!m)return;const l=loc||CHAT.loc;MPX.send({t:'chat',m,loc:l||undefined});if(txt==null){i.value=''}CHAT.loc=null;chatLocUi()}
+function chatGo(r,x,y){const cur=S.realm=='c'?'c':'h';if(r!=cur){toast('That spot is on the '+(r=='c'?'New Land':'home island')+' — sail there to see it');return}S.sel=[x,y];const ts=T0*zoom;S.cam.x=(x+.5)*ts-W/2;S.cam.y=(y+.5)*ts-H/2;chatToggle();render();hud()}
+function chatLine(m){const k=window.ONL?MPX.L(m.s):1,c=OWN[k]?OWN[k].c:'#ccc',ir=RK.ir,rk=ir?ir.arr.findIndex(q=>q.s==m.s):-1,medal=ir&&ir.n>=2&&rk>=0&&rk<3?MEDAL[rk]+' ':'',me=m.s==ONL.slot,d=new Date(m.at),tm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  const loc=m.loc?`<a href="#" onclick="chatGo('${m.loc.r}',${m.loc.x},${m.loc.y});return false" style="display:inline-block;margin-top:2px;background:#1f3c58;border:1px solid #3a638a;border-radius:9px;padding:1px 8px;color:#9fd2ff;text-decoration:none">📍 (${m.loc.x},${m.loc.y}) ${m.loc.r=='c'?'🏝️':'🏠'} ${escH(m.loc.t||'')}</a>`:'';
+  return`<div style="align-self:${me?'flex-end':'flex-start'};max-width:88%;background:${me?'#1d4a73':'#16293d'};border-radius:12px;padding:5px 9px"><div style="font-size:12px"><b style="color:${c}">${medal}${escH(m.n)}</b> <span class="mu">${tm}</span></div><div style="word-break:break-word">${escH(m.m)}</div>${loc}</div>`}
+function chatRender(){const l=$('chatl');if(!l)return;const near=l.scrollHeight-l.scrollTop-l.clientHeight<60;l.innerHTML=CHAT.log.map(chatLine).join('')||'<div class="mu" style="margin:auto">No messages yet. Say hi 👋 or press 📍 to tag a tile.</div>';if(near||!CHAT.open)l.scrollTop=l.scrollHeight;const w=$('chatwho');if(w&&window.ONL)w.textContent=(MP_online())+' online'}
+function MP_online(){return window.ONL&&ONL.sc?Object.values(ONL.sc).filter(p=>p.on).length:0}
+function chatAdd(m,live){if(CHAT.log.some(q=>q.id==m.id))return;CHAT.log.push(m);if(CHAT.log.length>120)CHAT.log.shift();if(CHAT.open)chatRender();else if(live&&m.s!=ONL.slot){CHAT.unread++;chatBtn();toast('💬 '+m.n+': '+m.m.slice(0,50))}}
+
+const _vmS2=vMenu;vMenu=function(){const r=_vmS2();r[1]+=mb('🏆','Ranking & rewards',RK.ir&&RK.ir.n>=2?'Island #'+RK.ir.rank+' of '+RK.ir.n:'Score, world ranking, daily chest',"openSheet('rank')")+mb('⚔️','War room','Where attack and defence come from',"openSheet('war')");return r};
 </script>
 </body></html>
