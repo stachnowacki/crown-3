@@ -37,7 +37,7 @@ let dirty = 0;
 const persist = () => { if (dirty) return; dirty = setTimeout(() => { dirty = 0;
   const out = [...rooms.values()].map(r => ({ code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield,
     tiles: [...r.tiles], mkt: r.mkt, chat: (r.chat || []).slice(-80), cid: r.cid || 0,
-    pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc })) }));
+    pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc, fx: p.fx })) }));
   const j = JSON.stringify(out); remote.push('rooms', j);
   fs.writeFile(RF + '.tmp', j, e => { if (!e) fs.rename(RF + '.tmp', RF, () => {}); }); }, 3000); };
 
@@ -93,7 +93,7 @@ const touch = r => { r.at = Date.now(); persist(); };
 
 function roomMsg(r, p, init) {
   const o = { t: 'room', code: r.code, host: dname(r.host), isHost: r.host === p.u, slot: p.s, seed: r.seed, diff: r.diff, started: r.started,
-    pl: r.pl.map(q => ({ s: q.s, n: dname(q.u), on: !!q.ws, sc: q.sc ? q.sc.s : 0, sp: q.sc ? q.sc.p : null })) };
+    pl: r.pl.map(q => ({ s: q.s, n: dname(q.u), on: !!q.ws, sc: q.sc ? q.sc.s : 0, sp: q.sc ? q.sc.p : null, fx: q.fx || null })) };
   if (init && r.started) { if (!r.mkt) r.mkt = mkNew(); o.init = { mkt: mkPub(r.mkt), chat: (r.chat || []).slice(-50), shield: r.shield || {}, save: p.save || null, snap: [...r.tiles].map(([i, v]) => [i, ...v]), pend: p.pend || [],
     tal: Object.fromEntries(r.pl.filter(q => q !== p && q.tal).map(q => [q.s, q.tal])) }; }
   return o;
@@ -185,12 +185,18 @@ function handle(ws, m) {
       rows.sort((x, y) => y.s - x.s); const mine = rows.findIndex(x => x.id === ws.u);
       send(ws, { t: 'lb', top: rows.slice(0, 50).map(({ id, ...q }) => q), total: rows.length, me: mine < 0 ? null : { rank: mine + 1, s: rows[mine].s, m: rows[mine].m } }); return;
     }
+    case 'fx': { // my look (picture, nickname effect, realm colour, building aura) so everyone in the room sees it
+      if (!r || !me || !m.fx || typeof m.fx !== 'object') return; const now = Date.now(); if (me.fxAt && now - me.fxAt < 1500) return; me.fxAt = now;
+      const fx = {}; for (const [k, mx] of [['pf', 13], ['nf', 9], ['rc', 9], ['au', 6]]) { const q = m.fx[k]; if (Number.isInteger(q) && q >= 0 && q < mx) fx[k] = q; }
+      me.fx = Object.keys(fx).length ? fx : null; bc(r); touch(r); return;
+    }
     case 'chat': {
       if (!r || !r.started || !me) return; const now = Date.now(); if (me.chAt && now - me.chAt < 900) return; me.chAt = now;
       const text = String(m.m || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200); if (!text) return;
       let loc = null; if (m.loc && typeof m.loc === 'object' && (m.loc.r === 'h' || m.loc.r === 'c') && num(m.loc.x, 0, 127) && num(m.loc.y, 0, 127)) loc = { r: m.loc.r, x: m.loc.x, y: m.loc.y, t: String(m.loc.t || '').slice(0, 40) };
       const msg = { id: r.cid = (r.cid || 0) + 1, s: me.s, n: dname(me.u), m: text, at: now }; if (loc) msg.loc = loc;
-      if (m.fx && typeof m.fx === 'object') { const fx = {}; for (const [k, mx] of [['pf', 12], ['nf', 8], ['mf', 8]]) { const q = m.fx[k]; if (Number.isInteger(q) && q >= 0 && q < mx) fx[k] = q; } if (Object.keys(fx).length) msg.fx = fx; }
+      if (m.fx && typeof m.fx === 'object') { const fx = {}; for (const [k, mx] of [['pf', 13], ['nf', 9], ['mf', 8]]) { const q = m.fx[k]; if (Number.isInteger(q) && q >= 0 && q < mx) fx[k] = q; } if (Object.keys(fx).length) msg.fx = fx; }
+      if (me.fx) { msg.fx = msg.fx || {}; for (const k of ['pf', 'nf']) if (me.fx[k] != null) msg.fx[k] = me.fx[k]; }
       (r.chat = r.chat || []).push(msg); if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);
       r.pl.forEach(p => send(p.ws, { t: 'chat', msg })); touch(r); return;
     }
