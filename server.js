@@ -36,7 +36,8 @@ try {
 let dirty = 0;
 const persist = () => { if (dirty) return; dirty = setTimeout(() => { dirty = 0;
   const out = [...rooms.values()].map(r => ({ code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield,
-    tiles: [...r.tiles], pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last, save: p.save, tal: p.tal, pend: p.pend })) }));
+    tiles: [...r.tiles], mkt: r.mkt, chat: (r.chat || []).slice(-80), cid: r.cid || 0,
+    pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc })) }));
   const j = JSON.stringify(out); remote.push('rooms', j);
   fs.writeFile(RF + '.tmp', j, e => { if (!e) fs.rename(RF + '.tmp', RF, () => {}); }); }, 3000); };
 
@@ -61,6 +62,28 @@ const srv = http.createServer((req, res) => {
 });
 const wss = new WebSocketServer({ server: srv, maxPayload: 1048576 });
 
+/* ---------- shared market (one per island): everyone trades against the same prices ---------- */
+const MRES = ['wood', 'stone', 'silver', 'gold', 'diamond'], MIC = { wood: '🪵', stone: '🪨', silver: '🥈', gold: '🥇', diamond: '💎' };
+const MB = { wood: 3, stone: 5, silver: 22, gold: 65, diamond: 220 }, MV = { wood: .6, stone: .7, silver: 1, gold: 1.2, diamond: 1.5 };
+const MI = { wood: .0015, stone: .002, silver: .006, gold: .015, diamond: .04 }, MM0 = { wood: 600, stone: 400, silver: 150, gold: 60, diamond: 20 };
+const MD = { wood: .5, stone: .4, silver: .12, gold: .05, diamond: .015 };
+const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+function mkNew() { const m = { price: {}, mom: {}, mk: {}, hist: {}, news: '', feed: [], tk: 0 }; for (const r of MRES) { m.price[r] = MB[r]; m.mom[r] = 0; m.mk[r] = MM0[r]; m.hist[r] = [MB[r]]; } return m; }
+function mkStep(m) {
+  m.tk++;
+  for (const r of MRES) {
+    const dem = MD[r] * Math.pow(MB[r] / m.price[r], .15); m.mk[r] = cl(m.mk[r] + MD[r] - dem, 0, MM0[r] * 3);
+    const sh = Math.max(.15, m.mk[r] / MM0[r]), tg = cl(MB[r] * Math.pow(1 / sh, .6), MB[r] * .35, MB[r] * 2.8);
+    m.mom[r] = m.mom[r] * .9 + (Math.random() * 2 - 1) * .3 * MV[r];
+    m.price[r] = cl(m.price[r] + (tg - m.price[r]) * .06 + m.price[r] * m.mom[r] * .004, MB[r] * .35, MB[r] * 2.8);
+  }
+  if (Math.random() < .004) { const r = MRES[Math.floor(Math.random() * 5)], up = Math.random() < .5; m.mk[r] = cl(m.mk[r] * (up ? .7 : 1.5), 0, MM0[r] * 3);
+    m.news = up ? MIC[r] + ' A shortage of ' + r + ' is driving demand up. Good time to sell!' : MIC[r] + ' ' + r[0].toUpperCase() + r.slice(1) + ' floods the market. Time to buy?'; }
+  if (m.tk % 2 == 0) for (const r of MRES) { const h = m.hist[r]; h.push(+m.price[r].toFixed(3)); if (h.length > 40) h.shift(); }
+}
+const mkPub = m => { const o = { t: 'mkt', price: {}, mk: {}, hist: m.hist, news: m.news, feed: m.feed }; for (const r of MRES) { o.price[r] = +m.price[r].toFixed(3); o.mk[r] = Math.round(m.mk[r]); } return o; };
+setInterval(() => { for (const r of rooms.values()) { if (!r.started || !r.pl.some(p => p.ws)) continue; if (!r.mkt) r.mkt = mkNew(); mkStep(r.mkt); if (r.mkt.tk % 2 == 0) { const o = mkPub(r.mkt); r.pl.forEach(p => send(p.ws, o)); } } }, 1000);
+
 /* ---------- helpers ---------- */
 const hash = (p, s) => crypto.scryptSync(p, s, 32).toString('hex');
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
@@ -70,9 +93,9 @@ const touch = r => { r.at = Date.now(); persist(); };
 
 function roomMsg(r, p, init) {
   const o = { t: 'room', code: r.code, host: dname(r.host), isHost: r.host === p.u, slot: p.s, seed: r.seed, diff: r.diff, started: r.started,
-    pl: r.pl.map(q => ({ s: q.s, n: dname(q.u), on: !!q.ws })) };
-  if (init && r.started) o.init = { shield: r.shield || {}, save: p.save || null, snap: [...r.tiles].map(([i, v]) => [i, ...v]), pend: p.pend || [],
-    tal: Object.fromEntries(r.pl.filter(q => q !== p && q.tal).map(q => [q.s, q.tal])) };
+    pl: r.pl.map(q => ({ s: q.s, n: dname(q.u), on: !!q.ws, sc: q.sc ? q.sc.s : 0, sp: q.sc ? q.sc.p : null })) };
+  if (init && r.started) { if (!r.mkt) r.mkt = mkNew(); o.init = { mkt: mkPub(r.mkt), chat: (r.chat || []).slice(-50), shield: r.shield || {}, save: p.save || null, snap: [...r.tiles].map(([i, v]) => [i, ...v]), pend: p.pend || [],
+    tal: Object.fromEntries(r.pl.filter(q => q !== p && q.tal).map(q => [q.s, q.tal])) }; }
   return o;
 }
 const bc = r => r.pl.forEach(p => send(p.ws, roomMsg(r, p)));
@@ -100,7 +123,7 @@ const newCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do 
 function auth(ws, m) {
   if (m.t === 'resume') {
     const u = db.keys[m.k]; if (!u || !db.users[u]) return send(ws, { t: 'auth', ok: 0, err: 'Session expired' });
-    ws.u = u; send(ws, { t: 'auth', ok: 1, name: dname(u), key: m.k }); return attach(ws);
+    ws.u = u; send(ws, { t: 'auth', ok: 1, name: dname(u), key: m.k }); if (m.lb) return; return attach(ws);
   }
   const name = String(m.u || '').trim(), pw = String(m.p || ''), id = name.toLowerCase();
   if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return send(ws, { t: 'auth', ok: 0, err: 'Name: 3-16 letters, digits or _' });
@@ -138,6 +161,38 @@ function handle(ws, m) {
     }
     case 'start': if (r && !r.started && r.host === ws.u && r.pl.length >= 2) { r.started = true; seed(r); touch(r); bc(r); } else if (r && r.host === ws.u) send(ws, { t: 'err', m: 'Need at least 2 players' }); return;
     case 'leave': return leave(ws);
+    case 'trade': { // a trade at the island's shared market
+      if (!r || !r.started || !me) return; if (!r.mkt) r.mkt = mkNew(); const m0 = r.mkt, res = String(m.r), n = Math.floor(+m.n);
+      if (!MRES.includes(res) || !(n >= 1 && n <= 20000) || (m.side !== 'buy' && m.side !== 'sell')) return;
+      const mid = m0.price[res];
+      if (m.side === 'sell') { m0.mk[res] = Math.min(MM0[res] * 3, m0.mk[res] + n); m0.price[res] = cl(mid * (1 - Math.min(.3, n * MI[res] * .5)), MB[res] * .35, MB[res] * 2.8); }
+      else { m0.mk[res] = Math.max(0, m0.mk[res] - n); m0.price[res] = cl(mid * (1 + Math.min(.25, n * MI[res] * .4)), MB[res] * .35, MB[res] * 2.8); }
+      m0.feed.push({ n: dname(me.u), s: m.side, r: res, q: n, at: Date.now() }); if (m0.feed.length > 8) m0.feed.shift();
+      send(ws, { t: 'tr', id: m.id, r: res, side: m.side, n, mid: +mid.toFixed(3) }); const o = mkPub(m0); r.pl.forEach(p => send(p.ws, o)); touch(r); return;
+    }
+    case 'score': { // my island's progress score (shown in the island ranking and the world ranking)
+      if (!r || !r.started || !me || !m.s || typeof m.s !== 'object') return; const now = Date.now(); if (me.scAt && now - me.scAt < 8000) return; me.scAt = now;
+      const s = cl(Math.floor(+m.s.s) || 0, 0, 2e6), p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 100)) : null;
+      me.sc = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now }; const u = db.users[ws.u]; if (u) { u.is = { s, p, d: me.sc.d, at: now }; saveDb(); } bc(r); touch(r); return;
+    }
+    case 'gscore': { // an offline (solo) island of a logged-in player
+      const u = db.users[ws.u]; if (!u || !m.s || typeof m.s !== 'object') return; const now = Date.now(); if (ws.gsAt && now - ws.gsAt < 8000) return; ws.gsAt = now;
+      const s = cl(Math.floor(+m.s.s) || 0, 0, 2e6), p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 100)) : null;
+      u.gs = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now }; saveDb(); return;
+    }
+    case 'lb': { // world ranking: every account's best island
+      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs, b = u.is; const best = !a ? (b ? [b, 'online'] : null) : !b ? [a, 'solo'] : (b.s > a.s ? [b, 'online'] : [a, 'solo']); if (best && best[0].s > 0) rows.push({ id, n: u.name || id, s: best[0].s, m: best[1], p: best[0].p, d: best[0].d }); }
+      rows.sort((x, y) => y.s - x.s); const mine = rows.findIndex(x => x.id === ws.u);
+      send(ws, { t: 'lb', top: rows.slice(0, 50).map(({ id, ...q }) => q), total: rows.length, me: mine < 0 ? null : { rank: mine + 1, s: rows[mine].s, m: rows[mine].m } }); return;
+    }
+    case 'chat': {
+      if (!r || !r.started || !me) return; const now = Date.now(); if (me.chAt && now - me.chAt < 900) return; me.chAt = now;
+      const text = String(m.m || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200); if (!text) return;
+      let loc = null; if (m.loc && typeof m.loc === 'object' && (m.loc.r === 'h' || m.loc.r === 'c') && num(m.loc.x, 0, 127) && num(m.loc.y, 0, 127)) loc = { r: m.loc.r, x: m.loc.x, y: m.loc.y, t: String(m.loc.t || '').slice(0, 40) };
+      const msg = { id: r.cid = (r.cid || 0) + 1, s: me.s, n: dname(me.u), m: text, at: now }; if (loc) msg.loc = loc;
+      (r.chat = r.chat || []).push(msg); if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);
+      r.pl.forEach(p => send(p.ws, { t: 'chat', msg })); touch(r); return;
+    }
     case 'save': // the player's own realm (coins, army, research...) so it survives switching the phone off
       if (r && r.started && me && m.d && typeof m.d === 'object' && JSON.stringify(m.d).length <= 600000) { me.save = m.d; touch(r); } return;
     case 'tiles': { // [index, owner(global slot), building, level, walls, conquest?]  conquest = 1 + previous building + 20 * previous owner
