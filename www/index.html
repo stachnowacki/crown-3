@@ -142,10 +142,13 @@ input[type=range]{width:100%;accent-color:#ffcf4a}.sw{display:inline-block;width
 <div id="msb"></div><div id="mis"></div><div id="sh"></div><div id="market"></div><div id="dm"></div>
 <div id="achievement-screen" role="dialog" aria-modal="true" aria-labelledby="achievement-title"><header class="ach-head"><b id="achievement-title">🏆 Achievement tree</b><span class="mu">Follow each branch from your realm to its rewards.</span><button class="ach-close" onclick="closeAchievements()" aria-label="Close achievement tree">✕</button></header><div class="ach-viewport" id="ach-viewport"><div class="ach-zoom"><button onclick="zoomAchievements(1.15)" aria-label="Zoom in">+</button><button onclick="zoomAchievements(.87)" aria-label="Zoom out">−</button></div><div class="ach-stage" id="ach-stage"><div class="ach-art" id="ach-art"></div></div></div><div class="ach-detail" id="ach-detail" aria-live="polite"></div></div>
 <div id="dev-screen" role="dialog" aria-modal="true" aria-labelledby="dev-title"><header class="ach-head"><b id="dev-title">🌳<span class="dtl"> Development</span></b><span class="mu" id="dev-rp"></span><button class="ach-close" onclick="devOverview()" aria-label="Overview" style="margin-left:8px">📊</button><button class="ach-close" onclick="closeDev()" aria-label="Close development tree" style="margin-left:6px">✕</button></header><div class="ach-viewport" id="dev-vp"><div class="ach-zoom"><button onclick="devZoom(1.2)" aria-label="Zoom in">+</button><button onclick="devZoom(.83)" aria-label="Zoom out">−</button></div><div class="dev-stage" id="dev-stage"><div class="dev-art" id="dev-art"></div></div></div><div class="ach-detail" id="dev-detail" aria-live="polite"></div></div>
-<script>/* Crownlands pre-boot save check: runs BEFORE the game so a damaged save is never silently replaced */
-(function(){try{var K='crownlands2',raw=localStorage.getItem(K);function ok(r){try{var s=JSON.parse(r);return !!s&&s.v==2&&(s.n==56||s.n==96||s.n==128)&&Array.isArray(s.tiles)&&s.tiles.length==s.n*s.n}catch(e){return false}}
-if(raw&&ok(raw))return;var c=[K+'-backup',K+'-bk2',K+'-bk3'];for(var i=0;i<c.length;i++){var b=localStorage.getItem(c[i]);if(b&&ok(b)){if(raw){try{localStorage.setItem(K+'-damaged',raw)}catch(e){}}localStorage.setItem(K,b);window.__gxRestored=c[i];break}}}catch(e){}})();</script>
-<script>
+<script>/* Crownlands pre-boot save check: runs BEFORE the game so a damaged save is never silently replaced.
+   Structure is checked, and so is the fingerprint: a save that was truncated or edited fails here,
+   is copied aside for inspection, and the newest valid automatic backup takes its place. */
+(function(){try{var K='crownlands2',raw=localStorage.getItem(K);
+function SUM(s){var h1=0x811c9dc5,h2=0x01000193;for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);h1=Math.imul(h1^c,16777619)>>>0;h2=Math.imul(h2+c,2246822519)>>>0}return h1.toString(36)+h2.toString(36)}
+function ok(r){try{var s=JSON.parse(r);if(!s||s.v!=2||!(s.n==56||s.n==96||s.n==128)||!Array.isArray(s.tiles)||s.tiles.length!=s.n*s.n)return false;if(s.fp&&s.fp!==SUM(r.replace(/,"fp":"[0-9a-z]*"\}$/,'}')))return false;return true}catch(e){return false}}
+if(raw&&ok(raw))return;var c=[K+'-backup',K+'-bk2',K+'-bk3'];for(var i=0;i<c.length;i++){var b=localStorage.getItem(c[i]);if(b&&ok(b)){if(raw){try{localStorage.setItem(K+'-damaged',raw)}catch(e){}}localStorage.setItem(K,b);window.__gxRestored=c[i];break}}}catch(e){}})();</script><script>
 /* ===== New Lands: compact save of two worlds + per-world tables ===== */
 const NL_CN=128;
 const packT=t=>[t.t,t.o,t.b,t.l,Math.round((t.e||0)*100)/100,t.r?1:0,t.w||0,t.q||0,t.off||0,t.oi||'',t.z?1:0,t.mx==null?-1:t.mx,t.my==null?-1:t.my,t.pt?1:0,t.pa==null?-1:t.pa];
@@ -323,7 +326,7 @@ function drawSea(ts,cm,tm){if(tm>SEA.next){if(SEA.list.length<4&&seaSpawn(ts,cm,
 /* ===== data ===== */
 let N=56;const T0=34,KEY='crownlands2',$=id=>document.getElementById(id),cv=$('c'),cx=cv.getContext('2d');
 const RES=['wood','stone','silver','gold','diamond'];
-const BASE={wood:3,stone:5,silver:22,gold:65,diamond:220},RATE={wood:.9,stone:.7,silver:.3,gold:.12,diamond:.04};
+const BASE={wood:3,stone:5,silver:22,gold:65,diamond:220},RATE={wood:.9,stone:.7,silver:.34,gold:.16,diamond:.055};
 const VOL={wood:.6,stone:.7,silver:1,gold:1.2,diamond:1.5},IMP={wood:.0015,stone:.002,silver:.006,gold:.015,diamond:.04};
 const ICON={coins:'🪙',wood:'🪵',stone:'🪨',silver:'🥈',gold:'🥇',diamond:'💎'};
 const RC={wood:'#b5733f',stone:'#d0d5db',silver:'#e6ecf3',gold:'#ffd23f',diamond:'#6df2ff'};
@@ -348,7 +351,7 @@ const buzz=()=>{try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}};
 /* ===== level rules ===== */
 const lv=t=>t.l||1;
 const tierOf=(k,l)=>k==1?(l>25?Math.min(7,5+((l-26)/5|0)):Math.min(4,(l-1)/5|0)):k==2?(l>15?Math.min(5,4+((l-16)/5|0)):(l>=15?3:Math.min(2,(l-1)/5|0))):(l>20?Math.min(7,5+((l-21)/8|0)):Math.min(4,(l-1)/5|0));
-const fx={inc:l=>.4*Math.pow(l,1.18),mine:l=>1+.25*(l-1),fdef:l=>14+6*l,fatk:l=>6+2*l,fnear:l=>.7+.15*l,cdef:l=>5+6*l,catk:l=>4*l};
+const fx={inc:l=>.4*Math.pow(l,1.18),mine:l=>1+.25*(l-1),fdef:l=>15+8*l,fatk:l=>6+2.5*l,fnear:l=>.7+.15*l,cdef:l=>5+7*l,catk:l=>4*l};
 const ore=(l,a,b,c)=>({silver:l>=5?a*(l-4):0,gold:l>=10?b*(l-9):0,diamond:l>=15?c*(l-14):0});
 const UPC={
  1:(t,l)=>({coins:Math.round(120*Math.pow(1.32,l-1)),wood:12*l,stone:10*l,...ore(l,3,2,1)}),
@@ -365,7 +368,7 @@ function compactAmount(value){const n=Number(value);if(!Number.isFinite(n))retur
 const costStr=c=>{c=SC(c);return ['coins',...RES].filter(k=>c[k]).map(k=>`<span class="${(k=='coins'?S.coins:S.res[k])>=c[k]?'':'bad'}">${ICON[k]}${compactAmount(c[k])}</span>`).join(' ')};
 const cities=o=>S.tiles.filter(t=>t.o==o&&t.b==1),owned=o=>S.tiles.reduce((n,t)=>n+(t.o==o),0);
 const ports=()=>S.tiles.reduce((n,t)=>n+(t.o==1&&t.b==4),0);
-const cap=()=>Math.round((100+60*cities(1).reduce((n,t)=>n+t.l,0)+150*portLv())*(1+rt('store')));
+const cap=()=>Math.round((120+70*cities(1).reduce((n,t)=>n+t.l,0)+10*owned(1)+150*portLv())*(1+rt('store'))*(1+.01*bl(12)+.08*bl(9))*(window.gwMul?gwMul('store'):1));
 const adj=(x,y,o)=>D4.some(([a,b])=>ok(x+a,y+b)&&T(x+a,y+b).o==o);
 const seaAdj=(x,y)=>D4.some(([a,b])=>ok(x+a,y+b)&&T(x+a,y+b).t=='w'&&!T(x+a,y+b).r);
 function near(x,y,o){let n=0;for(let b=-2;b<=2;b++)for(let a=-2;a<=2;a++)if((a||b)&&ok(x+a,y+b)){const t=T(x+a,y+b);if(t.o==o&&t.b==3)n+=fx.fnear(lv(t))}return n}
@@ -440,11 +443,15 @@ function aiTick(){
 let n10=0;
 function tick(){if(window.ADM_PAUSE&&S&&!S.on)return;
   const dt=.1,c=cap(),d=DF();S.time+=dt;S.st.hold+=dt;let inc=0;
-  for(const t of S.tiles){if(t.o!=1)continue;if(t.b==1)inc+=fx.inc(t.l)*(t.off>S.time?.4:1);else if(t.b==4){if(!(t.off>S.time))inc+=(1.5+.45*(lv(t)-1))*(1+rt('pinc'))}else if(t.b==2&&!(t.off>S.time)){const r=MR[t.t];S.res[r]=Math.min(c,S.res[r]+RATE[r]*fx.mine(lv(t))*d.rinc*fxm('prod')*(1+rt('prod')+(r=='wood'||r=='stone'?rt('bulk'):rt('ore')))*dt)}}
+  for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o!=1)continue;if(t.b==1)inc+=fx.inc(t.l)*(t.off>S.time?.4:1);else if(t.b==4){if(!(t.off>S.time))inc+=(1.5+.45*(lv(t)-1))*(1+rt('pinc'))}else if(t.b==2&&!(t.off>S.time)){const r=MR[t.t];if(S.res[r]<c)S.res[r]=Math.min(c,S.res[r]+mineOut(t,r,i)*dt)}}
   inc=(inc+bonusInc())*d.inc*fxm('inc')*(1+rt('inc'))*bmul()*(1+(window.RKB||0));const nu=UPK;S.inc=inc-nu;S.coins=Math.max(0,S.coins+(inc-nu)*dt);n10++;
   if(n10%10==0){marketTick();secTick()}if(n10%30==0)aiTick();if(n10%50==0)save();
   if(n10%5==0){hud();if(n10%20==0)render();misTick();if(mOpen)renderMarket();if(misOpen)renderMis()}updateHudAmounts()}
 
+/* One place for a mine's output per second, so the HUD, the overview and the economy agree.
+   Workshops boost mines within 2 tiles (+2% x level x workshop quality); the Monument adds +2% per level everywhere. */
+let MBON={};
+function mineOut(t,r,i){const d=DF();return RATE[r]*fx.mine(lv(t))*d.rinc*fxm('prod')*(1+rt('prod')+(r=='wood'||r=='stone'?rt('bulk'):rt('ore')))*(1+(MBON[i]||0)+.02*bl(12))*(window.gwMul?gwMul('prod'):1)}
 /* ===== icon drawing (shared by map and level cards) ===== */
 const rb=(tm,o)=>`hsl(${(tm*80+o)%360},90%,60%)`;
 const CAPSTONE_COLORS=['#ff5967','#ffad45','#ffe36b','#64d695','#52c7e8','#7488ff','#cf77ed'];
@@ -620,7 +627,7 @@ function renderMarket(){
 function openM(){mOpen=true;lastM='';seen=S.news;$('market').style.display='flex';renderMarket();hud()}
 function closeM(){mOpen=false;$('market').style.display='none'}
 function showDiff(){const d=$('dm');d.innerHTML=`<div class="dbox"><b style="font-size:22px">Choose difficulty</b><div class="mu">This starts a fresh island.</div>`+DIFFS.map((x,i)=>`<button onclick="startDiff(${i})"><b>${x.n}</b><small>${x.d}</small></button>`).join('')+`<button onclick="$('dm').style.display='none'">Cancel</button></div>`;d.style.display='flex'}
-function startDiff(i){newGame(i);save();$('dm').style.display='none';closeM();last='';render();hud();toast(DIFFS[i].n+' — good luck!')}
+function startDiff(i){newGame(i);save();$('dm').style.display='none';closeM();last='';render();hud();toast(DIFFS[i].n+' — good luck!');try{if(!META.tut.clGuided)setTimeout(()=>{try{clStartTutorial()}catch(e){}},900)}catch(e){}}
 
 /* ===== input ===== */
 const ptr=new Map();let dr=null,pd0=0,z0=1;
@@ -732,10 +739,16 @@ function setTab(t){misTab=t;lastMis='';renderMis.tab=1;renderMis()}
 /* ===== v3: settings, audio, army, buildings, research, events, achievements ===== */
 const SET={mus:.5,sfx:.7,mute:false,lowfx:false,rm:false};let META={ach:{},base:{},tut:{},col:0};
 try{Object.assign(SET,JSON.parse(localStorage.getItem('crownlands-set')||'{}'));Object.assign(META,JSON.parse(localStorage.getItem('crownlands-meta')||'{}'))}catch(e){}
+/* Graphics quality. 'low' = no glow, 1x resolution, slow animation, no sea life/clouds/particles;
+   'med' = 1.5x resolution, half-rate animation, sea life but no clouds; 'high' = everything.
+   First run picks a level from the device; older saves with "low-effects" on start at Low. */
+if(!SET.gfx){let g='high';try{const m=navigator.deviceMemory||0,c=navigator.hardwareConcurrency||0;if(SET.lowfx||(m&&m<=2)||(c&&c<=2))g='low';else if((m&&m<=4)||(c&&c<=4)||/Android/i.test(navigator.userAgent||''))g='med'}catch(e){}SET.gfx=g}
+const GQ=()=>SET.gfx=='low'||SET.gfx=='med'?SET.gfx:'high';
+SET.lowfx=GQ()=='low';
 let LOW=SET.lowfx,RM=SET.rm,lastF=0;
 const COLS=['#4aa8ff','#ff7bd0','#41e0c4','#ffd23f','#b277ff','#ff9d3d'],COLT=[0,2,5,8,12,16];
 OWN[1].c=COLS[META.col||0];
-const saveSet=()=>{LOW=SET.lowfx;RM=SET.rm;try{localStorage.setItem('crownlands-set',JSON.stringify(SET))}catch(e){}};
+const saveSet=()=>{SET.lowfx=GQ()=='low';LOW=SET.lowfx;RM=SET.rm;try{localStorage.setItem('crownlands-set',JSON.stringify(SET))}catch(e){}};
 const saveMeta=()=>{try{localStorage.setItem('crownlands-meta',JSON.stringify(META))}catch(e){}};
 const mmss=s=>{const m=Math.max(0,s|0);return (m/60|0)+':'+String(m%60).padStart(2,'0')};
 /* --- audio (synthesised, no files) --- */
@@ -760,12 +773,14 @@ const _fin=fin;fin=function(){sfx('trade');_fin()};
 function hint(k,t){if(META.tut[k])return;META.tut[k]=1;saveMeta();NQ.push('💡 '+t)}
 /* --- units, army, battles --- */
 const UN={
- inf:{n:'Infantry',ic:'🗡️',cost:{coins:30,wood:10},atk:6,def:8,hp:30,up:.02,cnt:{cav:1.6,arc:.9},d:'Cheap and sturdy. Strong vs cavalry, +25% when defending, weak to archers.'},
- arc:{n:'Archers',ic:'🏹',cost:{coins:45,wood:20},atk:9,def:3,hp:18,up:.03,cnt:{inf:1.4,cav:.6},d:'Ranged. +30% behind infantry, −20% without. Strong vs infantry, weak vs cavalry.'},
- cav:{n:'Cavalry',ic:'🐎',cost:{coins:90,wood:15,silver:3},atk:12,def:5,hp:34,up:.06,cnt:{arc:1.7,inf:.6},d:'Fast and costly. Attack +25% on grassland, −30% in forest, −45% on mountains. Strong vs archers.'},
- sie:{n:'Siege engines',ic:'🏰',cost:{coins:120,wood:50,stone:40},atk:5,def:1,hp:20,up:.05,cnt:{},d:'×2.4 vs cities, strongholds and walls; weak in the open and on defence.'}};
+ inf:{n:'Infantry',ic:'🗡️',cost:{coins:30,wood:10},atk:5,def:8,hp:30,up:.02,cnt:{cav:1.6,arc:.9},d:'The best defenders for their price: +25% when defending, strong vs cavalry, weak to archers. Shield your archers.'},
+ arc:{n:'Archers',ic:'🏹',cost:{coins:40,wood:18},atk:9,def:4,hp:18,up:.025,cnt:{inf:1.4,cav:.6},d:'Strongest attack per coin, but only behind infantry (+30% with 1 infantry per 3 archers, −20% without). Fragile: they take extra losses.'},
+ cav:{n:'Cavalry',ic:'🐎',cost:{coins:70,wood:12,silver:2},atk:13,def:6,hp:34,up:.045,cnt:{arc:1.7,inf:.6},d:'Hard-hitting and tough (fewer losses). +25% on grassland, −30% in forest, −45% on mountains. Strong vs archers, weak vs infantry.'},
+ sie:{n:'Siege engines',ic:'🏰',cost:{coins:100,wood:40,stone:30},atk:5,def:1,hp:22,up:.05,cnt:{},d:'×2.6 vs cities, strongholds and walls, and the only unit that can start a siege (halves fortifications). Weak in the open and on defence.'}};
 const sum=c=>{let n=0;if(c)for(const u in UN)n+=c[u]||0;return n};
 const addTo=(a,b)=>{for(const u in UN)a[u]=(a[u]||0)+(b[u]||0)};
+/* casualties weighted by toughness: fragile units (low HP) lose a larger share, tough ones a smaller one */
+const cutHP=(c,f)=>{const o={};for(const u in UN){const n=c[u]||0,g=Math.min(.95,f*Math.sqrt(28/(UN[u].hp||28)));let l=Math.round(n*g);if(f>0&&n>0&&l<1)l=1;l=Math.min(n,l);o[u]=l;c[u]=n-l}return o};
 const cut=(c,f)=>{const o={};for(const u in UN){const n=c[u]||0;let l=Math.round(n*f);if(f>0&&n>0&&l<1)l=1;l=Math.min(n,l);o[u]=l;c[u]=n-l}return o};
 const UL=c=>Object.keys(UN).filter(u=>c[u]).map(u=>UN[u].ic+c[u]).join(' ')||'—';
 let CB={},CQ={},UPK=0,UC=10,SEND=1,TH=[],DEMO=-1,xk='',SH=null,shK='',catT='Economy',achCat='All',achSt='all',FXL=[],BA={};
@@ -784,7 +799,7 @@ function recruit(u,n){const c=scaleC(ucost(u),n);if(!cities(1).length)return toa
 function intel(x,y){for(let b=-5;b<=5;b++)for(let a=-5;a<=5;a++)if(ok(x+a,y+b)){const t=T(x+a,y+b);if(t.o==1&&t.b==11)return true}return false}
 function towerDef(x,y){let d=0;for(let b=-3;b<=3;b++)for(let a=-3;a<=3;a++){if(!ok(x+a,y+b))continue;const t=T(x+a,y+b);if(t.o==1&&t.b==11&&Math.max(Math.abs(a),Math.abs(b))<=(t.e>.65?3:2))d+=5*lv(t)*(1+rt('tow'))}return d}
 function fortV(x,y){const t=T(x,y);let d=8+(t.b==3?fx.fdef(lv(t)):0)+(t.b==1?fx.cdef(t.l)+12*(t.w||0)*(t.o==1?1+rt('wall'):1):0)+12*near(x,y,t.o);
-  if(t.o==1)d+=towerDef(x,y)+2*bl(9);
+  if(t.o==1)d+=towerDef(x,y)+3*bl(9);
   if('mSGD'.includes(t.t))d*=1.3;else if(t.t=='f')d*=1.15;
   if(t.o==1)d*=(1+rt('dfn'))*fxm('def');
   return Math.round(d*1.6)}
@@ -794,7 +809,7 @@ function strength(comp,foe,att,x,y,tac,pl){const t=T(x,y),ft=sum(foe)||1,it=comp
     let a=n*(att?U.atk:U.def*.6+U.atk*.4)*m;
     if(u=='arc')a*=it>=ar*.3?1.3:.8;
     if(u=='cav'&&att)a*=t.t=='g'?1.25:t.t=='f'?.7:'mSGD'.includes(t.t)?.55:1;
-    if(u=='sie')a*=att?(st||tac=='siege'?2.4:.6):.3;
+    if(u=='sie')a*=att?(st||tac=='siege'?2.6:.6):.3;
     if(!att&&u=='inf')a*=1.25;if(pl&&att)a*=1+rt('a'+u);
     v+=a}
   return att?v:v*1.5}
@@ -806,7 +821,7 @@ function resolve(k,att,i,tac){
   const fort=fortV(x,y)*(tac=='siege'?.5:1),du=strength(dc,att,false,x,y,tac);
   const A=strength(att,dc,true,x,y,tac,k==1)*M[0]*(k==1?1+rt('atk'):1)*(k==1?(window.SEAB||1):1),D=(du+fort)*(window.guardX?guardX(dk):1),pw=winP(A,D),win=Math.random()<pw,r=A/Math.max(1,D),sa=Math.max(1,D)/(Math.max(1,A)+Math.max(1,D)),sd=1-sa;
   const a0={...att},d0={...dc},fa=win?clampN(.08+.5*sa,.08,.6):clampN(.3+.55*sa,.35,.9),fd=win?clampN(.3+.55*sd,.35,.9):clampN(.08+.5*sd,.08,.6);
-  const la=cut(att,fa*M[1]),ld=cut(dc,fd),why=[],st=t.b==1||t.b==3||t.w;
+  const la=cutHP(att,fa*M[1]),ld=cutHP(dc,fd),why=[],st=t.b==1||t.b==3||t.w;
   if(fort>du*.8)why.push(win?'Attackers overcame strong fortifications':'Fortifications favoured the defender');
   if('mSGD'.includes(t.t))why.push('Defenders held mountain terrain (+30%)');else if(t.t=='f')why.push('Forest cover helped the defender (+15%)');
   if(a0.cav&&dc.inf!==undefined&&d0.inf)why.push('Infantry stood against the cavalry');
@@ -859,13 +874,13 @@ function aiTick(){const d=DF();
 /* --- buildings, specialisation, research --- */
 const cnt=(x,y,r,f)=>{let n=0;for(let b=-r;b<=r;b++)for(let a=-r;a<=r;a++)if((a||b)&&ok(x+a,y+b)&&f(T(x+a,y+b)))n++;return n};
 const BLD={
- 5:{n:'Market',ic:'🏪',col:'#ff9c43',cat:'Economy',max:3,lim:4,upk:0,cost:{coins:220,wood:40,stone:30},d:'Adds coin income. Works better beside more cities.',eff:(l,q)=>`+${(1.2*l*q).toFixed(1)}🪙/s (region ×${q.toFixed(2)})`},
- 6:{n:'Barracks',ic:'⚔️',col:'#ff5268',cat:'Military',max:3,lim:3,upk:.1,cost:{coins:260,wood:60,stone:60},d:'Raises the army limit and makes recruits cheaper.',eff:l=>`+${6*l} army limit, −${10*l}% recruit cost`},
- 7:{n:'Academy',ic:'🎓',col:'#8d79ff',cat:'Economy',max:3,lim:2,upk:.15,cost:{coins:300,wood:50,stone:80,silver:8},d:'Produces research points for the development tree.',eff:l=>`+${(.15*l).toFixed(2)} research/s`},
- 9:{n:'Palace',ic:'👑',col:'#ffd34e',cat:'Special',max:3,lim:1,upk:.5,cost:{coins:1500,wood:150,stone:250,silver:40,gold:10},d:'Kingdom-wide income and defence. Needs a level 5 city.',eff:l=>`+${6*l}% income, +${4*l} defence everywhere`},
- 10:{n:'Workshop',ic:'🔧',col:'#f28a45',cat:'Economy',max:3,lim:2,upk:.1,cost:{coins:240,wood:60,stone:50},d:'Cheaper buildings. Best with mines nearby (max −30% overall).',eff:(l,q)=>`−${Math.round(8*l*q)}% build cost (region ×${q.toFixed(2)})`},
- 11:{n:'Watchtower',ic:'🗼',col:'#45c9e6',cat:'Defense',max:3,lim:6,upk:.05,cost:{coins:150,wood:50,stone:40},d:'Defence aura, exact enemy intel within 5 tiles and threat warnings.',eff:(l,q)=>`+${5*l} defence within ${q>1?3:2} tiles${q>1?' (high ground)':''}`},
- 12:{n:'Monument',ic:'🗿',col:'#d7a6ff',cat:'Special',max:1,lim:1,upk:0,cost:{coins:4000,stone:400,silver:60,gold:20,diamond:5},d:'Prestige: one-time score and a small permanent income bonus. Needs a level 8 city.',eff:()=>'+5% income, +300 score'}};
+ 5:{n:'Market',ic:'🏪',col:'#ff9c43',cat:'Economy',max:3,lim:4,upk:0,cost:{coins:600,wood:110,stone:90},d:'Adds coin income. Works better beside more cities.',eff:(l,q)=>`+${(1.2*l*q).toFixed(1)}🪙/s (region ×${q.toFixed(2)})`},
+ 6:{n:'Barracks',ic:'⚔️',col:'#ff5268',cat:'Military',max:3,lim:3,upk:.1,cost:{coins:700,wood:150,stone:150},d:'Raises the army limit and makes recruits cheaper.',eff:l=>`+${6*l} army limit, −${10*l}% recruit cost`},
+ 7:{n:'Academy',ic:'🎓',col:'#8d79ff',cat:'Economy',max:3,lim:2,upk:.15,cost:{coins:900,wood:140,stone:210,silver:24},d:'Produces research points for the development tree.',eff:l=>`+${(.15*l).toFixed(2)} research/s`},
+ 9:{n:'Palace',ic:'👑',col:'#ffd34e',cat:'Special',max:3,lim:1,upk:.5,cost:{coins:4500,wood:420,stone:700,silver:120,gold:30},d:'Kingdom-wide income, defence and storage. Needs a level 5 city.',eff:l=>`+${(3.5*l).toFixed(1)}% income, +${3*l} defence, +${8*l}% storage`},
+ 10:{n:'Workshop',ic:'🔧',col:'#f28a45',cat:'Economy',max:3,lim:2,upk:.15,cost:{coins:900,wood:180,stone:150,silver:12},d:'Cheaper buildings and more output from every mine in reach. Best beside mines.',eff:(l,q)=>`−${Math.round(2*l*q)}% build cost, +${Math.round(2*l*q)}% mine output nearby`},
+ 11:{n:'Watchtower',ic:'🗼',col:'#45c9e6',cat:'Defense',max:3,lim:6,upk:.08,cost:{coins:400,wood:120,stone:100},d:'Defence aura, exact enemy intel within 5 tiles and threat warnings.',eff:(l,q)=>`+${5*l} defence within ${q>1?3:2} tiles${q>1?' (high ground)':''}`},
+ 12:{n:'Monument',ic:'🗿',col:'#d7a6ff',cat:'Special',max:1,lim:1,upk:0,cost:{coins:12000,wood:300,stone:1200,silver:260,gold:80,diamond:20},d:'Prestige: score, income, storage and richer mines. Needs a level 8 city.',eff:l=>`+${l}% income, +${2*l}% mine output, +${l}% storage, +300 score`}};
 function qual(b,x,y){const t=T(x,y);return b==5?1+.2*Math.min(3,cnt(x,y,3,q=>q.o==1&&q.b==1)):b==10?1+.25*Math.min(2,cnt(x,y,2,q=>q.o==1&&q.b==2)):b==11?(t.e>.65?1.5:1):1}
 function reqOf(b,x,y){const B=BLD[b],t=T(x,y);if(t.o!=1)return 'not your land';if(t.b)return 'tile is occupied';if(t.t=='w')return 'cannot build on water';
   const n=S.tiles.reduce((m,q)=>m+(q.o==1&&q.b==b),0);if(n>=B.lim)return 'limit reached ('+B.lim+')';
@@ -873,7 +888,7 @@ function reqOf(b,x,y){const B=BLD[b],t=T(x,y);if(t.o!=1)return 'not your land';i
   if(b==9&&!cities(1).some(c=>c.l>=5))return 'needs a level 5 city';
   if(b==12&&!cities(1).some(c=>c.l>=8))return 'needs a level 8 city';
   return null}
-const bup=(b,l)=>{const o={},base=BLD[b].cost;for(const k in base){const scale=k=='coins'?Math.pow(1.38,l):k=='wood'||k=='stone'?.4+.055*l:.14+.045*l;o[k]=Math.max(1,Math.round(base[k]*scale))}if(l>=5)o.silver=(o.silver||0)+Math.ceil((l-4)*.35);if(l>=10)o.gold=(o.gold||0)+Math.ceil((l-9)*.25);if(l>=14)o.diamond=(o.diamond||0)+1;return o};
+const bup=(b,l)=>{const o={},base=BLD[b].cost;for(const k in base){const scale=k=='coins'?Math.pow(1.38,l):k=='wood'||k=='stone'?.4+.055*l:.14+.045*l;o[k]=Math.max(1,Math.round(base[k]*scale))}if(l>=5)o.silver=(o.silver||0)+Math.ceil((l-4)*1.1);if(l>=10)o.gold=(o.gold||0)+Math.ceil((l-9)*.9);if(l>=14)o.diamond=(o.diamond||0)+Math.ceil((l-13)*1.5);return o};
 function buildB(b){const s=S.sel;if(!s)return;const [x,y]=s,t=T(x,y),why=reqOf(b,x,y);if(why)return toast('Cannot build: '+why);const c=BLD[b].cost;if(!canPay(c))return toast('Missing: '+missStr(SC(c)));
   pay(c);t.b=b;t.l=1;t.q=qual(b,x,y);BA[y*N+x]=performance.now();fxAdd(x,y,'build');S.st.built++;if(b==12)S.score+=300;calcCB();sfx('build');toast(BLD[b].n+' built');buzz();save();last='';xk='';closeSheet();hud()}
 function upB(){const s=S.sel;if(!s)return;const [x,y]=s,t=T(x,y);if(t.o!=1||t.b<5)return;const B=BLD[t.b],l=lv(t);if(l>=B.max)return;const c=bup(t.b,l);if(!canPay(c))return toast('Missing: '+missStr(SC(c)));pay(c);t.l=l+1;S.st.upgrades++;BA[y*N+x]=performance.now();fxAdd(x,y,'build');calcCB();toast(B.n+' upgraded to level '+t.l);buzz();save();last='';xk='';render();hud()}
@@ -970,7 +985,7 @@ const PATHS=[
  ['p_b3','Bonded Vaults','🔐','Locked rooms for rich cargo.',{store:.15}],
  ['p_b4','Customs Docks','🏗️','Every ship pays its fee.',{inc:.06}],
  ['p_x','Sea Lords','🌊','Who rules the waves rules trade.',{pinc:.4,store:.15,spr:.01}]]}];
-const RPT=[20,40,80,140,230,500],CT=[150,300,600,1100,1800,3500];
+const RPT=[20,45,100,200,380,900],CT=[150,350,900,2200,5000,12000];   /* v6: deeper nodes take longer, so research stays a long-term goal */
 const TECH=[],TID={};
 PATHS.forEach((P,pi)=>P.nodes.forEach((n,i)=>{const tier=i==0?1:i<=4?i+1:i<=8?i-3:6,lane=i==0||i==9?0:i<=4?1:2,pre=i==0?[]:i==1||i==5?[P.nodes[0][0]]:i==9?[P.nodes[4][0],P.nodes[8][0]]:[P.nodes[i-1][0]];
   const t={id:n[0],n:n[1],ic:n[2],d:n[3],fx:n[4],p:pi,i,tier,lane,pre,rp:RPT[tier-1],coins:CT[tier-1]};TECH.push(t);TID[t.id]=t}));
@@ -987,7 +1002,8 @@ function techSt(t){if(S.tech[t.id])return['done',''];const miss=t.pre.filter(p=>
   const r=tcost(t),c=SC({coins:t.coins});if(S.rp<r||c.coins>S.coins)return['need','Missing: '+(S.rp<r?'🎓'+Math.ceil(r-S.rp)+' ':'')+missStr(c)];return['ok','']}
 function research(id){const t=TID[id];if(!t)return;const st=techSt(t);if(st[0]!='ok')return toast(st[1]||'Already researched');S.rp-=tcost(t);pay({coins:t.coins});S.tech[id]=1;rtDirty();S.st.techs++;sfx('mission');buzz();toast('Researched: '+t.n);chron('🎓','Researched '+t.n);save();hud();shK='';if(SH)renderSheet();if(typeof devOpen!='undefined'&&devOpen)devRender()}
 
-const bonusInc=()=>.9*(CQ[5]||0)+rt('flat'),bmul=()=>1+.025*bl(9)+.01*bl(12),wsm=()=>1-Math.min(.3,.02*(CQ[10]||0)+rt('cost'));
+const bonusInc=()=>.5+.9*(CQ[5]||0)+rt('flat'),   /* .5 = crown stipend: makes the first minutes playable on every difficulty, irrelevant later */
+      bmul=()=>1+.035*bl(9)+.01*bl(12),wsm=()=>1-Math.min(.3,.02*(CQ[10]||0)+rt('cost'));
 function fxm(k){return S&&S.efx?S.efx.reduce((m,e)=>S.time<e.until&&e[k]?m*e[k]:m,1):1}
 function threats(){TH=[];const seen=new Set();for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o==1&&t.b==11){const x=i%N,y=(i/N)|0,R=Math.min(9,4+lv(t));for(let b=-R;b<=R;b++)for(let a=-R;a<=R;a++){if(!ok(x+a,y+b))continue;const j=(y+b)*N+x+a;if(!seen.has(j)&&S.tiles[j].o==1&&edge(x+a,y+b)){seen.add(j);TH.push(j)}}}}}
 /* --- events --- */
@@ -1138,16 +1154,16 @@ var lastSH=null,TAPT=0;
 function openSheet(n){SH=n;shK='';lastSH=null;closeMis();closeM();if(n!='cat'&&n!='battle'&&n!='sea'&&n!='war')S.sel=null;render();$('sh').style.display='flex';renderSheet();if(n=='army')hint('army','Recruit here, garrison cities and strongholds from their tile panel, and attack rival tiles that touch your land.')}
 function closeSheet(){SH=null;shK='';lastSH=null;$('sh').style.display='none';render()}
 function setSend(v){SEND=v;shK='';renderSheet()}
-function renderSheet(){if(!SH)return;const v={menu:vMenu,army:vArmy,dev:vDev,chron:vChron,ach:vAch,set:vSet,help:vHelp,cat:vCat,battle:vBattle,sea:vSea,rank:vRank,war:vWar,report:vReport}[SH]();
+function renderSheet(){if(!SH)return;const fn={menu:vMenu,army:vArmy,dev:vDev,chron:vChron,ach:vAch,set:vSet,help:vHelp,cat:vCat,battle:vBattle,sea:vSea,rank:vRank,war:vWar,report:vReport}[SH]||(window.XSH&&XSH[SH]);if(!fn)return closeSheet();const v=fn();
   const h=`<div class="mh" style="padding:10px"><b style="font-size:18px">${v[0]}</b><button onclick="closeSheet()" style="margin-left:auto;text-align:center" aria-label="Close">✕</button></div><div id="shl">${v[1]}</div>`;
-  if(h!==shK){const o=$('shl'),sc=o&&lastSH===SH?o.scrollTop:0;shK=h;lastSH=SH;$('sh').innerHTML=h;const n=$('shl');if(n)n.scrollTop=sc}}
+  if(h!==shK){const o=$('shl'),re=lastSH===SH,sc=o&&re?o.scrollTop:0;shK=h;lastSH=SH;$('sh').classList.toggle('noanim',re);$('sh').innerHTML=h;const n=$('shl');if(n)n.scrollTop=sc}}
 const mb=(ic,t,s,f)=>`<button class="mbtn" style="--h:${(String(ic).codePointAt(0)*47)%360}" onclick="${f}"><i class="mic">${ic}</i><span class="mtx"><b>${t}</b><small>${s}</small></span><i class="chev">›</i></button>`;
 function vMenu(){return['☰ Menu',mb('🎓','Kingdom development',`Research · ${compactAmount(S.rp)} RP`,"openDev()")+mb('📜','Chronicle & events',S.evp?'❗ A decision is waiting':'Active effects and history',"openSheet('chron')")+mb('🏆','Achievements & stats','Bronze, silver and gold goals',"openAchievements()")+mb('⚙️','Settings','Sound, music, animations, performance',"openSheet('set')")+mb('❓','Help & tutorial','Rules and replayable hints',"openSheet('help')")]}
 function vArmy(){const tl=tally(),tot=sum(tl);let h=`<div class="mu">Units ${tot}/${UC} · upkeep ${compactAmount(UPK)}🪙/s. Ready units can attack; garrisoned units defend their tile.</div>`;
   for(const u in UN){const U=UN[u],c=ucost(u),c5=scaleC(c,5),can=cities(1).length>0&&tot<UC&&canRaw(c);
     h+=`<div class="mi"><div class="mh"><span>${U.ic}</span><b>${U.n}</b><em>${S.army[u]} ready · ${tl[u]-S.army[u]} out</em></div><div class="mu">${U.d}</div><div class="mf"><span>⚔${U.atk} 🛡${U.def} ❤${U.hp} · ${U.up}🪙/s</span><span>${rawStr(c)}</span></div>${!canRaw(c)?`<div class="mf bad"><span>Missing: ${missStr(c)}</span></div>`:''}<div class="row2"><button ${can?'':'disabled'} onclick="recruit('${u}',1)">Recruit 1</button><button ${tot+5<=UC&&canRaw(c5)?'':'disabled'} onclick="recruit('${u}',5)">Recruit 5</button></div></div>`}
   S.sieges.forEach((g,j)=>{if(g.k==1)h+=`<div class="mi ready"><div class="mh"><span>🏰</span><b>Siege at (${g.idx%N},${(g.idx/N)|0})</b><em>${Math.max(0,Math.ceil(g.dur-(S.time-g.t0)))}s</em></div><div class="mf"><span>${UL(g.comp)}</span><button onclick="retreat(${j})">Retreat</button></div></div>`});
-  return['⚔️ Army',h+`<p class="mu">Counters: infantry beat cavalry · cavalry beat archers · archers beat infantry · siege engines break walls. Cavalry want open ground.</p>`]}
+  return['⚔️ Army',h+`<p class="mu">Counters: infantry beat cavalry · cavalry beat archers · archers beat infantry · siege engines break walls. Cavalry want open ground; archers need an infantry screen; fragile units (low ❤) lose more in every battle.</p>`]}
 function vDev(){return['🌳 Kingdom development',`<div class="mu">🎓 ${compactAmount(S.rp)} RP (+${rpRate().toFixed(2)}/s)</div><button style="width:100%;margin-top:8px" onclick="openDev()">Open the development tree</button>`]}
 function vChron(){let h='';const e=S.evp&&EID[S.evp.id];
   if(e)h+=`<div class="mi ready"><div class="mh"><span>${e.ic}</span><b>${e.n}</b><em>${e.cat}</em></div><div class="mu">${e.txt}</div><div class="mf"><span>Decide within ${Math.max(0,Math.ceil(S.evp.until-S.time))}s — otherwise the first option applies. You can close this and come back.</span></div>`+e.o.map((o,j)=>{const c=o.cost,can=!c||canPay(c);return `<button style="width:100%;margin-top:6px" ${can?'':'disabled'} onclick="choose(${j})">${o.t}<small>${o.d}${c?' · '+costStr(c):''}${!can?' · Missing: '+missStr(SC(c)):''}</small></button>`}).join('')+`</div>`;
@@ -1162,7 +1178,7 @@ function vAch(){const cats=['All','Expansion','Economy','Military','Defense','Ch
     h+=`<div class="mi ${st=='done'?'ready':''}"><div class="mh"><span>${a[6]}</span><b>${a[2]}</b><em>${got?TN[got-1]:'Locked'}</em></div><div class="mu">${a[3].replace('{n}',tgt)}</div><div class="bar"><i style="width:${Math.min(100,v/tgt*100)}%"></i></div><div class="mf"><span>Progress: ${Math.min(v,tgt)}/${tgt}</span><span>${a[5].map((g,i)=>`<span class="bd" style="background:${META.ach[a[0]+i]?TC[i]:'#555'}">${TN[i][0]}</span>`).join('')}${window.gemTxt?gemTxt():""}</span></div></div>`}
   return['🏆 Achievements',h]}
 function vSet(){const t=(k,l)=>`<button class="${SET[k]?'on':''}" style="width:100%;margin:4px 0" onclick="setOpt('${k}',${!SET[k]});shK='';renderSheet()">${l}: ${SET[k]?'ON':'OFF'}</button>`;
-  return['⚙️ Settings',`<b>Music volume</b><input type="range" min="0" max="1" step=".05" value="${SET.mus}" oninput="setOpt('mus',+this.value)"><b>Effects volume</b><input type="range" min="0" max="1" step=".05" value="${SET.sfx}" oninput="setOpt('sfx',+this.value)">`+t('mute','Mute everything')+t('rm','Reduce animations (also skips battle effects)')+t('lowfx','Low-effects mode (faster on weak phones)')+`<p class="mu">Music and sounds are generated in the app, so no audio files are needed. Settings are saved on this device.</p>`]}
+  return['⚙️ Settings',`<b>Music volume</b><input type="range" min="0" max="1" step=".05" value="${SET.mus}" oninput="setOpt('mus',+this.value)"><b>Effects volume</b><input type="range" min="0" max="1" step=".05" value="${SET.sfx}" oninput="setOpt('sfx',+this.value)">`+t('mute','Mute everything')+`<b>Graphics quality</b><div class="gfxq">${[['low','Low','Fastest · best battery'],['med','Medium','Balanced'],['high','High','All effects']].map(([k,n,d])=>`<button class="${GQ()==k?'on':''}" onclick="SET.gfxLock=1;setOpt('gfx','${k}');shK='';renderSheet()"><b>${n}</b><small>${d}</small></button>`).join('')}</div><div class="mu" style="font-size:12px">Low: no glow, sea life, clouds or sparkles, lower resolution. Medium: sharper map and sea life. High: full resolution, clouds and every animation.${SET.gfxLock?'':' The game lowers this automatically if your device struggles.'}</div>`+t('rm','Reduce animations (also skips battle effects)')+`<p class="mu">Music and sounds are generated in the app, so no audio files are needed. Settings are saved on this device.</p>`]}
 function vHelp(){return['❓ Help',`<div class="mu">• Tap a tile to see what it is and what you can do.<br>• Claim land next to your border, then build cities, mines, strongholds and more.<br>• Sell goods in the Market; recruit in Army; research in Development.<br>• Time is real-time here: sieges, effects and events count seconds, not turns.</div><button style="width:100%;margin-top:8px" onclick="META.tut={};saveMeta();toast('Hints will show again')">Replay tutorial hints</button><button style="width:100%;margin-top:6px" onclick="openMis()">Open the tutorial missions</button>`]}
 function vCat(){const s=S.sel;if(!s)return['Buildings','<p class="mu">Select a tile first.</p>'];const [x,y]=s;
   let h=`<div class="tabs" style="padding:0 0 6px">`+['Economy','Military','Defense','Special'].map(c=>`<button class="${catT==c?'on':''}" onclick="catT='${c}';shK='';renderSheet()">${c}</button>`).join('')+`</div>`+regionInfo(x,y);
@@ -1193,13 +1209,13 @@ var VYU=null,VYD=null,VYON=false,SEAD=null;
 let PR=1,CHK=new Map(),SPR=new Map(),CLD=null,FT=8,slow=0;
 const ANI=new Map();let ANL=[];
 {const _sc=SPR.clear.bind(SPR);SPR.clear=function(){_sc();ANI.clear();ANL=[]}}
-const aniFps=()=>LOW?10:24;
+const aniFps=()=>LOW?8:GQ()=='med'?15:24;
 function aniSprite(big,key,t,x,y,qs){let a=ANI.get(key),s=SPR.get(key);if(!s||!a||a.s!==s){s=(big?spriteBig:sprite)(key,t,x,y,qs,0);a={s,t,x,y,qs,big,fr:-1,q:0};ANI.set(key,a)}
   const fr=Math.floor(performance.now()/1000*aniFps());if(a.fr!==fr&&!a.q){a.q=1;ANL.push(a)}return s}
 function aniFlush(){const L=ANL;ANL=[];if(!L.length)return;L.sort((p,q)=>p.fr-q.fr);const tm=performance.now()/1000,fr=Math.floor(tm*aniFps()),end=performance.now()+5;
   for(let i=0;i<L.length;i++){const a=L[i];a.q=0;if(i>0&&performance.now()>end)continue;const s=a.s,c=s.c.getContext('2d');c.setTransform(PR,0,0,PR,0,0);c.clearRect(0,0,s.w+1,s.h+1);
     try{if(a.big)drawMetro(c,2.4*a.qs,2.7*a.qs,2*a.qs,a.t.l,OWN[a.t.o].c,tm);else paintB(c,a.t,1.3*a.qs,1.6*a.qs,a.qs,tm,a.x,a.y)}catch(e){}a.fr=fr}}const ICN=new Map();let icq=[],icT=0;
-function setPR(){PR=Math.min(LOW?1:2,window.devicePixelRatio||1)}
+function setPR(){PR=Math.min(LOW?1:GQ()=='med'?1.5:2,window.devicePixelRatio||1)}
 function resize(){const r=$('wrap').getBoundingClientRect();setPR();W=r.width;H=r.height;cv.width=Math.round(W*PR);cv.height=Math.round(H*PR);cx.setTransform(PR,0,0,PR,0,0);CHK.clear();SPR.clear()}
 function tree2c(g,x,y,s){g.fillStyle='#0004';g.beginPath();g.ellipse(x+s*.2,y+s*.08,s*.32,s*.09,0,0,7);g.fill();g.fillStyle='#4a2f18';g.fillRect(x-s*.04,y-s*.12,s*.08,s*.22);[[-.13,-.2,.2],[.13,-.18,.2],[0,-.36,.22]].forEach(([a,b,r])=>{g.fillStyle='#1c6430';g.beginPath();g.arc(x+a*s,y+b*s,r*s,0,7);g.fill()});[[-.15,-.24,.11],[.08,-.4,.12]].forEach(([a,b,r])=>{g.fillStyle='#48ab5a';g.beginPath();g.arc(x+a*s,y+b*s,r*s,0,7);g.fill()})}
 function pinec(g,x,y,s){g.fillStyle='#0004';g.beginPath();g.ellipse(x+s*.2,y+s*.1,s*.3,s*.08,0,0,7);g.fill();g.fillStyle='#4a2f18';g.fillRect(x-s*.03,y-s*.05,s*.06,s*.15);for(let k=0;k<3;k++){const ay=y-s*.62+k*s*.2,by=ay+s*.34,w=s*(.17+.06*k);g.fillStyle='#2f8a47';g.beginPath();g.moveTo(x,ay);g.lineTo(x-w,by);g.lineTo(x,by);g.fill();g.fillStyle='#17562c';g.beginPath();g.moveTo(x,ay);g.lineTo(x+w,by);g.lineTo(x,by);g.fill()}}
@@ -1254,13 +1270,13 @@ function draw(){if(VYU)VYU();
       key=t.b+'|'+lv(t)+'|'+(t.b==2?t.t:'')+'|'+t.o+'|'+(t.w||0)+'|'+qs+'|'+ph+(t.b==4?'|'+portDir(x,y):''),s=ph?aniSprite(big,key,t,x,y,qs):(big?spriteBig:sprite)(key,t,x,y,qs,0),k=ts/qs,a=BA[y*N+x],an=a&&!RM?(performance.now()-a)/500:2;
     if(an<1){const sc=(.6+.4*an+Math.sin(an*3.14)*.12)*k;cx.save();cx.translate(mx,my);cx.scale(sc,sc);cx.drawImage(s.c,-s.ox,-s.oy,s.w,s.h);cx.restore()}else cx.drawImage(s.c,mx-s.ox*k,my-s.oy*k,s.w*k,s.h*k);
     if(t.off>S.time){cx.font=`${ts*.4}px sans-serif`;cx.textAlign='center';cx.textBaseline='middle';cx.fillText(t.oi||'⚠️',mx,my-ts*.55)}
-    if(t.o==1&&!RM&&Math.random()<.004){const sy=t.b==1?'coins':t.b==2?MR[t.t]:'';if(sy)PT.push({x:x+.5,y:y+.2,t:0,s:sy})}}
+    if(t.o==1&&!RM&&!LOW&&Math.random()<(GQ()=='med'?.002:.004)){const sy=t.b==1?'coins':t.b==2?MR[t.t]:'';if(sy)PT.push({x:x+.5,y:y+.2,t:0,s:sy})}}
   aniFlush();
   if(!LOW&&!busy){for(let i=0;i<3;i++){const dir=i%2?1:-1,a=tm*.035*dir+i*2.1,p=shipPos(a,i),q=shipPos(a+.03*dir,i);if(!p[2])continue;const bx=p[0]*ts-cm.x,by=p[1]*ts-cm.y;
       cx.save();cx.translate(bx,by);cx.rotate(Math.atan2(q[1]-p[1],q[0]-p[0]));cx.strokeStyle='#ffffff55';cx.lineWidth=ts*.05;cx.beginPath();cx.moveTo(-ts*.2,0);cx.lineTo(-ts*.8,0);cx.stroke();cx.fillStyle='#5a3418';cx.beginPath();cx.ellipse(0,0,ts*.24,ts*.09,0,0,7);cx.fill();cx.fillStyle='#fff';cx.beginPath();cx.ellipse(ts*.02,0,ts*.14,ts*.05,0,0,7);cx.fill();cx.restore()}
     drawSea(ts,cm,tm);
     if(!CLD){CLD=mkc(340,340);const g=CLD.getContext('2d'),r=g.createRadialGradient(170,170,0,170,170,160);r.addColorStop(0,'rgba(0,10,25,.2)');r.addColorStop(1,'rgba(0,10,25,0)');g.fillStyle=r;g.fillRect(0,0,340,340)}
-    for(let i=0;i<4;i++){const a=((tm*9*(1+i*.15)+i*330)%(W+500))-250,b=(i*197)%Math.max(200,H);cx.drawImage(CLD,a-170,b-170)}}
+    if(GQ()=='high')for(let i=0;i<4;i++){const a=((tm*9*(1+i*.15)+i*330)%(W+500))-250,b=(i*197)%Math.max(200,H);cx.drawImage(CLD,a-170,b-170)}}
   drawFX(ts,cm);
   if(VYD)VYD(ts,cm,tm,dt);
   if(SEAD)SEAD(ts,cm,tm);
@@ -1268,7 +1284,7 @@ function draw(){if(VYU)VYU();
   if(HL&&performance.now()<HL.t){const k=(performance.now()%900)/900,x=HL.x*ts-cm.x+ts/2,y=HL.y*ts-cm.y+ts/2;cx.save();cx.strokeStyle='#ffcf4a';cx.lineWidth=4;cx.globalAlpha=1-k;cx.beginPath();cx.arc(x,y,ts*(.4+k*.9),0,7);cx.stroke();cx.globalAlpha=1;cx.beginPath();cx.arc(x,y,ts*.5,0,7);cx.stroke();cx.restore()}
   if(S.sel){const [x,y]=S.sel;cx.save();cx.strokeStyle='#fff';cx.lineWidth=3;cx.setLineDash([8,6]);cx.lineDashOffset=-tm*20;cx.strokeRect(x*ts-cm.x+2,y*ts-cm.y+2,ts-4,ts-4);cx.restore()}
   FT=FT*.9+(performance.now()-t0)*.1;
-  if(FT>22&&!LOW){if(++slow>150){SET.lowfx=true;saveSet();CHK.clear();SPR.clear();ICN.clear();resize();toast('Low-effects mode switched on automatically')}}else if(FT<16)slow=0}
+  if(FT>22&&!LOW&&!SET.gfxLock){if(++slow>150){slow=0;SET.gfx=GQ()=='high'?'med':'low';saveSet();CHK.clear();SPR.clear();ICN.clear();resize();toast('Graphics lowered to '+(SET.gfx=='med'?'Medium':'Low')+' to keep the game smooth (Settings)')}}else if(FT<16)slow=0}
 function drawPortLevelArt(c,t,mx,my,ts,x,y,face=null){
   const l=lv(t),phase=Math.min(2,Math.floor((l-1)/5)),accent=TIERS[phase][1],capstone=l>=15,d=face||D4.find(([a,b])=>ok(x+a,y+b)&&T(x+a,y+b).t=='w'&&!T(x+a,y+b).r)||[0,1];
   c.save();c.translate(mx,my);c.rotate(Math.atan2(d[1],d[0]));
@@ -1286,7 +1302,7 @@ const _dp=drawPort;drawPort=function(c,t,mx,my,ts,tm,x,y,oc,face=null,icon=false
 function paintIcons(){const cs=[...document.querySelectorAll('#panel canvas[data-k]')];cs.forEach(c2=>{const key=c2.dataset.k+'|'+c2.dataset.l+'|'+c2.dataset.r,s=ICN.get(key);if(s)blit(c2,s);else icq.push([c2,key])});if(icq.length&&!icT)icT=requestAnimationFrame(icStep)}
 const blit=(c2,s)=>{const c=c2.getContext('2d');c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,180,180);c.drawImage(s,0,0)};
 function icStep(){icT=0;const t0=performance.now();while(icq.length&&performance.now()-t0<6){const [c2,key]=icq.shift();if(c2.isConnected===false)continue;let s=ICN.get(key);if(!s){const [k,l,r]=key.split('|');s=mkc(180,180);const c=s.getContext('2d');c.setTransform(3,0,0,3,0,0);if(k=='1')drawCity(c,30,30,46,+l,'#4aa8ff',1);else if(k=='3')drawFort(c,30,26,46,+l,'#4aa8ff',1);else drawMine(c,30,26,46,+l,r,1);ICN.set(key,s)}blit(c2,s)}if(icq.length)icT=requestAnimationFrame(icStep)}
-function setOpt(k,v){SET[k]=v;saveSet();if(k=='lowfx'||k=='rm'){CHK.clear();SPR.clear();ICN.clear();resize()}}
+function setOpt(k,v){SET[k]=v;saveSet();if(k=='lowfx'||k=='rm'||k=='gfx'){CHK.clear();SPR.clear();ICN.clear();resize()}}
 /* --- saving: compact + off the critical path --- */
 let sT=0;
 function doSave(){if(!S||S.on)return;S.ts=Date.now();try{localStorage.setItem(KEY,JSON.stringify(packS(S)))}catch(e){}}
@@ -1314,16 +1330,21 @@ function mkEnsure(){if(S.mk)return;S.mk={};S.mkD={};const sp0=mkSupply();RES.for
 const _ex=ensureX;ensureX=function(){_ex();mkEnsure()};
 function marketTick(){mkEnsure();const sp0=mkSupply(),own=S.tiles.reduce((n,t)=>n+(t.o>0),0),f=Math.pow(own/S.mkO,.8);
   RES.forEach(r=>{const dem=S.mkD[r]*f*Math.pow(BASE[r]/S.price[r],.15);S.mk[r]=Math.max(0,Math.min(M0[r]*3,S.mk[r]+sp0[r]-dem));
-    const sh=Math.max(.15,S.mk[r]/M0[r]),target=Math.max(BASE[r]*.35,Math.min(BASE[r]*2.8,BASE[r]*Math.pow(1/sh,.6))),m=(S.mom[r]||0)*.9+rnd(-1,1)*.3*VOL[r];S.mom[r]=m;
-    let p=S.price[r];p+=(target-p)*.06+p*m*.004;S.price[r]=Math.max(BASE[r]*.35,Math.min(BASE[r]*2.8,p))});
+    const sh=Math.max(.15,S.mk[r]/M0[r]),target=Math.max(BASE[r]*.35,Math.min(BASE[r]*2.8,BASE[r]*Math.pow(1/sh,.6))),m=(S.mom[r]||0)*.9+rnd(-1,1)*.22*VOL[r];S.mom[r]=m;
+    let p=S.price[r];p+=(target-p)*.03+p*m*.004;S.price[r]=Math.max(BASE[r]*.35,Math.min(BASE[r]*2.8,p))});
   if(Math.random()<.004){const r=RES[rnd(0,5)|0],up=Math.random()<.5;S.mk[r]=Math.min(M0[r]*3,Math.max(0,S.mk[r]*(up?.7:1.5)));S.news=up?`${ICON[r]} A shortage of ${r} is driving demand up. Good time to sell!`:`${ICON[r]} ${r[0].toUpperCase()+r.slice(1)} floods the market. Time to buy?`;toast(S.news)}
-  if((S.time|0)%2==0)RES.forEach(r=>{const h=S.hist[r];h.push(S.price[r]);if(h.length>40)h.shift()})}
-function sell(r,f){mkEnsure();const n=Math.floor(S.res[r]*f);if(!n)return;S.coins+=Math.floor(n*bid(r));S.res[r]-=n;S.st.trades++;S.mk[r]=Math.min(M0[r]*3,S.mk[r]+n);S.price[r]*=1-Math.min(.3,n*IMP[r]*.5);fin()}
-function buy(r){mkEnsure();const n=Math.min(10,cap()-Math.floor(S.res[r]));if(n<=0)return toast('Storage is full');const c=Math.ceil(n*ask(r));if(c>S.coins)return toast('Not enough coins');S.coins-=c;S.res[r]+=n;S.st.trades++;S.mk[r]=Math.max(0,S.mk[r]-n);S.price[r]*=1+Math.min(.25,n*IMP[r]*.4);fin()}
+  if((S.time|0)%3==0)RES.forEach(r=>{const h=S.hist[r];h.push(S.price[r]);if(h.length>40)h.shift()})}
+/* A trade fills along the price curve: a big sale is paid the average of the price before and after it,
+   so dumping a huge stockpile at once earns less than selling in steps (and buying in bulk costs more). */
+const sellImp=(r,n)=>Math.min(.3,n*IMP[r]*.5),buyImp=(r,n)=>Math.min(.25,n*IMP[r]*.4);
+const sellQuote=(r,n)=>Math.floor(n*bid(r)*(1-sellImp(r,n)/2)),buyQuote=(r,n)=>Math.ceil(n*ask(r)*(1+buyImp(r,n)/2));
+function buyQty(r,q){const room=Math.max(0,cap()-Math.floor(S.res[r]));let n=Math.min(room,q=='max'?room:q);if(q=='max'){while(n>0&&buyQuote(r,n)>S.coins)n=Math.floor(n*.85)}return n}
+function sell(r,f){mkEnsure();const n=Math.floor(S.res[r]*f);if(!n)return;S.coins+=sellQuote(r,n);S.res[r]-=n;S.st.trades++;S.mk[r]=Math.min(M0[r]*3,S.mk[r]+n);S.price[r]*=1-sellImp(r,n);fin()}
+function buy(r,q){mkEnsure();const n=buyQty(r,q||10);if(n<=0)return toast(cap()-S.res[r]<1?'Storage is full':'Not enough coins');const c=buyQuote(r,n);if(c>S.coins)return toast('Not enough coins');S.coins-=c;S.res[r]+=n;S.st.trades++;S.mk[r]=Math.max(0,S.mk[r]-n);S.price[r]*=1+buyImp(r,n);fin()}
 function mkWhy(r){let me=0,ai=0;for(const q of S.tiles)if(MR[q.t]==r){if(q.o==1)me++;else if(q.o>1)ai++}const m=S.mk[r]/M0[r];return `${m<.8?'<span class="bad">Shortage</span>':m>1.25?'<span class="ok">Surplus</span>':'Balanced'} · stock ${Math.round(S.mk[r])} · rivals hold ${ai} source tile${ai==1?'':'s'}, you hold ${me}`}
 function renderMarket(){mkEnsure();
   const h=`<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:22px">Market</b><span class="pill" style="padding:4px 10px" data-market-coins>🪙 ${compactAmount(S.coins)}</span><button onclick="closeM()">Close</button></div>${S.news?`<div class="news">${S.news}</div>`:''}${mktNote()}`+
-  RES.map(r=>{const hh=S.hist[r],pr=hh[Math.max(0,hh.length-6)],ch=(S.price[r]/pr-1)*100,up=ch>=0,a=ask(r),can=S.coins>=a*10&&S.res[r]<cap();return `<div class="mr"><div><b>${ICON[r]} ${r[0].toUpperCase()+r.slice(1)}</b> <span class="mu" data-market-resource="${r}">you hold ${compactAmount(S.res[r])}</span><br><span style="font-size:17px">Buy ${a.toFixed(1)} · Sell ${bid(r).toFixed(1)}</span> <span class="${up?'ok':'bad'}">${up?'▲':'▼'} ${Math.abs(ch).toFixed(1)}%</span><br>${spark(r)}<div class="mu" style="font-size:12px">${mkWhy(r)}</div></div><div class="row"><button class="buy" ${can?'':'disabled'} onclick="buy('${r}')">Buy 10</button><button onclick="sell('${r}',.25)">Sell ¼</button><button onclick="sell('${r}',1)">Sell all</button></div></div>`}).join('')+
+  RES.map(r=>{const hh=S.hist[r],pr=hh[Math.max(0,hh.length-6)],ch=(S.price[r]/pr-1)*100,up=ch>=0,a=ask(r),room=cap()-S.res[r]>=1,can=S.coins>=a*10&&room,can100=S.coins>=buyQuote(r,100)&&cap()-S.res[r]>=100,all=Math.floor(S.res[r]);return `<div class="mr"><div><b>${ICON[r]} ${r[0].toUpperCase()+r.slice(1)}</b> <span class="mu" data-market-resource="${r}">you hold ${compactAmount(S.res[r])}</span><br><span style="font-size:17px">Buy ${a.toFixed(1)} · Sell ${bid(r).toFixed(1)}</span> <span class="${up?'ok':'bad'}">${up?'▲':'▼'} ${Math.abs(ch).toFixed(1)}%</span><br>${spark(r)}<div class="mu" style="font-size:12px">${mkWhy(r)}${all>0?` · selling all now pays 🪙${compactAmount(sellQuote(r,all))}`:''}</div></div><div class="row mkrow"><button class="buy" ${can?'':'disabled'} onclick="buy('${r}',10)">Buy 10</button><button class="buy" ${can100?'':'disabled'} onclick="buy('${r}',100)">Buy 100</button><button class="buy" ${can?'':'disabled'} onclick="buy('${r}','max')">Buy max</button><button ${all?'':'disabled'} onclick="sell('${r}',.25)">Sell ¼</button><button ${all?'':'disabled'} onclick="sell('${r}',1)">Sell all</button></div></div>`}).join('')+
   `<div style="margin-top:12px"><button onclick="showDiff()">New game</button></div>`;
   if(h!==lastM){lastM=h;{const m=$('market'),sc=m.scrollTop;m.innerHTML=h;m.scrollTop=sc}}}
 /* --- buildings to level 15, ports and the galleon --- */
@@ -1331,15 +1352,16 @@ function renderMarket(){mkEnsure();
 BLD[5].eff=(l,q)=>`+${(.9*Math.pow(l,.85)*q).toFixed(1)}🪙/s (region ×${q.toFixed(2)})`;
 BLD[6].eff=l=>`+${3*l} army limit, −${2*l}% recruit cost`;
 BLD[7].eff=l=>`+${(.1*l).toFixed(1)} research/s`;
-BLD[9].eff=l=>`+${(2.5*l).toFixed(1)}% income, +${2*l} defence everywhere`;
-BLD[10].eff=(l,q)=>`−${(2*l*q).toFixed(1)}% build cost (region ×${q.toFixed(2)}, max −30% overall)`;
+BLD[9].eff=l=>`+${(3.5*l).toFixed(1)}% income, +${3*l} defence, +${8*l}% storage`;
+BLD[10].eff=(l,q)=>`−${(2*l*q).toFixed(1)}% build cost, +${(2*l*q).toFixed(1)}% mine output nearby`;
 BLD[11].eff=(l,q)=>`+${3*l} defence within ${(q>1?3:2)+(l>=8?1:0)} tiles (overlap cap +75)${q>1?' (high ground)':''}`;
-BLD[12].eff=l=>`+${l}% income (+300 score when built, +60 per level)`;
+BLD[12].eff=l=>`+${l}% income, +${2*l}% mine output, +${l}% storage (+300 score, +60 per level)`;
 const portUp=l=>({coins:Math.round(500*Math.pow(1.38,l-1)*(l==14?1.5:1)),wood:Math.round(40+18*l),stone:Math.round(55+22*l),silver:l>=5?Math.ceil((l-4)*1.5):0,gold:l>=10?Math.ceil((l-9)*.75):0,diamond:l>=14?1:0});
 const portLv=()=>S.tiles.reduce((n,t)=>n+(t.o==1&&t.b==4?1+.25*(lv(t)-1):0),0);
 const maxLv=b=>{let m=0;for(const t of S.tiles)if(t.o==1&&t.b==b&&lv(t)>m)m=lv(t);return m};
 const maxCity=()=>maxLv(1);
-function calcCB(){CB={};CQ={};for(const t of S.tiles)if(t.o==1&&t.b>=5&&!(t.off>S.time)){const l=lv(t);CB[t.b]=(CB[t.b]||0)+l;CQ[t.b]=(CQ[t.b]||0)+(t.b==5?Math.pow(l,.85):l)*(t.q||1)}}
+function calcCB(){CB={};CQ={};MBON={};const ws=[];for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o==1&&t.b>=5&&!(t.off>S.time)){const l=lv(t);CB[t.b]=(CB[t.b]||0)+l;CQ[t.b]=(CQ[t.b]||0)+(t.b==5?Math.pow(l,.85):l)*(t.q||1);if(t.b==10)ws.push(i)}}
+  for(const i of ws){const t=S.tiles[i],x=i%N,y=(i/N)|0,b=.02*lv(t)*(t.q||1);for(let q=-2;q<=2;q++)for(let p=-2;p<=2;p++)if(ok(x+p,y+q)){const j=(y+q)*N+x+p,m=S.tiles[j];if(m.o==1&&m.b==2)MBON[j]=Math.min(.6,(MBON[j]||0)+b)}}}
 function towerDef(x,y){let d=0;for(let b=-4;b<=4;b++)for(let a=-4;a<=4;a++){if(!ok(x+a,y+b))continue;const t=T(x+a,y+b);if(t.o==1&&t.b==11&&!(t.off>S.time)&&Math.max(Math.abs(a),Math.abs(b))<=(t.e>.65?3:2)+(lv(t)>=8?1:0))d+=3*lv(t)*(1+rt('tow'))}return Math.min(75,d)}
 function upB(){const s=S.sel;if(!s)return;const [x,y]=s,t=T(x,y);if(t.o!=1||(t.b<5&&t.b!=4))return;const isP=t.b==4,l=lv(t),mxl=isP?15:BLD[t.b].max;if(l>=mxl)return;
   const need=Math.ceil(1.4*(l+1)-3);if(maxCity()<need)return toast('Needs a level '+need+' city');const c=isP?portUp(l):bup(t.b,l);if(!canPay(c))return toast('Missing: '+missStr(SC(c)));
@@ -1368,7 +1390,7 @@ function xtraHtml(x,y,t){let h='';const own=t.o==1,land=t.t!='w';
   if(t.o>1&&land&&adj(x,y,1)){h+=`<button onclick="openSheet('battle')">⚔️ Attack with army<small>Pick a tactic · see predicted strength first</small></button>`;hint('atk','"Attack with army" lets you choose a tactic and shows predicted strength before you commit.')}
   return h}
 function downloadProjectZip(){const link=document.createElement('a');link.href='/Crownlands-Updated-Game.zip';link.download='Crownlands-Updated-Game.zip';document.body.append(link);link.click();link.remove()}
-function vMenu(){return['☰ Menu',mb('🎓','Kingdom development',`Research · ${compactAmount(S.rp)} RP`,"openDev()")+mb('📜','Chronicle & events',S.evp?'❗ A decision is waiting':'Active effects and history',"openSheet('chron')")+mb('🏆','Achievement tree','Bronze, silver and gold goals',"openAchievements()")+mb('⚙️','Settings','Sound, music, animations, performance',"openSheet('set')")+mb('❓','Help & tutorial','Rules and replayable hints',"openSheet('help')")+mb('↓','Download updated ZIP','Full Android Studio project source','downloadProjectZip()')+(S.gal?`<div class="mi ready"><b>⛵ Galleon</b><div class="mu">Your galleons are ready. Open Voyages to plan an expedition to the New Land.</div></div>`:'')]}
+function vMenu(){return['☰ Menu',mb('🎓','Kingdom development',`Research · ${compactAmount(S.rp)} RP`,"openDev()")+mb('📜','Chronicle & events',S.evp?'❗ A decision is waiting':'Active effects and history',"openSheet('chron')")+mb('🏆','Achievement tree','Bronze, silver and gold goals',"openAchievements()")+mb('⚙️','Settings','Sound, music, animations, performance',"openSheet('set')")+mb('❓','Help & tutorial','Rules and replayable hints',"openSheet('help')")+(S.gal?`<div class="mi ready"><b>⛵ Galleon</b><div class="mu">Your galleons are ready. Open Voyages to plan an expedition to the New Land.</div></div>`:'')]}
 /* --- achievement tree --- */
 const BNAMES={1:['City','🏰',[8,16,25]],2:['Mine','⛏️',[5,10,15]],3:['Stronghold','🛡️',[7,14,20]],4:['Port','⚓',[5,10,15]],5:['Market','🏪',[5,10,15]],6:['Barracks','⚔️',[5,10,15]],7:['Academy','🎓',[5,10,15]],9:['Palace','👑',[5,10,15]],10:['Workshop','🔧',[5,10,15]],11:['Watchtower','🗼',[5,10,15]],12:['Monument','🗿',[5,10,15]]};
 for(const b in BNAMES){const [n,ic,tr]=BNAMES[b];ACH.push(['lv'+b,'Buildings',n+' Master','Raise a '+n.toLowerCase()+' to level {n}','lv_'+b,tr,ic])}
@@ -1448,9 +1470,10 @@ const had=load();
 if(!had)newGame(1);
 else{const off=Math.min(7200,(Date.now()-(S.ts||Date.now()))/1000);if(off>60){const g=Math.floor(S.inc*off*.5);S.coins+=g;if(g>0)setTimeout(()=>toast(`Welcome back! Your realm earned 🪙${compactAmount(g)} while you were away`),600)}}
 center(28,43);home();
-setInterval(tick,100);
+setInterval(()=>tick(),100);   /* call the latest tick, so later layers (diplomacy, v6) actually run */
 hud();resize();if(window.ResizeObserver)new ResizeObserver(resize).observe($('wrap'));
-render();loop();
+if(S)S.sel=null;   /* a selection saved in an old save used to crash the first render and freeze the map */
+try{render()}catch(e){console.error(e)}loop();
 if(!had)setTimeout(showDiff,500);else toast('Tap a tile · drag to explore · pinch to zoom');
 try{if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js')}catch(e){}
 </script><script>
@@ -1513,11 +1536,13 @@ function conn(cb){
     else if(MP.open){MP.err='Cannot reach the server';ui()}}}
 
 function onMsg(e){let m;try{m=JSON.parse(e.data)}catch(x){return}
-  if(m.t=='auth'){if(m.ok){MP.name=m.name;MP.key=m.key;localStorage.setItem('cl-key',m.key);MP.err='';if(MP.v=='auth')MP.v='home';if(MP.want&&!MP.room){wsend({t:'join',code:MP.want});MP.want=''}}
+  if(m.t=='auth'){if(m.ok){MP.name=m.name;MP.key=m.key;MP.st=m.st||null;MP.caps=m.caps||{};localStorage.setItem('cl-key',m.key);MP.err='';if(MP.v=='auth')MP.v='home';if(MP.want&&!MP.room){wsend({t:'join',code:MP.want});MP.want=''}}
     else{MP.err=m.err||'Login failed';MP.key='';MP.v='auth';localStorage.removeItem('cl-key')}ui()}
   else if(m.t=='err'){MP.err=m.m;if(S&&S.on)toast(m.m);ui()}
+  else if(m.t=='ack'){try{window.obxAck&&obxAck(m.mid)}catch(x){}}
+  else if(m.t=='kicked'){MP.room=null;toast('🔒 '+(m.m||'Your realm was opened on another device.')+' Reload to play here again.')}
   else if(m.t=='room'){MP.room=m;
-    if(m.started){if(!window.ONL)startOn(m);else{m.pl.forEach(p=>{ONL.names[p.s]=p.n;ONL.off[p.s]=!p.on});if(m.init){syncOut();applyInit(m.init)}}badge()}
+    if(m.started){if(!window.ONL)startOn(m);else{m.pl.forEach(p=>{ONL.names[p.s]=p.n;ONL.off[p.s]=!p.on});if(m.init){syncOut();applyInit(m.init)}}badge();if(m.init){try{window.obxFlush&&obxFlush()}catch(x){}}}
     else{MP.v='lobby';MP.open=1}
     try{window.srvRoom&&window.srvRoom(m)}catch(e){console.error(e)}
     ui()}
@@ -1588,9 +1613,9 @@ function onHit(m){const x=m.i%N,y=(m.i/N)|0,g=S.gar[m.i];let n=0;
 window.shieldLeft=k=>!S||!S.on||!window.ONL||k<2?0:Math.max(0,((SHD[L(k)]||0)-Date.now())/1000);
 window.guardX=k=>S&&S.on&&window.ONL&&k>1&&ONL.off&&ONL.off[L(k)]?1.5:1;   // an offline realm's home guard: +50% defence
 const _rs=resolve;
-resolve=function(k,att,i,tac){const dk=S.tiles[i].o,r=_rs(k,att,i,tac);if(S.on&&k==1&&dk>1)wsend({t:'hit',to:L(dk),i,ld:r.ld,win:r.win});return r};
+resolve=function(k,att,i,tac){const dk=S.tiles[i].o,r=_rs(k,att,i,tac);if(S.on&&k==1&&dk>1){const o={t:'hit',to:L(dk),i,ld:r.ld,win:r.win};window.obxSend?obxSend(o):wsend(o)}return r};
 const _ss=startSiege;
-startSiege=function(k,c,i){_ss(k,c,i);if(S.on&&k==1){const dk=S.tiles[i].o;if(dk>1)wsend({t:'siege',to:L(dk),i})}};
+startSiege=function(k,c,i){_ss(k,c,i);if(S.on&&k==1){const dk=S.tiles[i].o;if(dk>1){const o={t:'siege',to:L(dk),i};window.obxSend?obxSend(o):wsend(o)}}};
 
 /* ---------- smarter offline bots: they build, upgrade, expand and fight each other ---------- */
 function botBuild(k,mine,a){
@@ -1641,7 +1666,7 @@ function ui(){const d=$('dm');if(!MP.open){d.style.display='none';return}
     +B('Close',"mp.close()");
   else if(MP.v=='auth')h=`<b style="font-size:22px">Online account</b>${er}<input id="mu" placeholder="Username" maxlength="16" autocomplete="username" autocapitalize="off"><input id="mpw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><input id="msv" value="${E(MP.url)}" aria-label="Server address"><div class="mu">Server address (wss:// or ws://)</div>`
     +B('Log in',"mp.auth('login')")+B('Create account',"mp.auth('reg')")+B('Back',"mp.back()");
-  else if(MP.v=='home')h=`<b style="font-size:22px">Hello, ${E(MP.name)}</b>${er}<div class="mu">Host a new island:</div><select id="mdf">${DIFFS.map((x,i)=>`<option value="${i}"${i==1?' selected':''}>${x.n}</option>`).join('')}</select>`
+  else if(MP.v=='home')h=`<b style="font-size:22px">Hello, ${E(MP.name)}</b>${er}${MP.st?`<div class="mu" style="font-size:12px">${MP.st.durable?'🛡️ This server stores realms permanently and keeps automatic backups.':'⚠️ This server has no permanent storage configured: realms may be lost when it restarts. Ask the server owner to set it up.'}</div>`:''}<div class="mu">Host a new island:</div><select id="mdf">${DIFFS.map((x,i)=>`<option value="${i}"${i==1?' selected':''}>${x.n}</option>`).join('')}</select>`
     +B('🏝️ Create island<small>You get an invite key to share</small>',"mp.create()")+`<div class="mu">…or join friends with their key:</div><input id="mcd" placeholder="KEY" maxlength="6" autocapitalize="characters" style="text-transform:uppercase;letter-spacing:4px;text-align:center">`
     +B('🔑 Join island',"mp.join()")+B('Sign out',"mp.out()")+B('Back',"mp.back()");
   else if(MP.v=='lobby'&&MP.room){const R=MP.room;h=`<b>Island key</b><div class="code">${R.code}</div><div class="mu" style="text-align:center">Share it — ${R.pl.length}/5 players</div>${er}`
@@ -1679,7 +1704,7 @@ if(!EVT._x){EVT._x=1;
 
 const _vm=vMenu;
 vMenu=function(){const r=_vm();r[1]=mb('📤','Share the game','Send friends the install link'+(MP.room?' + island key':''),"mp.share()")+mb('🌐',S&&S.on?'Online island':'Online play',S&&S.on?'Island key, players, leave':'Account, invite key, up to 5 players',"mp.menu()")+r[1];return r};
-window.MPX={send:o=>wsend(o),open:()=>!!(MP.ws&&MP.ws.readyState==1),srv:()=>({url:MP.url,key:MP.key}),L:s=>L(s),sig:t=>sig(t),syncOut:()=>syncOut(),setLast:a=>{LAST=a}};
+window.MPX={send:o=>wsend(o),open:()=>!!(MP.ws&&MP.ws.readyState==1),srv:()=>({url:MP.url,key:MP.key}),L:s=>L(s),sig:t=>sig(t),syncOut:()=>syncOut(),setLast:a=>{LAST=a},upSave:()=>upSave(),st:()=>MP.st||null,caps:()=>MP.caps||{},room:()=>MP.room,badge:()=>badge()};
 window.mp={
   menu(){MP.open=1;MP.err='';MP.v=MP.room&&!MP.room.started?'lobby':'mode';ui()},
   close(){MP.open=0;ui()},
@@ -1824,16 +1849,174 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
   let overlayMode=localStorage.getItem('cl-map-overlay')||'off';
   const overlays=['off','ownership','resources','military','objectives'];
   const overlayNames={off:'Off',ownership:'Ownership',resources:'Resources',military:'Military',objectives:'Objectives'};
-  let tutStep=0;
-  const tutSteps=[
-    {title:'1/7 · Claim land',body:'Tap a neutral tile next to your border and claim it. Connected territory is the foundation of expansion.',action:'Show missions',run:()=>openMis()},
-    {title:'2/7 · Build a mine',body:'Resource veins are valuable. Claim a silver, gold or diamond tile and open a mine when you can afford it.',action:'Find resources',run:()=>setOverlay('resources')},
-    {title:'3/7 · Trade wisely',body:'Market prices fluctuate. Compare the current price with your stockpile before selling rare materials.',action:'Open market',run:()=>openM()},
-    {title:'4/7 · Defend your realm',body:'Strongholds improve defence. Keep important cities and resource sites protected, especially near rival borders.',action:'Show military',run:()=>setOverlay('military')},
-    {title:'5/7 · Maintain your army',body:'Recruitment is only the initial cost: units also consume upkeep. Avoid expanding the army faster than your income.',action:'Open army',run:()=>openSheet('army')},
-    {title:'6/7 · Prepare battles',body:'Terrain, garrisons, fortifications and siege engines can change the outcome. Check the battle estimate before committing.',action:'Show ownership',run:()=>setOverlay('ownership')},
-    {title:'7/7 · Choose a strategy',body:'Develop your economy, research technologies, or focus on military expansion. Use missions and the Chronicle to track your progress.',action:'Open Chronicle',run:()=>openSheet('chron')}
+  /* ===== guided tutorial: 11 chapters, saved progress, real targets highlighted =====
+     Each step can name a real element (#dock button, HUD pill...). The card is placed above
+     the panels so instructions never hide what they point at, and a step whose task is
+     already done is skipped instead of repeated. No step can block the game: every step
+     has a working "Next", and progress can be paused, skipped, restarted or resumed. */
+  const TUT_KEY='cl-tutorial-v2';
+  const TUT={
+    ch:0,step:0,open:false,paused:false,done:{},
+    started:false,
+    load(){try{const o=JSON.parse(localStorage.getItem(TUT_KEY)||'{}');this.ch=o.ch|0;this.step=o.step|0;this.done=o.done||{};this.paused=!!o.paused;this.started=!!o.started}catch(e){}},
+    save(){try{localStorage.setItem(TUT_KEY,JSON.stringify({ch:this.ch,step:this.step,done:this.done,paused:this.paused,started:this.started}))}catch(e){}},
+    finished(){return this.ch>=CHAPTERS.length}
+  };
+  const has=c=>typeof c==='function'?!!c():false;
+  const CHAPTERS=[
+  {id:'welcome',t:'Welcome to Crownlands',ic:'👑',steps:[
+    {title:'Your realm, your rules',body:'You rule one kingdom on an island shared with rival realms. Land, wealth, armies and knowledge all matter — a realm that ignores one of them stalls.',target:'#hud',action:['Open kingdom overview',()=>{try{openKingdomOverview()}catch(e){}}]},
+    {title:'What you are looking at',body:'The map is the world. The top bar shows your coins, income per second and five resources. The buttons along the bottom open Missions, Market, Army and the Menu.',target:'#dock'},
+    {title:'Time runs in real time',body:'Buildings, sieges and events count real seconds. While the game is closed your realm earns half its income (up to 2 hours) and nothing is taken from you.',target:'#hud .coin'}
+  ]},
+  {id:'kingdom',t:'Understanding your kingdom',ic:'🏰',steps:[
+    {title:'Your starting land',body:'Tiles in your realm colour are yours. Tap any tile to open its panel: terrain, owner, defences and what you can build there.',target:'#panel',action:['Open kingdom overview',()=>{try{openKingdomOverview()}catch(e){}}]},
+    {title:'Territory is connected',body:'Land can only be claimed next to your own border. A compact realm is cheaper to defend than a long thin one — and harder for rivals to cut in half.',target:null,done:()=>owned(1)>23},
+    {title:'The map overlays',body:'The button in the minimap cycles overlays: ownership, resources, military and claimable objectives. Use it when you need to find something fast.',target:'#cl-overlay-tag',action:['Show objectives',()=>setOverlay('objectives')]}
+  ]},
+  {id:'build',t:'Building your first settlement',ic:'🏗️',steps:[
+    {title:'Claim a tile',body:'Tap a neutral tile that touches your border, then press “Claim land”. This is how every kingdom grows.',target:'#panel',done:()=>S.st.gained>=1,action:['Show a claimable tile',()=>{const p=findT((t,x,y)=>!t.o&&t.t!='w'&&adj(x,y,1));if(p){S.sel=p;center(p[0],p[1]);render()}else toast('No claimable tile in view — drag the map')}]},
+    {title:'Build a mine on a resource',body:'Forest gives wood, mountains give stone, and silver, gold or diamond veins are the valuable ones. A mine only pays on the right terrain — the panel says so before you spend.',target:'#panel',done:()=>S.st.built>=1,action:['Find a resource tile',()=>{const p=findT((t,x,y)=>t.o==1&&!t.b&&MR[t.t]);if(p){S.sel=p;center(p[0],p[1]);render()}else setOverlay('resources')}]},
+    {title:'Upgrades are the real progress',body:'Every level costs more and gives more. The level ladder in a tile panel shows the income or defence of each level before you commit.',target:'#panel'},
+    {title:'What to build first',body:'A city raises income and your unit limit. A mine pays for it. A stronghold makes a border expensive to attack. A realm with no city cannot recruit, so start there.',target:'#hud'}
+  ]},
+  {id:'economy',t:'Understanding the economy',ic:'💰',steps:[
+    {title:'Production and upkeep',body:'Cities produce coins. Mines produce materials up to your storage limit. Units and some buildings cost upkeep every second. The number next to your coins is your income per second after upkeep.',target:'#hud .coin'},
+    {title:'Storage has a ceiling',body:'Materials stop growing at your storage limit. Cities, land, ports, the Palace and research raise it. Full storage means wasted production, not a bug.',target:'#hud .res'},
+    {title:'The market',body:'Buy low and sell high: prices move with what everyone on the island sells. A big sale pushes the price down against you, so spread them out.',target:'#mk',action:['Open the market',()=>openM()],done:()=>S.st.trades>=1},
+    {title:'Spotting trouble',body:'A negative income means upkeep is eating your treasury, and it turns red by your coins. Fix it by selling goods, upgrading cities or reducing units before the treasury empties.',target:'#hud'}
+  ]},
+  {id:'expand',t:'Expansion and territory',ic:'🗺️',steps:[
+    {title:'Claim with a purpose',body:'Land next to a resource vein, a chokepoint or a rival border is worth more than empty grassland. Claim toward something.',target:'#cl-overlay-tag',action:['Show resources',()=>setOverlay('resources')]},
+    {title:'Ports and the sea',body:'A port (it needs a level 3 city) adds income, storage and better market prices. A level 15 port launches a galleon that can sail to the New Land.',target:'#panel'},
+    {title:'Territory costs defence',body:'Every new border needs defenders. Expanding faster than you can fortify turns your kingdom into a target.',target:'#hud'}
+  ]},
+  {id:'military',t:'Military and defence',ic:'⚔️',steps:[
+    {title:'Recruit',body:'Units are trained in the Army panel. Recruitment is only the first cost — each unit adds upkeep for as long as it exists.',target:'#amb',action:['Open the army',()=>openSheet('army')],done:()=>sum(tally())>0},
+    {title:'Four units, four jobs',body:'Infantry hold ground, archers punish infantry, cavalry punish archers and want open terrain, siege engines break walls. A mixed army beats a larger single-type one.',target:'#amb'},
+    {title:'Garrisons defend, armies attack',body:'Units left in a city or stronghold defend it and are not counted in your ready army. The ready army is what attacks.',target:'#amb'},
+    {title:'Strongholds and walls',body:'Defence is fortification plus garrison. A stronghold on your border with a garrison behind it can stop an army several times its size.',target:'#panel'},
+    {title:'Read the odds first',body:'Before attacking, the panel shows your attack power, their defence and the win chance. It is never certain — a bad roll still costs units.',target:'#panel'}
+  ]},
+  {id:'research',t:'Research and development',ic:'🎓',steps:[
+    {title:'Research points',body:'Academies generate research points over time. Each node you buy is a permanent improvement for this kingdom.',target:'#mnb',action:['Open the menu',()=>openSheet('menu')]},
+    {title:'Eight paths',body:'The development tree has eight paths — Commerce, Industry, Offense, Fortification, Army, Expansion, Scholarship and Seafaring. Plan toward a goal instead of spreading thin.',target:'#mnb',done:()=>Object.keys(S.tech||{}).length>0,action:['Open the tree',()=>openDev()]},
+    {title:'Pick a direction',body:'Early nodes are cheap and pay back fast. Decide whether this kingdom is a trading realm, a fortress or a war machine, and follow that path.',target:'#mnb'}
+  ]},
+  {id:'goals',t:'Missions, events and achievements',ic:'📜',steps:[
+    {title:'Missions are your to-do list',body:'Each mission is a concrete goal with a reward. Claim it as soon as it is ready — rewards never expire.',target:'#mib',action:['Open missions',()=>openMis()]},
+    {title:'Events force decisions',body:'A drought, a mine cave-in or a rival mobilising arrives with a countdown. Choices cost something and pay something; if you do not decide, a default option is applied. Their size grows with your kingdom.',target:'#mnb'},
+    {title:'Achievements are milestones',body:'Achievements count across every kingdom you play on this device and unlock realm colours. Great Works and Milestones (Menu) are the long-term goals of a single kingdom.',target:'#mnb',action:['Open the menu',()=>openSheet('menu')]}
+  ]},
+  {id:'rivals',t:'Rival kingdoms',ic:'🐺',steps:[
+    {title:'Four personalities',body:'Every rival has a temperament. Conquerors build armies and attack. Merchants grow their economy. Wardens fortify and defend. Opportunists strike whatever looks weak.',target:'#cl-overlay-tag',action:['Show military overlay',()=>setOverlay('military')]},
+    {title:'They remember',body:'Rivals remember who attacked them, who took their land and who paid them tribute. A realm that keeps raiding one neighbour makes a lasting enemy; the War room shows how each rival feels about you.',target:'#hud'},
+    {title:'Diplomacy buys time',body:'In offline games, pacts, trade agreements and tribute cost coins but postpone a war you are not ready for. The Chronicle lists every agreement and its expiry.',target:'#mnb'}
+  ]},
+  {id:'online',t:'Playing with others',ic:'🌐',steps:[
+    {title:'Online islands',body:'An online island is a shared map for up to five players. One player creates it and shares the six-character key; everyone starts from the same seed.',target:'#mnb',action:['Open online play',()=>{try{mp.menu()}catch(e){}}]},
+    {title:'Your realm is stored on the server',body:'Online realms are saved on the server, not only on your phone, so closing the game or updating it does not lose your kingdom. The server keeps automatic backups too.',target:'#hud'},
+    {title:'Disconnects are never punished',body:'If your connection drops — even mid-battle — your realm, army and battle messages are kept. Sieges against you pause while you are away. Reconnect and you resume the same island. There is no automatic defeat, forfeit or surrender.',target:'#mpb'}
+  ]},
+  {id:'advanced',t:'Advanced strategy',ic:'♟️',steps:[
+    {title:'Balance beats focus',body:'A realm that is only military starves; one that is only economy gets conquered. Your score weighs land, economy, development, military, defence, wealth, research and conquest.',target:'#mnb',action:['Open the ranking',()=>openSheet('rank')]},
+    {title:'The late game',body:'Late goals are expensive projects: Great Works, cities past level 25, the Palace and Monument, deep research nodes and the New Land across the sea. Milestones keep scaling with your realm.',target:'#hud'},
+    {title:'You are ready',body:'Reopen this guide any time from Menu → Help. Long campaigns are won by expanding steadily, defending what you take and reinvesting in development.',target:'#mnb',action:['Open the help page',()=>openSheet('help')]}
+  ]}
   ];
+  let tutCard=null,tutRing=null;
+  const tutTotal=()=>CHAPTERS.reduce((n,c)=>n+c.steps.length,0);
+  const tutFlat=()=>{let n=0;for(let i=0;i<TUT.ch&&i<CHAPTERS.length;i++)n+=CHAPTERS[i].steps.length;return n+TUT.step};
+  function tutEnsure(){
+    if(tutCard&&tutCard.isConnected)return;
+    if(!document.getElementById('cl-tut2-css')){
+      const st=document.createElement('style');st.id='cl-tut2-css';
+      st.textContent=`#cl-tut2{position:fixed;left:8px;right:8px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:45;display:none;max-width:460px;margin:0 auto;background:#0f2236fa;border:2px solid #ffcf4a;border-radius:16px;padding:12px 13px;box-shadow:0 10px 32px #000b;max-height:56vh;overflow:auto;font-size:14px;line-height:1.45;color:#e9f1f8}
+      #cl-tut2 .t2h{display:flex;align-items:center;gap:8px;font-weight:800;color:#ffcf4a;font-size:13px;letter-spacing:.4px;text-transform:uppercase}
+      #cl-tut2 .t2h .t2c{margin-left:auto;font-weight:700;color:#9fc3e0;text-transform:none;letter-spacing:0;font-size:12px}
+      #cl-tut2 h3{margin:6px 0 4px;font-size:17px;color:#fff}
+      #cl-tut2 .t2b{color:#d6e6f4}
+      #cl-tut2 .t2g{display:flex;gap:3px;margin:9px 0 8px;flex-wrap:wrap}
+      #cl-tut2 .t2g i{flex:1;min-width:6px;height:5px;border-radius:3px;background:#274761}
+      #cl-tut2 .t2g i.on{background:#ffcf4a}#cl-tut2 .t2g i.done{background:#3ddc97}
+      #cl-tut2 .t2r{display:flex;gap:7px;margin-top:10px}
+      #cl-tut2 button{flex:1;min-height:42px;border-radius:10px;border:1px solid #3a638a;background:#16324c;color:#e9f1f8;font:inherit;font-weight:700;cursor:pointer;padding:6px 8px}
+      #cl-tut2 button.pri{background:linear-gradient(#e9b93c,#c98f14);color:#1a1405;border-color:#ffd977;flex:1.6}
+      #cl-tut2 .t2f{display:flex;gap:12px;margin-top:9px;font-size:12px;flex-wrap:wrap}
+      #cl-tut2 .t2f button{flex:0;background:none;border:0;color:#9fc3e0;text-decoration:underline;min-height:28px;padding:0;font-weight:600}
+      #cl-tut2 .t2ok{margin-top:8px;font-weight:700;color:#3ddc97}
+      #cl-tut-ring{position:fixed;z-index:44;pointer-events:none;display:none;border:3px solid #ffcf4a;border-radius:12px;box-shadow:0 0 0 4000px #0006,0 0 18px #ffcf4a;transition:all .25s}
+      #cl-tut-ring b{position:absolute;left:50%;transform:translateX(-50%);top:-14px;background:#ffcf4a;color:#1a1405;font-size:11px;padding:2px 8px;border-radius:9px;white-space:nowrap}
+      @media(max-width:520px){#cl-tut2{bottom:calc(78px + env(safe-area-inset-bottom,0px));max-height:52vh;font-size:13.5px;padding:11px}#cl-tut2 h3{font-size:16px}}
+      @media(orientation:landscape) and (max-height:460px){#cl-tut2{max-height:70vh;max-width:380px;right:auto;left:10px}}`;
+      document.head.appendChild(st);
+    }
+    tutCard=document.createElement('div');tutCard.id='cl-tut2';tutCard.setAttribute('role','dialog');tutCard.setAttribute('aria-live','polite');tutCard.setAttribute('aria-label','Tutorial');
+    document.body.appendChild(tutCard);
+    tutRing=document.createElement('div');tutRing.id='cl-tut-ring';document.body.appendChild(tutRing);
+  }
+  function tutTarget(el){const r=el.getBoundingClientRect();if(r.width<4||r.height<4||getComputedStyle(el).display=='none'){tutHideRing();return}tutRing.style.display='block';tutRing.style.left=(r.left-6)+'px';tutRing.style.top=(r.top-6)+'px';tutRing.style.width=(r.width+12)+'px';tutRing.style.height=(r.height+12)+'px';tutRing.innerHTML='<b>here</b>'}
+  function tutHideRing(){if(tutRing)tutRing.style.display='none'}
+  function tutSkipDone(){ /* never re-show a step whose task is already complete */
+    let guard=0;
+    while(!TUT.finished()&&guard++<40){const c=CHAPTERS[TUT.ch],s=c.steps[TUT.step],id=c.id+':'+TUT.step;
+      if(s&&s.done&&has(s.done))TUT.done[id]=1;
+      if(!s||TUT.done[id]){TUT.step++;if(TUT.step>=c.steps.length){TUT.ch++;TUT.step=0}}else break}
+    TUT.save();
+  }
+  function tutPlace(s){
+    tutHideRing();if(!s||!s.target)return;
+    const el=document.querySelector(s.target);if(!el)return;
+    tutTarget(el);
+  }
+  function tutRender(){
+    tutEnsure();TUT.load();
+    if(!TUT.open||TUT.finished()){tutCard.style.display='none';tutHideRing();return}
+    const c=CHAPTERS[TUT.ch],s=c.steps[TUT.step]||c.steps[0],id=c.id+':'+TUT.step,prior=!!(s.done&&has(s.done));
+    const flat=tutFlat(),total=tutTotal();
+    tutCard.style.display='block';
+    tutCard.innerHTML=`<div class="t2h"><span>${c.ic} ${c.t}</span><span class="t2c">${TUT.ch+1}/${CHAPTERS.length} · ${flat+1}/${total}</span></div>
+      <h3>${s.title}</h3><div class="t2b">${s.body}</div>
+      ${prior?'<div class="t2ok">✓ You have already done this — carry on.</div>':''}
+      <div class="t2g">${Array.from({length:CHAPTERS.length},(_,i)=>`<i class="${i<TUT.ch?'done':i==TUT.ch?'on':''}"></i>`).join('')}</div>
+      <div class="t2r">${s.action?`<button data-a="1">${s.action[0]}</button>`:''}<button class="pri" data-n="1">${flat>=total-1?'Finish':'Next →'}</button></div>
+      <div class="t2f"><button data-p="1">${TUT.paused?'Resume':'Pause'}</button><button data-s="1">Skip</button><button data-k="1">Chapters</button></div>`;
+    const nb=tutCard.querySelector('[data-n]');if(nb)nb.onclick=tutNext;
+    const ab=tutCard.querySelector('[data-a]');
+    if(ab)ab.onclick=()=>{try{s.action[1]()}catch(e){}setTimeout(()=>{if(TUT.open)tutPlace(s)},200)};
+    const pb=tutCard.querySelector('[data-p]');if(pb)pb.onclick=()=>{TUT.paused=!TUT.paused;TUT.save();if(TUT.paused)openChapterList();else tutRender()};
+    const sb=tutCard.querySelector('[data-s]');if(sb)sb.onclick=()=>{if(!confirm('Hide the tutorial? You can restart it any time from Menu → Help.'))return;TUT.open=false;TUT.save();META.tut.clGuided=1;saveMeta();tutRender();toast('Tutorial hidden — reopen it from Help')};
+    const kb=tutCard.querySelector('[data-k]');if(kb)kb.onclick=openChapterList;
+    tutPlace(s);
+  }
+  function tutNext(){
+    if(TUT.finished())return;
+    const c=CHAPTERS[TUT.ch];TUT.step++;
+    if(TUT.step>=c.steps.length){TUT.ch++;TUT.step=0;if(!TUT.finished())toast('✅ Chapter complete: '+c.t)}
+    tutSkipDone();
+    if(TUT.finished()){TUT.open=false;TUT.save();META.tut.clGuided=1;saveMeta();tutCard.style.display='none';tutHideRing();toast('🎉 Tutorial complete — good luck, ruler');return}
+    TUT.save();tutRender();
+  }
+  function openChapterList(){
+    tutEnsure();tutCard.style.display='block';
+    tutCard.innerHTML=`<div class="t2h"><span>📘 Tutorial chapters</span><span class="t2c">${Object.keys(TUT.done).length} steps done</span></div>
+      <div style="margin-top:6px">${CHAPTERS.map((c,i)=>`<button style="width:100%;margin:4px 0;text-align:left;flex:none" data-ch="${i}">${i<TUT.ch?'✅':c.ic} ${i+1}. ${c.t}${i==TUT.ch?' · current':''}</button>`).join('')}</div>
+      <div class="t2f"><button data-r="1">↺ Restart from the beginning</button><button data-x="1">Close</button></div>`;
+    tutCard.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{TUT.ch=+b.dataset.ch;TUT.step=0;TUT.open=true;TUT.paused=false;tutSkipDone();TUT.save();tutRender()});
+    const r=tutCard.querySelector('[data-r]');if(r)r.onclick=()=>{if(!confirm('Restart the tutorial? Your kingdom is not touched.'))return;TUT.ch=0;TUT.step=0;TUT.done={};TUT.open=true;TUT.paused=false;TUT.save();tutRender()};
+    const x=tutCard.querySelector('[data-x]');if(x)x.onclick=()=>tutRender();
+    tutHideRing();
+  }
+  window.clTutChapters=openChapterList;
+  window.clTutPause=()=>{if(TUT.finished())return;TUT.load();TUT.paused=true;TUT.open=false;TUT.save();tutRender()};
+  window.clTutResume=()=>{TUT.load();if(TUT.finished()){TUT.ch=0;TUT.step=0}if(TUT.paused)TUT.paused=false;TUT.open=true;TUT.save();tutSkipDone();tutRender()};
+  window.clStartTutorial=()=>{TUT.load();if(TUT.finished()){TUT.ch=0;TUT.step=0}TUT.open=true;TUT.paused=false;TUT.started=true;TUT.save();tutSkipDone();tutRender()};
+  window.clTutStatus=()=>{TUT.load();return TUT.finished()?'complete':`chapter ${TUT.ch+1}/${CHAPTERS.length}, step ${TUT.step+1}`};
+  addEventListener('resize',()=>{if(TUT.open){const c=CHAPTERS[TUT.ch];tutPlace(c&&c.steps[TUT.step])}});
+  addEventListener('scroll',()=>{if(TUT.open){const c=CHAPTERS[TUT.ch];tutPlace(c&&c.steps[TUT.step])}},true);
+  /* a task finished while its card is open advances the guide on its own */
+  setInterval(()=>{if(!TUT.open||!S||TUT.paused||!tutCard)return;const c=CHAPTERS[TUT.ch];if(!c)return;const s=c.steps[TUT.step];if(!s||!s.done||!has(s.done))return;
+    const id=c.id+':'+TUT.step;if(TUT.done[id])return;TUT.done[id]=1;TUT.save();toast('✅ '+s.title+' — done');setTimeout(tutNext,700)},2500);
   function initCLState(){
     if(!S)return;
     S.clEventHistory=Array.isArray(S.clEventHistory)?S.clEventHistory:[];S.evl=Array.isArray(S.evl)?S.evl:[];S.efx=Array.isArray(S.efx)?S.efx:[];S.chron=Array.isArray(S.chron)?S.chron:[];
@@ -1845,19 +2028,24 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
   function setMMVisible(v){mmVisible=!!v;localStorage.setItem('cl-minimap-visible',mmVisible?'1':'0');mm.style.display=mmVisible?'block':'none';mmToggle.style.display=mmVisible?'none':'block';}
   $('cl-mm-hide').onclick=()=>setMMVisible(false);mmToggle.onclick=()=>setMMVisible(true);setMMVisible(mmVisible);setOverlay(overlayMode);overlayTag.onclick=()=>setOverlay(overlays[(overlays.indexOf(overlayMode)+1)%overlays.length]);
 
+  let mmLast=0,mmOff=null,mmImg=null;const mmHex={};
+  const mmRGB=c=>{let v=mmHex[c];if(v)return v;let h=String(c||'#000').replace('#','');if(h.length==3)h=h.split('').map(q=>q+q).join('');v=[parseInt(h.slice(0,2),16)||0,parseInt(h.slice(2,4),16)||0,parseInt(h.slice(4,6),16)||0];mmHex[c]=v;return v};
   function drawMinimap(){
-    if(!S||!S.tiles||!mmVisible||!mm.isConnected)return;
+    if(!S||!S.tiles||!mmVisible||!mm.isConnected||document.hidden)return;
+    const now=performance.now(),every=GQ()=='low'?1200:GQ()=='med'?600:300;if(now-mmLast<every)return;mmLast=now;
     const w=mmc.width,h=mmc.height,tw=w/N,th=h/N;
-    mc.clearRect(0,0,w,h);mc.fillStyle='#071522';mc.fillRect(0,0,w,h);
+    if(!mmOff||mmOff.width!==N){mmOff=document.createElement('canvas');mmOff.width=N;mmOff.height=N;mmImg=mmOff.getContext('2d').createImageData(N,N)}
+    const px=mmImg.data;
     for(let y=0;y<N;y++)for(let x=0;x<N;x++){
       const t=T(x,y);let col=t.t==='w'?'#164f78':t.z&&(t.t==='g'||t.t==='f')?'#d8bd6c':t.t==='f'?'#287044':t.t==='m'?'#80776b':t.t==='S'?'#c4d5e5':t.t==='G'?'#e7b72f':t.t==='D'?'#43d7e9':'#789d50';
       if(overlayMode==='ownership'&&t.o)col=OWN[t.o]?.c||col;
       else if(overlayMode==='resources'&&'SGD'.includes(t.t))col=t.t==='S'?'#e6edf6':t.t==='G'?'#ffd23f':'#6df2ff';
       else if(overlayMode==='military'&&t.o){col=t.o===1?'#4aa8ff':OWN[t.o]?.c||col;if(t.b===3||t.b===1)col='#ffe7a0';}
       else if(overlayMode==='objectives'&&t.o===0&&t.t!=='w'&&adj(x,y,1))col='#ffcf4a';
-      mc.fillStyle=col;mc.fillRect(x*tw,y*th,Math.ceil(tw),Math.ceil(th));
-      if(t.b){mc.fillStyle=t.o===1?'#eaf7ff':'#160e12';mc.fillRect(x*tw+tw*.28,y*th+th*.28,Math.max(1,tw*.45),Math.max(1,th*.45));}
+      if(t.b)col=t.o===1?'#eaf7ff':t.o?'#160e12':col;
+      const c=mmRGB(col),k=(y*N+x)*4;px[k]=c[0];px[k+1]=c[1];px[k+2]=c[2];px[k+3]=255;
     }
+    mmOff.getContext('2d').putImageData(mmImg,0,0);mc.imageSmoothingEnabled=false;mc.clearRect(0,0,w,h);mc.drawImage(mmOff,0,0,w,h);
     const ts=T0*zoom,cam=S.cam||{x:0,y:0};
     const vx=Math.max(0,Math.min(N,cam.x/ts)),vy=Math.max(0,Math.min(N,cam.y/ts)),vw=Math.min(N,W/ts),vh=Math.min(N,H/ts);
     mc.strokeStyle='#fff';mc.lineWidth=2;mc.strokeRect(vx*tw,vy*th,Math.max(2,vw*tw),Math.max(2,vh*th));
@@ -1889,17 +2077,22 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
     const troops=S.army?Object.values(S.army).reduce((a,b)=>a+(+b||0),0):0;
     return Math.max(.65,Math.min(1.8,.65+land/85+citiesNow*.07+troops/180));
   }
-  function eventForPrompt(e,scale){
-    scale=scale||S.evp?.scale||1;
+  /* Two scales: "scale" (0.65-1.8) sets how strong an event's effects are; the value scales vs/rvs make its
+     coin and resource amounts matter for the kingdom's real economy (so 300 coins is not meaningless at 500/s). */
+  function eventForPrompt(e,scale,vv){
+    scale=scale||S.evp?.scale||1;vv=vv||S.evp?.vv||(window.evVal?evVal():null)||{vs:scale,rvs:scale};const vs=Math.max(scale,vv.vs||1),rvs=Math.max(scale,vv.rvs||1);
+    const amt=(k,v)=>Math.max(1,Math.round(v*(k=='coins'?vs:RES.includes(k)?rvs:scale)));
+    const dtx=d=>String(d||'').replace(/🪙(\d+)/gu,(m,n)=>'🪙'+compactAmount(Math.round(n*vs))).replace(/([🪵🪨])(\d+)/gu,(m,i,n)=>i+compactAmount(Math.round(n*rvs))).replace(/(\d+) (wood|stone)/g,(m,n,r)=>compactAmount(Math.round(n*rvs))+' '+r).replace(/(\d+) (research points|infantry|ready units)/g,(m,n,r)=>Math.round(n*scale)+' '+r);
     return {...e,o:e.o.map(o=>{
-      const n={...o};
-      if(o.cost)n.cost=Object.fromEntries(Object.entries(o.cost).map(([k,v])=>[k,Math.max(1,Math.round(v*scale))]));
+      const n={...o,d:dtx(o.d)};
+      if(o.cost)n.cost=Object.fromEntries(Object.entries(o.cost).map(([k,v])=>[k,amt(k,v)]));
       if(o.fx){n.fx={...o.fx};for(const k of ['inc','prod','cost','def','ai'])if(typeof n.fx[k]==='number')n.fx[k]=Math.max(.1,1+(n.fx[k]-1)*scale);if(n.fx.dur)n.fx.dur=Math.round(n.fx.dur*(.85+.15*scale));}
       if(o.run)n.run=()=>{
         const before={coins:S.coins,res:{...S.res},score:S.score,army:{...S.army}};o.run();
-        const scaleDelta=(after,b)=>{const d=(+after||0)-(+b||0);return d?Math.round(d*scale):0};
-        S.coins=Math.max(0,before.coins+scaleDelta(S.coins,before.coins));
-        for(const r of RES)S.res[r]=Math.max(0,(before.res[r]||0)+scaleDelta(S.res[r],before.res[r]||0));
+        const scaleDelta=(after,b,f)=>{const d=(+after||0)-(+b||0);return d?Math.round(d*(f||scale)):0};
+        /* percentage losses (e.g. "lose 24% of your coins") are already proportional: only flat gains are scaled */
+        const dc=S.coins-before.coins;S.coins=Math.max(0,before.coins+(dc>0?scaleDelta(S.coins,before.coins,vs):dc));
+        for(const r of RES){const dr=(S.res[r]||0)-(before.res[r]||0);S.res[r]=Math.max(0,(before.res[r]||0)+(dr>0?scaleDelta(S.res[r],before.res[r]||0,rvs):dr))}
         if(S.score!=null)S.score=Math.max(0,(before.score||0)+scaleDelta(S.score,before.score||0));
         for(const u in S.army)S.army[u]=Math.max(0,(before.army[u]||0)+scaleDelta(S.army[u],before.army[u]||0));
       };
@@ -1907,7 +2100,7 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
     })};
   }
   function initEventPool(){initCLState();const now=S.time||0;S.clEventHistory=S.clEventHistory.filter(x=>now-x.time<600);}
-  function getPromptEvent(){const e=S.evp&&EID[S.evp.id];return e?eventForPrompt(e,S.evp.scale||1):null;}
+  function getPromptEvent(){const e=S.evp&&EID[S.evp.id];return e?eventForPrompt(e,S.evp.scale||1,S.evp.vv):null;}
 
   /* Replace event scheduling with cooldowns, repeat protection and kingdom scaling. */
   const _clOldEvTick=evTick;
@@ -1922,12 +2115,12 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
     let pool=EVT.filter(e=>(e.f?hasT(e.f):e.ok())&&!recent.includes(e.id)&&!S.clEventHistory.some(x=>x.id===e.id&&x.time>cutoff)&&!S.evl.includes(e.id)&&!(e.o[0].fx&&S.efx.some(f=>f.n===e.o[0].fx.n)));
     if(!pool.length)pool=EVT.filter(e=>(e.f?hasT(e.f):e.ok())&&!S.clEventHistory.some(x=>x.id===e.id&&x.time>cutoff)&&!(e.o[0].fx&&S.efx.some(f=>f.n===e.o[0].fx.n)));
     S.evAt=S.time+5*(105+rng()*95);if(!pool.length)return;
-    const scale=eventScale();let total=pool.reduce((a,e)=>a+e.w,0),r=rng()*total,e=pool[0];for(const q of pool){r-=q.w;if(r<=0){e=q;break}}
+    const scale=eventScale(),vv=window.evVal?evVal():{vs:scale,rvs:scale};let total=pool.reduce((a,e)=>a+e.w,0),r=rng()*total,e=pool[0];for(const q of pool){r-=q.w;if(r<=0){e=q;break}}
     S.clEventHistory.push({id:e.id,time:S.time,scale});if(S.clEventHistory.length>16)S.clEventHistory.shift();
     S.evl=(S.evl||[]).concat(e.id).slice(-6);sfx(e.o.length===1?'mission':'warn');
-    const prompt=eventForPrompt(e,scale);
+    const prompt=eventForPrompt(e,scale,vv);
     if(prompt.o.length===1&&!prompt.f){if(applyOpt(prompt,prompt.o[0])){S.st.events++;chron(prompt.ic,`${prompt.n}: ${prompt.o[0].d}`);toast(`${prompt.ic} ${prompt.n} — ${prompt.o[0].d}`)}else chron(prompt.ic,`${prompt.n}: no valid option`)}
-    else{S.evp={id:e.id,scale,until:S.time+150,tgt:e.f?pickT(e.f):null};if(S.evp.tgt!=null){const i=S.evp.tgt;HL={x:i%N,y:(i/N)|0,t:performance.now()+9000}}toast(`${prompt.ic} ${prompt.cat}: ${prompt.n} — open the Chronicle to decide`);hint('ev','Events need a decision. Open Menu → Chronicle. Events now scale with kingdom size, and recent events are less likely to repeat.')}
+    else{S.evp={id:e.id,scale,vv,until:S.time+150,tgt:e.f?pickT(e.f):null};if(S.evp.tgt!=null){const i=S.evp.tgt;HL={x:i%N,y:(i/N)|0,t:performance.now()+9000}}toast(`${prompt.ic} ${prompt.cat}: ${prompt.n} — open the Chronicle to decide`);hint('ev','Events need a decision. Open Menu → Chronicle. Events now scale with kingdom size, and recent events are less likely to repeat.')}
     save();
   };
   choose=function(j){const p=S.evp;if(!p)return;const e=getPromptEvent(),o=e&&e.o[j];if(!o)return;if(o.need&&!o.need())return toast(o.needT||'Requirement not met');if(!applyOpt(e,o))return toast('Missing: '+missStr(SC(o.cost||{})));
@@ -2006,11 +2199,8 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
     h+='</div><div class="cl-campaigns">'+campaignHtml()+'</div>';r[1]+=h;return r};
   window.clSetHistoryFilter=function(id){S.clHistoryFilter=id;shK='';renderSheet()};
 
-  /* Guided first-session tutorial, with skip/replay and no duplicate mission counters. */
-  function showTutorial(){tutStep=Math.max(0,Math.min(tutSteps.length-1,tutStep));const q=tutSteps[tutStep];tut.innerHTML=`<b style="color:#ffcf4a">${q.title}</b><div style="margin-top:5px">${q.body}</div><div class="cl-tut-actions"><button id="cl-tut-prev" ${tutStep===0?'disabled':''}>← Back</button><button id="cl-tut-action">${q.action}</button><button id="cl-tut-next">${tutStep===tutSteps.length-1?'Finish':'Next →'}</button></div><div style="margin-top:6px;text-align:right"><button id="cl-tut-close">Skip tutorial</button></div>`;tut.style.display='block';$('cl-tut-prev').onclick=()=>{tutStep=Math.max(0,tutStep-1);showTutorial()};$('cl-tut-next').onclick=()=>{if(tutStep>=tutSteps.length-1){tut.style.display='none';META.tut.clGuided=1;saveMeta();toast('Tutorial completed')}else{tutStep++;showTutorial()}};$('cl-tut-action').onclick=()=>{q.run();showTutorial()};$('cl-tut-close').onclick=()=>{tut.style.display='none';META.tut.clGuided=1;saveMeta()}}
-  window.clStartTutorial=()=>{tutStep=0;showTutorial()};
   const _clVHelp=vHelp;
-  vHelp=function(){const r=_clVHelp();r[1]+='<button style="width:100%;margin-top:8px" onclick="clStartTutorial()">🧭 Start guided 7-step tutorial</button><button style="width:100%;margin-top:6px" onclick="clCycleOverlay()">🗺️ Map overlay: '+overlayNames[overlayMode]+' (tap to cycle)</button><button style="width:100%;margin-top:6px" onclick="clToggleMinimap()">Minimap: '+(mmVisible?'ON':'OFF')+'</button>';return r};
+  vHelp=function(){const r=_clVHelp();r[1]+='<div class="mi"><b>📘 Tutorial</b><div class="mu">11 short chapters that teach the real mechanics. Progress is saved, and you can pause, skip or restart at any time.</div><button style="width:100%;margin-top:6px" onclick="clStartTutorial()">▶ '+(clTutStatus()=='complete'?'Replay tutorial':'Continue tutorial')+'</button><button style="width:100%;margin-top:6px" onclick="clTutChapters()">📚 Choose a chapter</button></div>'+'<button style="width:100%;margin-top:6px" onclick="clCycleOverlay()">🗺️ Map overlay: '+overlayNames[overlayMode]+' (tap to cycle)</button><button style="width:100%;margin-top:6px" onclick="clToggleMinimap()">Minimap: '+(mmVisible?'ON':'OFF')+'</button>';return r};
   window.clCycleOverlay=()=>{setOverlay(overlays[(overlays.indexOf(overlayMode)+1)%overlays.length]);shK='';renderSheet()};
   window.clToggleMinimap=()=>{setMMVisible(!mmVisible);shK='';renderSheet()};
   const _clVSet=vSet;
@@ -2032,7 +2222,12 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
   /* Existing settings already expose reduced effects and sound controls. Add a stable
      one-tap hint launcher without resetting missions or the player's realm. */
   
-  if(!had&&!META.tut.clGuided)setTimeout(()=>{if($('dm').style.display!=='flex'&&tut.style.display!=='block')clStartTutorial()},3500);
+  /* offer the guide once the player actually has a kingdom (not over the difficulty picker) */
+  function tutMaybeAuto(){try{if(had||META.tut.clGuided||TUT.open)return;if(!S||S.on)return;if($('dm').style.display==='flex'){setTimeout(tutMaybeAuto,1500);return}clStartTutorial()}catch(e){}}
+  function tutFirstSession(){if(!had&&!META.tut.clGuided)setTimeout(tutMaybeAuto,3500)}
+  tutFirstSession();
+  /* resume a guide that was in progress when the page was closed */
+  (function(){try{TUT.load();if(TUT.started&&!TUT.paused&&!TUT.finished()&&!had)setTimeout(()=>{try{clTutResume()}catch(e){}},1600);else if(TUT.started&&!TUT.paused&&!TUT.finished()&&had)setTimeout(()=>{try{clTutResume()}catch(e){}},2500)}catch(e){}})();
   /* UI hints: never rely on colour alone; give overlays a visible legend. */
   
   setInterval(()=>{if(overlayTag.textContent!=='Overlay: '+overlayNames[overlayMode])overlayTag.textContent='Overlay: '+overlayNames[overlayMode]},500);
@@ -2469,7 +2664,7 @@ function strengthEx(comp,foe,att,x,y,tac,pl){const t=T(x,y),ft=sum(foe)||1,it=co
     const base=n*(att?U.atk:U.def*.6+U.atk*.4);let a=base*m;if(Math.abs(m-1)>.02)notes.push((m>1?'+':'−')+Math.abs(Math.round((m-1)*100))+'% matchup');
     if(u=='arc'){const f=it>=ar*.3?1.3:.8;a*=f;notes.push(f>1?'+30% behind infantry':'−20% no infantry cover')}
     if(u=='cav'&&att){const f=t.t=='g'?1.25:t.t=='f'?.7:'mSGD'.includes(t.t)?.55:1;if(f!=1){a*=f;notes.push((f>1?'+':'−')+Math.abs(Math.round((f-1)*100))+'% terrain')}}
-    if(u=='sie'){const f=att?(st||tac=='siege'?2.4:.6):.3;a*=f;notes.push(f>1?'×2.4 vs fortified':'weak here (×'+f+')')}
+    if(u=='sie'){const f=att?(st||tac=='siege'?2.6:.6):.3;a*=f;notes.push(f>1?'×2.6 vs fortified':'weak here (×'+f+')')}
     if(!att&&u=='inf'){a*=1.25;notes.push('+25% defending')}
     if(pl&&att){const b=1+rt('a'+u);if(b!=1){a*=b;notes.push('+'+Math.round((b-1)*100)+'% research')}}
     rows.push({u,n,base:Math.round(base),val:Math.round(a),notes});v+=a}
@@ -2478,7 +2673,7 @@ function defParts(x,y){const t=T(x,y),rows=[['Base ground',8]];let d=8;
   if(t.b==3){const v=fx.fdef(lv(t));d+=v;rows.push(['🏰 Stronghold Lv'+lv(t),v])}
   if(t.b==1){const c=fx.cdef(t.l);d+=c;rows.push(['🏙️ City Lv'+t.l,c]);const w=12*(t.w||0)*(t.o==1?1+rt('wall'):1);if(w){d+=w;rows.push(['🧱 Walls Lv'+t.w,Math.round(w)])}}
   const nr=12*near(x,y,t.o);if(nr){d+=nr;rows.push(['🏰 Strongholds within 2 tiles',Math.round(nr)])}
-  if(t.o==1){const tw=towerDef(x,y),ba=2*bl(9);if(tw){d+=tw;rows.push(['🗼 Watchtowers close by',Math.round(tw)])}if(ba){d+=ba;rows.push(['🏛️ Barracks',ba])}}
+  if(t.o==1){const tw=towerDef(x,y),ba=3*bl(9);if(tw){d+=tw;rows.push(['🗼 Watchtowers close by',Math.round(tw)])}if(ba){d+=ba;rows.push(['👑 Palace',ba])}}
   const mults=[];if('mSGD'.includes(t.t))mults.push(['⛰️ Mountain terrain',1.3]);else if(t.t=='f')mults.push(['🌲 Forest cover',1.15]);
   if(t.o==1){const r1=1+rt('dfn');if(Math.abs(r1-1)>.001)mults.push(['🎓 Research',r1]);const e1=fxm('def');if(Math.abs(e1-1)>.001)mults.push(['✨ Active effects',e1])}
   let tot=d;mults.forEach(m=>tot*=m[1]);mults.push(['Fortification scale',1.6]);tot*=1.6;return{rows,mults,total:Math.round(tot),raw:d}}
@@ -2512,7 +2707,7 @@ const MKT={live:0,id:0,pend:{},busy:0,feed:[]};
 const _mt0=marketTick;marketTick=function(){if(S.on&&MKT.live)return;_mt0()};
 const _sell0=sell,_buy0=buy;
 sell=function(r,f){if(!(S.on&&MKT.live))return _sell0(r,f);const n=Math.floor(S.res[r]*f);if(!n)return;mktReq('sell',r,n)};
-buy=function(r){if(!(S.on&&MKT.live))return _buy0(r);const n=Math.min(10,cap()-Math.floor(S.res[r]));if(n<=0)return toast('Storage is full');if(Math.ceil(n*ask(r))>S.coins)return toast('Not enough coins');mktReq('buy',r,n)};
+buy=function(r,q){if(!(S.on&&MKT.live))return _buy0(r,q);const n=buyQty(r,q||10);if(n<=0)return toast(cap()-S.res[r]<1?'Storage is full':'Not enough coins');if(buyQuote(r,n)>S.coins)return toast('Not enough coins');mktReq('buy',r,n)};
 function mktReq(side,r,n){if(MKT.busy)return;const id=++MKT.id;MKT.pend[id]={side,r,n};MKT.busy=1;MPX.send({t:'trade',id,r,side,n});setTimeout(()=>{if(MKT.pend[id]){delete MKT.pend[id];MKT.busy=0;toast('The market did not answer')}},3500)}
 function mktNote(){if(S.on&&MKT.live){const ago=t=>{const s=Math.max(0,Math.round((Date.now()-t)/1000));return s<60?s+'s':Math.round(s/60)+'m'};
   return`<div class="mu" style="margin:4px 0">🌍 <b>Shared island market.</b> Everyone on this island trades at the same prices. Big sales push the price down for everybody, and whoever holds a lot of one resource has an edge.</div>`+(MKT.feed.length?`<div class="mu" style="font-size:12px">${MKT.feed.slice(-4).reverse().map(f=>`${escH(f.n)} ${f.s=='sell'?'sold':'bought'} ${f.q} ${ICON[f.r]} · ${ago(f.at)} ago`).join('<br>')}</div>`:'')}
@@ -2555,8 +2750,9 @@ const _srvMsg0=window.srvMsg;
 window.srvMsg=function(m){
   if(m.t=='mkt'){MKT.live=1;if(S.on){S.price=m.price;S.mk=Object.assign(S.mk||{},m.mk);S.hist=m.hist;if(m.news&&m.news!==S.news){S.news=m.news;if(!mOpen)toast(m.news)}else if(!m.news)S.news=''}MKT.feed=m.feed||[];lastM='';if(mOpen)renderMarket();return}
   if(m.t=='tr'){const q=MKT.pend[m.id];if(!q)return;delete MKT.pend[m.id];MKT.busy=0;const r=q.r;
-    if(q.side=='sell'){const n=Math.min(q.n,Math.floor(S.res[r]));if(n>0){S.coins+=Math.floor(n*m.mid*(1-.06*DF().sp+sp()));S.res[r]-=n}}
-    else{const c=Math.ceil(q.n*m.mid*(1+.08*DF().sp-sp()));if(c>S.coins){toast('The price moved — not enough coins');return}S.coins-=c;S.res[r]+=q.n}
+    const px=m.px||m.mid;   /* px = average price the server filled the order at (newer servers) */
+    if(q.side=='sell'){const n=Math.min(q.n,Math.floor(S.res[r]));if(n>0){S.coins+=Math.floor(n*px*(1-.06*DF().sp+sp()));S.res[r]-=n}}
+    else{const c=Math.ceil(q.n*px*(1+.08*DF().sp-sp()));if(c>S.coins){toast('The price moved — not enough coins');return}S.coins-=c;S.res[r]+=q.n}
     S.st.trades++;fin();return}
   if(m.t=='chat'){chatAdd(m.msg,true);return}
   if(m.t=='lb'){lbGot(m);return}};
@@ -2767,12 +2963,14 @@ function treR(){const e=tre();let b='';
  else if(TT=='cos')b=Object.keys(CT).map(t=>`<b style="display:block;margin:10px 0 4px">${CT[t]}</b><div class="tg">`+CAT.filter(c=>c.t==t).map(c=>{const o=own(c.id),on=eq(t)===c.i,col=t=='rc'?c.v:CRC[c.r];return`<div class="tc ${on?'eq':''}" style="--rc:${CRC[c.r]}">${t=='pf'?pfHTML(c.i,1):t=='rc'?`<span class="pf pfb" style="--rc:${c.v}">&nbsp;</span>`:t=='nf'?`<div class="pfb" style="width:auto;height:34px;font-size:22px;font-weight:800"><span class="nfx nfx${c.i}">Nickname</span></div>`:t=='mf'?`<div class="mfx${c.i}" style="border-radius:12px;padding:6px;margin:4px 0;background:#16293d;font-size:12px">Hello 👋</div>`:`<div class="pfb" style="font-size:26px">✨</div>`}<b>${c.n}</b><small style="color:${CRC[c.r]}">${CRN[c.r]}</small>${o?`<button onclick="gxEq('${c.id}')">${on?'Unequip':'Equip'}</button>`:`<button class="buy" ${M.gems>=CP[c.r]?'':'disabled'} onclick="gxCos('${c.id}')">${GI} ${CP[c.r]}</button>`}</div>`}).join('')+'</div>').join('');
  else if(TT=='gq')b=`<div class="mu" style="margin:6px 0">Long-term goals that take days. Progress carries over between games and works offline.</div>`+GQ.map((q,i)=>{const v=Math.min(q[3],gqv(q[2])),d=!!M.gq[i],rd=!d&&v>=q[3];return`<div class="mi ${rd?'ready':''}" style="${d?'opacity:.6':''}"><div class="mh"><span>${GI}</span><b>${q[0]}</b><em>${d?'Claimed':rd?'Ready!':'Active'}</em></div><div class="mu">${q[1]}</div><div class="bar"><i style="width:${v/q[3]*100}%;background:linear-gradient(90deg,#7a2be0,#e0a3ff)"></i></div><div class="mf"><span>${fmt(v)}/${fmt(q[3])}</span><span>${GI} ${q[4]}${q[5]!=null?' + '+TR[q[5]].n:''}</span></div>${rd?`<button style="width:100%;text-align:center;margin-top:6px" onclick="gxGq(${i})">Claim</button>`:''}</div>`}).join('');
  else b=`<div class="mu" style="margin:6px 0">Spend gems on advantages for your current island. Works on online islands too.</div>`+OFF.map((o,i)=>`<div class="mr"><div><b>${o[0]} ${o[1]}</b><div class="mu">${i==0?'4x a daily chest of coins':i==1?'Half your storage of each material':i==2?'Rare diamonds':'A quick army boost'}</div></div><button class="buy" ${M.gems>=o[3]?'':'disabled'} onclick="gxOff(${i})">${GI} ${o[3]}</button></div>`).join('');
- e.innerHTML=`<div class="th"><b style="font-size:19px">${GI} Treasury</b><span class="gemb" style="margin-left:auto;cursor:default">${GI}<b>${fmt(M.gems)}</b></span><button class="ach-close" onclick="closeTre()" aria-label="Close" style="margin-left:6px">✕</button></div><div class="tabs" style="padding:8px 8px 4px">${[['ch','Chests'],['cos','Style'],['gq','Gem quests'],['sh','Gem shop']].map(a=>`<button class="${TT==a[0]?'on':''}" onclick="treTab('${a[0]}')">${a[1]}</button>`).join('')}</div><div class="tb">${b}</div>`}
+ const ob=e.querySelector('.tb'),keep=e.dataset.tt===TT,sc=keep&&ob?ob.scrollTop:0,sce=keep?e.scrollTop:0;
+ e.innerHTML=`<div class="th"><b style="font-size:19px">${GI} Treasury</b><span class="gemb" style="margin-left:auto;cursor:default">${GI}<b>${fmt(M.gems)}</b></span><button class="ach-close" onclick="closeTre()" aria-label="Close" style="margin-left:6px">✕</button></div><div class="tabs" style="padding:8px 8px 4px">${[['ch','Chests'],['cos','Style'],['gq','Gem quests'],['sh','Gem shop']].map(a=>`<button class="${TT==a[0]?'on':''}" onclick="treTab('${a[0]}')">${a[1]}</button>`).join('')}</div><div class="tb">${b}</div>`;
+ const nb=e.querySelector('.tb');if(nb)nb.scrollTop=sc;e.scrollTop=sce;e.dataset.tt=TT}
 const hid=()=>{window.GXHID=($$('tre')&&$$('tre').style.display=='flex')||($$('cho')&&$$('cho').style.display=='block')?1:0};
-window.openTre=function(t){if(t)TT=t;closeSheet();closeMis();const e=tre();e.style.display='flex';hid();treR()};window.closeTre=()=>{$$('tre').style.display='none';hid()};
+window.openTre=function(t){if(t)TT=t;closeSheet();closeMis();const e=tre();delete e.dataset.tt;e.style.display='flex';hid();treR()};window.closeTre=()=>{$$('tre').style.display='none';hid()};
 const _vm=vMenu;vMenu=function(){const r=_vm(),d=document.createElement('div');d.innerHTML=r[1];let ks=[...d.children].filter(k=>!/Share the game|Download updated ZIP|Admin code|Admin tools/.test(k.textContent));const take=re=>{const i=ks.findIndex(k=>re.test(k.textContent));return i<0?'':ks.splice(i,1)[0].outerHTML};
  const tre=`<button class="mbtn gemv" style="--h:275" onclick="openTre()"><i class="mic"><i class="gm"></i></i><span class="mtx"><b>Treasury</b><small>${fmt(M.gems)} gems · ${Object.values(M.chests).reduce((a,b)=>a+b,0)} chests · styles</small></span><i class="chev">›</i></button>`,o=take(/Online (play|island)/),rk=take(/Ranking/),ch=take(/Chronicle/),kd=take(/Kingdom development/),ac=take(/Achievement tree/),wr=take(/War room/),vy=take(/Voyages/),hp=take(/Help & tutorial/),st=take(/Settings/),dev=mb('🧑‍💻','Developer mode',isDev()?'Admin tools · gems · chests · black effects':'Enter the password',isDev()?'adm.open()':'adm.code()');
- r[1]=tre+o+rk+ch+kd+ac+wr+vy+ks.map(k=>k.outerHTML).join('')+hp+st+dev;return r};
+ r[1]=tre+o+mb('🏰','Kingdom overview','Resources, income, army, threats and objectives','openKingdomOverview()')+rk+ch+mb('🏛️','Great Works','Long projects with permanent bonuses',"openSheet('gw')")+kd+ac+wr+vy+ks.map(k=>k.outerHTML).join('')+hp+st+dev;return r};
 /* ---------- HUD: gem badge + rising resource effects ---------- */
 const _hud=hud;hud=function(){_hud();const tp=document.querySelector('#hud .top');if(tp&&!tp.querySelector('.gemb')){const g=document.createElement('div');g.className='gemb';g.setAttribute('role','button');g.setAttribute('aria-label','Gems and chests');g.innerHTML=GI+'<b id="gemn">'+fmt(M.gems)+'</b>';g.onclick=()=>openTre();tp.insertBefore(g,tp.lastElementChild)}applyRc()};
 function fly(txt,cls,col){if(LOW||RM)return;const h=$$('hud');if(!h||h.querySelectorAll('.gx-f').length>4)return;const t=cls=='gemb'?h.querySelector('.gemb'):h.querySelector('[data-hud-coins]');if(!t)return;const r=t.getBoundingClientRect(),hr=h.getBoundingClientRect(),d=document.createElement('div');d.className='gx-f';d.style.cssText=`left:${r.left-hr.left}px;top:${r.bottom-hr.top-4}px;color:${col}`;d.innerHTML=txt;d.addEventListener('animationend',()=>d.remove());h.style.position='relative';h.appendChild(d)}
@@ -2876,26 +3074,211 @@ button.x,.ach-close{--t:#ff8393;--m:#e2445d;--d:#a1213a;--s:#4a0d1a;text-align:c
 <script>(function(){try{Object.assign(SFX,{tap:[[720,.035,'triangle',0]]})}catch(e){}let last=0;document.addEventListener('pointerdown',e=>{const b=e.target.closest&&e.target.closest('button');if(!b||b.disabled)return;const n=performance.now();if(n-last<70)return;last=n;try{sfx('tap')}catch(x){}try{navigator.vibrate&&navigator.vibrate(6)}catch(x){}},{passive:true,capture:true})
 addEventListener('load',()=>{const c=document.getElementById('c');if(!c)return;const m=()=>{GXM=performance.now()};c.addEventListener('pointerdown',m,{passive:true});c.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType=='touch')m()},{passive:true});c.addEventListener('wheel',()=>{GXZ=performance.now()},{passive:true})})})();</script>
 <script>
+/* ===== Kingdom Overview: one screen that answers "how is my realm doing?" =====
+   Pure presentation over existing state — it never changes game data. Every number
+   is computed from the same helpers the rest of the game uses, so it cannot drift. */
+(()=>{
+  const OX='cl-overview';
+  function ovEconomy(){
+    const inc=S.inc||0, upk=typeof UPK==='number'?UPK:0;
+    const rows=[];
+    const cityInc=cities(1).reduce((n,t)=>n+fx.inc(t.l)*(t.off>S.time?.4:1),0);
+    if(cityInc)rows.push(['🏙️ Cities',cityInc]);
+    const flat=typeof bonusInc==='function'?bonusInc():0; if(flat)rows.push(['👑 Crown stipend & markets',flat]);
+    if(upk)rows.push(['⚔️ Army & building upkeep',-upk]);
+    const total=inc;   /* the real net income (after difficulty, research, events and upkeep) */
+    return{rows,total,inc};
+  }
+  function ovMines(){
+    const out={};for(const r of RES)out[r]=0;
+    const full=[];
+    const cp=cap();for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o!=1||t.b!=2||t.off>S.time)continue;const r=MR[t.t];if(!r)continue;
+      out[r]+=mineOut(t,r,i); if(S.res[r]>=cp*.999)full.push(r)}
+    return{out,full:[...new Set(full)]};
+  }
+  function ovArmy(){
+    const tl=tally(),ready=sum(S.army),gar=ready?0:0;
+    let garrisoned=0;for(const i in S.gar)garrisoned+=sum(S.gar[i]);
+    const rows=Object.keys(UN).filter(u=>(tl[u]||0)>0).map(u=>[UN[u].ic+' '+UN[u].n,tl[u]||0]);
+    return{total:sum(tl),ready,garrisoned,rows,cap:typeof UC==='number'?UC:0,upk:typeof UPK==='number'?UPK:0};
+  }
+  function ovThreats(){
+    const list=[];
+    if(S.st&&S.st.hold!=null&&S.st.hold<20)list.push(['⚠️','Your borders were recently breached — rebuild walls and garrisons.']);
+    let edgeN=0,mineN=0;for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o!=1)continue;mineN++;if(edge(i%N,(i/N)|0))edgeN++}
+    if(mineN>8&&edgeN>=mineN*.5)list.push(['🛡️','More than half your land is border land. Fortify before expanding further.']);
+    const weak=Object.keys(UN).filter(u=>(S.army[u]||0)===0);
+    if(sum(tally())===0)list.push(['⚔️','You have no army at all. A single rival raid can walk in.']);
+    else if(weak.length===4)list.push(['⚔️','No units recruited yet.']);
+    else if(weak.length>=2)list.push(['⚔️','You are missing '+weak.length+' unit types — a mixed army counters more enemies.']);
+    if((S.inc||0)<0)list.push(['💸','Income is negative. Upkeep is draining the treasury.']);
+    const full=ovMines().full;if(full.length)list.push(['📦','Storage is full for '+full.join(', ')+'. Production is being wasted — upgrade cities.']);
+    for(let k=2;k<6;k++){const n=S.tiles.filter(t=>t.o===k).length;if(n>owned(1)*1.5&&n>30)list.push(['🐺',OWN[k].n+' controls '+n+' tiles — more than you. Expect pressure.'])}
+    return list;
+  }
+  function ovObjectives(){
+    const out=[];
+    if(typeof MIS!=='undefined'&&S.ms)for(const m of MIS){const r=S.ms[m.id];if(!r||r.c)continue;if(mstat(m)==='ready'){out.push(['🎯 '+m.name,'Ready to claim']);if(out.length>=3)break}}
+    if(typeof S.side!=='undefined'&&S.side)for(const q of S.side){if(S.st[q.k]-q.b>=q.g){out.push(['🎲 '+q.n,'Side challenge ready']);break}}
+    return out;
+  }
+  function ovScore(){
+    try{const sc=scoreOf();return sc}catch(e){return null}
+  }
+  window.openKingdomOverview=function(){
+    if(!S)return;
+    let d=document.getElementById(OX);
+    if(!d){d=document.createElement('div');d.id=OX;d.setAttribute('role','dialog');d.setAttribute('aria-modal','true');d.setAttribute('aria-label','Kingdom overview');document.body.appendChild(d)}
+    const eco=ovEconomy(),mines=ovMines(),army=ovArmy(),threats=ovThreats(),obj=ovObjectives(),sc=ovScore();
+    const land=owned(1),citiesN=cities(1).length,forts=S.tiles.filter(t=>t.o==1&&t.b==3).length;
+    const dev=(typeof bl==='function')?Object.keys({1:1,2:1,3:1,4:1,5:1,6:1,7:1,9:1,10:1,11:1,12:1}).reduce((n,b)=>n+bl(+b),0):0;
+    const capV=cap(),storePct=RES.map(r=>[r,Math.min(1,(S.res[r]||0)/capV)]).sort((a,b)=>b[1]-a[1])[0];
+    const row=(a,b,cls)=>`<div class="ovr ${cls||''}"><span>${a}</span><b>${b}</b></div>`;
+    const bar=(f,col)=>`<div class="ovbar"><i style="width:${Math.max(0,Math.min(100,f*100)).toFixed(1)}%;${col?'background:'+col:''}"></i></div>`;
+    const techs=(S.tech&&Object.keys(S.tech).length)||0, techTot=(typeof TECH!=='undefined'&&TECH.length)||1;
+    d.innerHTML=`
+<div class="ovbox">
+  <div class="ovhead"><b>🏰 Kingdom overview</b><span class="ovsub">${DF().n}${S.on?' · online island':' · offline'}</span><button onclick="closeKingdomOverview()" aria-label="Close">✕</button></div>
+  <div class="ovbody">
+    <div class="ovcard">
+      <h4>💰 Economy</h4>
+      ${row('Coins','🪙 '+compactAmount(S.coins||0))}
+      ${row('Net income',((eco.total>=0?'+':'')+compactAmount(eco.total)+'/s'),eco.total<0?'bad':'ok')}
+      ${bar(eco.total<0?.06:Math.min(1,(eco.total||0)/8),eco.total<0?'#ff6b6b':'#3ddc97')}
+      ${eco.rows.map(r=>row(r[0],(r[1]>=0?'+':'')+compactAmount(r[1])+'/s')).join('')}
+      <div class="ovnote">Rows are base values before difficulty, research and event multipliers. Upkeep comes from units and some buildings.</div>
+    </div>
+    <div class="ovcard">
+      <h4>📦 Resources</h4>
+      ${RES.map(r=>row(ICON[r]+' '+r,compactAmount(S.res[r]||0)+' / '+compactAmount(capV),((S.res[r]||0)>=capV*.95?'bad':''))).join('')}
+      ${RES.map(r=>bar((S.res[r]||0)/capV,r==='gold'?'#ffd23f':r==='silver'?'#dce8f5':r==='wood'?'#b5733f':r==='stone'?'#d0d5db':'#6df2ff')).join('')}
+      <h4 style="margin-top:10px">⛏️ Production /s</h4>
+      ${RES.map(r=>row(ICON[r]+' '+r,(mines.out[r]||0).toFixed(2))).join('')}
+      ${storePct&&storePct[1]>.95?`<div class="ovnote bad">${ICON[storePct[0]]} Storage full — production is wasted.</div>`:''}
+    </div>
+    <div class="ovcard">
+      <h4>🗺️ Realm</h4>
+      ${row('Land',land+' tiles')}
+      ${row('Cities',citiesN)}
+      ${row('Strongholds',forts)}
+      ${row('Building levels',dev)}
+      ${row('Research',techs+' / '+techTot+' nodes')}
+      ${bar(techs/techTot,'#b277ff')}
+      <h4 style="margin-top:10px">📊 Score</h4>
+      ${sc?row('Total','⭐ '+sc.s+` <small style="color:#9fc3e0">(×${sc.dm.toFixed(2)} ${DF().n})</small>`):''}
+      ${sc?row('Defence',Math.round(sc.p[5])+'%'):''}
+    </div>
+    <div class="ovcard">
+      <h4>⚔️ Military</h4>
+      ${row('Units',army.total+' / '+army.cap)}
+      ${bar(army.cap?army.total/army.cap:0,'#ff9d3d')}
+      ${row('Ready to attack',army.ready)}
+      ${row('Garrisoned',army.garrisoned)}
+      ${army.rows.length?army.rows.map(r=>row(r[0],r[1])).join(''):'<div class="ovnote">No units yet — open Army to recruit.</div>'}
+      <div class="ovnote">Upkeep ${compactAmount(army.upk)}🪙/s</div>
+    </div>
+    <div class="ovcard wide">
+      <h4>⚠️ Current threats</h4>
+      ${threats.length?threats.slice(0,5).map(t=>`<div class="ovthreat"><span>${t[0]}</span><div>${t[1]}</div></div>`).join(''):'<div class="ovnote ok">Nothing urgent. Keep garrisons supplied and watch rival armies.</div>'}
+    </div>
+    <div class="ovcard wide">
+      <h4>🎯 Objectives ready</h4>
+      ${obj.length?obj.map(o=>`<div class="ovobj"><span>${o[0]}</span><button onclick="closeKingdomOverview();openMis()">Claim</button></div>`).join(''):'<div class="ovnote">No mission reward is ready yet. Open Missions to see progress.</div>'}
+    </div>
+  </div>
+  <div class="ovfoot"><button onclick="closeKingdomOverview();openSheet('war')">⚔️ War room</button><button onclick="closeKingdomOverview();openSheet('chron')">📜 Chronicle</button><button onclick="closeKingdomOverview();openMis()">🎯 Missions</button></div>
+</div>`;
+    d.style.display='flex';
+    if(!document.getElementById('cl-ov-css')){
+      const st=document.createElement('style');st.id='cl-ov-css';
+      st.textContent=`#cl-overview{position:fixed;inset:0;z-index:42;display:none;align-items:center;justify-content:center;background:#01060cd9;padding:10px;padding-top:calc(10px + env(safe-area-inset-top,0px));padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+      #cl-overview .ovbox{width:100%;max-width:760px;max-height:100%;display:flex;flex-direction:column;background:linear-gradient(#122c44,#0b1a2a);border:2px solid #3a638a;border-radius:16px;box-shadow:0 12px 40px #000c;overflow:hidden}
+      #cl-overview .ovhead{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid #2a4a68;background:#0f2438}
+      #cl-overview .ovhead b{font-size:18px}#cl-overview .ovsub{margin-left:auto;color:#9fc3e0;font-size:12px;text-align:right}
+      #cl-overview .ovhead button{min-width:38px;min-height:38px;border-radius:10px;background:#16324c;color:#e9f1f8;border:1px solid #3a638a;font-size:16px;cursor:pointer}
+      #cl-overview .ovbody{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:10px;overflow:auto;-webkit-overflow-scrolling:touch}
+      #cl-overview .ovcard{background:#0d1f31;border:1px solid #274761;border-radius:12px;padding:9px 10px}
+      #cl-overview .ovcard.wide{grid-column:1/-1}
+      #cl-overview h4{margin:0 0 6px;font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:#ffcf4a}
+      #cl-overview .ovr{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;padding:2.5px 0;border-bottom:1px dashed #1e3950}
+      #cl-overview .ovr:last-child{border-bottom:0}#cl-overview .ovr b{font-variant-numeric:tabular-nums}
+      #cl-overview .ovr.ok b{color:#3ddc97}#cl-overview .ovr.bad b{color:#ff7b7b}
+      #cl-overview .ovbar{height:6px;border-radius:4px;background:#1b3348;overflow:hidden;margin:4px 0 7px}
+      #cl-overview .ovbar i{display:block;height:100%;background:#3ddc97;border-radius:4px;transition:width .3s}
+      #cl-overview .ovnote{font-size:12px;color:#9fc3e0;margin-top:6px;line-height:1.4}
+      #cl-overview .ovnote.bad{color:#ff9d9d}#cl-overview .ovnote.ok{color:#8fe3bb}
+      #cl-overview .ovthreat,#cl-overview .ovobj{display:flex;gap:9px;align-items:center;font-size:13.5px;padding:6px 0;border-bottom:1px dashed #1e3950}
+      #cl-overview .ovthreat:last-child,#cl-overview .ovobj:last-child{border-bottom:0}
+      #cl-overview .ovthreat span{font-size:17px;flex:none}#cl-overview .ovobj span{flex:1}
+      #cl-overview .ovobj button{min-height:34px;padding:4px 14px;border-radius:9px;background:linear-gradient(#e9b93c,#c98f14);color:#1a1405;font-weight:800;border:1px solid #ffd977;cursor:pointer}
+      #cl-overview .ovfoot{display:flex;gap:7px;padding:9px 10px;border-top:1px solid #2a4a68;background:#0f2438}
+      #cl-overview .ovfoot button{flex:1;min-height:40px;border-radius:10px;background:#16324c;color:#e9f1f8;border:1px solid #3a638a;font-weight:700;font-size:13px;cursor:pointer}
+      @media(max-width:620px){#cl-overview .ovbody{grid-template-columns:1fr}#cl-overview .ovhead b{font-size:16px}#cl-overview .ovfoot button{font-size:12px}#cl-overview .ovbox{max-height:96%}}`;
+      document.head.appendChild(st);
+    }
+  };
+  window.closeKingdomOverview=function(){const d=document.getElementById(OX);if(d)d.style.display='none'};
+  /* the overview is opened from the Menu and from the HUD land counter */
+})();
+
 /* ===== save safety: verified writes, rotating backups, quota warnings, export / import / restore ===== */
 (function(){
 const K=KEY,BK=[K+'-backup',K+'-bk2',K+'-bk3'],$$=id=>document.getElementById(id);
-const okSave=raw=>{try{const s=JSON.parse(raw);return !!s&&s.v==2&&(s.n==56||s.n==96||s.n==128)&&Array.isArray(s.tiles)&&s.tiles.length==s.n*s.n?s:null}catch(e){return null}};
+/* Deterministic 53-bit fingerprint of the save text. It is a corruption check, not security:
+   the point is to notice a truncated or scrambled save before it can replace a good one. */
+const SUM=s=>{let h1=0x811c9dc5,h2=0x01000193;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,16777619)>>>0;h2=Math.imul(h2+c,2246822519)>>>0}return h1.toString(36)+h2.toString(36)};
+const okSave=raw=>{try{const s=JSON.parse(raw);if(!s||s.v!=2||!(s.n==56||s.n==96||s.n==128)||!Array.isArray(s.tiles)||s.tiles.length!=s.n*s.n)return null;
+  if(s.fp&&s.fp!==SUM(raw.replace(/,"fp":"[0-9a-z]*"\}$/,'}')))return null;   // truncated/edited copy: treat as invalid, never load it
+  return s}catch(e){return null}};
 const looks=r=>!!r&&r.length>500&&r[0]=='{'&&r[r.length-1]=='}'&&r.indexOf('"v":2')>-1;
 let lastRot=0,lastWarn=0;
 const warn=m=>{const n=Date.now();if(n-lastWarn>60000){lastWarn=n;try{toast(m)}catch(e){}}};
 const tryset=(k,v)=>{try{localStorage.setItem(k,v);return true}catch(e){return false}};
+/* Incremental, repeatable save migrations. v2 is the current shape, so today this only fills
+   defaults for fields added by later updates; unknown fields are copied through untouched.
+   A save that needs a real structural change gets a step here instead of being thrown away. */
+const SAVE_V=2;
+function migrateSave(s){
+  if(!s||typeof s!=='object')return null;
+  const from=s.sv|0;
+  try{
+    if(!Array.isArray(s.chron))s.chron=[];
+    if(!s.st||typeof s.st!=='object')s.st={};
+    if(!s.tech||typeof s.tech!=='object')s.tech={};
+    if(!s.ms||typeof s.ms!=='object')s.ms={};
+    if(!s.gar||typeof s.gar!=='object')s.gar={};
+    if(!Array.isArray(s.sieges))s.sieges=[];
+    if(!Array.isArray(s.side))s.side=[];
+    if(!s.price||typeof s.price!=='object')s.price={};
+    if(!s.res||typeof s.res!=='object')s.res={};
+    if(!s.army||typeof s.army!=='object')s.army={inf:0,arc:0,cav:0,sie:0};
+    if(!s.rl||typeof s.rl!=='object')s.rl={};
+  }catch(e){return null}
+  s.sv=SAVE_V;
+  if(from&&from!==SAVE_V&&window.console)console.info('[save] migrated from sv'+from+' to sv'+SAVE_V);
+  return s;
+}
+/* load a save through validation + migration, keeping the original text for backups */
+const loadSaveText=raw=>{const s=okSave(raw);return s?migrateSave(s):null};
 doSave=function(){if(!S||S.on||window.__gxNoSave)return;
  if(!(S.tiles&&S.tiles.length==N*N)){warn('⚠️ Save skipped: kingdom data looks invalid');return}
- S.ts=Date.now();let j;try{j=JSON.stringify(packS(S))}catch(e){warn('⚠️ Could not save your kingdom: '+e.message);return}
+ S.ts=Date.now();S.sv=Math.max(S.sv|0,SAVE_V);delete S.fp;let j;try{const o=packS(S);delete o.fp;j=JSON.stringify(o)}catch(e){warn('⚠️ Could not save your kingdom: '+e.message);return}
+ j=j.slice(0,-1)+',"fp":"'+SUM(j)+'"}';                       // fingerprint the exact text we are about to store
  let prev=null;try{prev=localStorage.getItem(K)}catch(e){warn('⚠️ Storage is unavailable, so your progress cannot be saved. Export your kingdom (Settings).');return}
- if(prev&&prev!==j&&looks(prev)){const n=Date.now();if(n-lastRot>6e5){lastRot=n;const b2=localStorage.getItem(BK[1]);if(b2)tryset(BK[2],b2);const b1=localStorage.getItem(BK[0]);tryset(BK[1],b1&&looks(b1)?b1:prev)}tryset(BK[0],prev)}
- const put=()=>{localStorage.setItem(K,j);return localStorage.getItem(K)===j};
- try{if(put())return}catch(e){}
+ /* rotate: the outgoing save is only trusted as a backup if it validates, and the oldest slot
+    is never overwritten by something that has not been checked first */
+ if(prev&&prev!==j&&looks(prev)&&okSave(prev)){
+   const n=Date.now();
+   if(n-lastRot>6e5){lastRot=n;const b2=localStorage.getItem(BK[1]);if(b2&&okSave(b2))tryset(BK[2],b2);const b1=localStorage.getItem(BK[0]);if(b1&&okSave(b1))tryset(BK[1],b1)}
+   tryset(BK[0],prev);
+ }
+ const put=()=>{try{localStorage.setItem(K,j);return localStorage.getItem(K)===j}catch(e){return false}};
+ if(put())return;
  for(const k of [BK[2],BK[1]]){try{localStorage.removeItem(k);if(put())return warn('⚠️ Storage is almost full: older backups were removed to keep saving')}catch(e){}}
  warn('⚠️ Your kingdom could NOT be saved (storage full or blocked). Export it now: Menu > Settings > Export kingdom.')};
 if(window.__gxRestored)setTimeout(()=>{try{toast('♻️ Your kingdom was restored from an automatic backup')}catch(e){}},1500);
 /* ---- settings entries ---- */
-const _vS=vSet;vSet=function(){const r=_vS();r[1]+=`<div class="mi"><b>🛟 Kingdom backup</b><div class="mu">Your offline kingdom is saved on this device with automatic backups. Export a file to keep it safe or move it to another device.</div>`+mb('📤','Export kingdom','Save a backup file','gxExport()')+mb('📥','Import kingdom','Load an exported file','gxImport()')+mb('♻️','Restore automatic backup','Go back to an earlier save','gxBackups()')+`</div>`;return r};
+const _vS=vSet;vSet=function(){const r=_vS();r[1]+=`<div class="mi"><b>🛟 Kingdom backup</b><div class="mu">Your offline kingdom is saved on this device with automatic backups. Export a file to keep it safe or move it to another device.</div>`+mb('📤','Export kingdom','Save a backup file','gxExport()')+mb('📥','Import kingdom','Load an exported file','gxImport()')+mb('♻️','Restore automatic backup','Go back to an earlier save','gxBackups()')+mb('🔎','Check my save','Verify the save is intact','gxVerify()')+`<div class="mu" style="font-size:12px;margin-top:2px">Save: ${gxSaveInfo()}</div>`+`</div>`;return r};
 window.gxExport=async function(){if(S&&!S.on)doSave();const raw=localStorage.getItem(K);if(!raw||!okSave(raw))return toast('No valid offline kingdom to export yet');
  const payload=JSON.stringify({app:'crownlands',fmt:1,exported:new Date().toISOString(),data:raw}),name='crownlands-'+new Date().toISOString().slice(0,10)+'.json';
  try{const f=new File([payload],name,{type:'application/json'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Crownlands kingdom'});return toast('Kingdom exported')}}catch(e){if(e&&e.name=='AbortError')return}
@@ -2903,12 +3286,348 @@ window.gxExport=async function(){if(S&&!S.on)doSave();const raw=localStorage.get
  try{await navigator.clipboard.writeText(payload);toast('Copied to the clipboard. Paste it into a note to keep it.')}catch(e){toast('Export is not supported on this device')}};
 window.gxImport=function(){const d=$$('dm');d.innerHTML=`<div class="dbox"><b style="font-size:22px">📥 Import kingdom</b><div class="mu">Choose an exported file or paste its text. Your current offline kingdom is kept as a backup first.</div><input id="gx-file" type="file" accept=".json,application/json" style="display:none"><button onclick="document.getElementById('gx-file').click()">Choose file…</button><textarea id="gx-paste" rows="4" placeholder="…or paste the exported text here" style="width:100%;margin-top:8px;border-radius:10px;background:#0b1620;color:#fff;border:1px solid #3a638a;padding:8px"></textarea><button class="buy" style="margin-top:8px;text-align:center" onclick="gxDoImport()">Import</button><button style="margin-top:6px;text-align:center" onclick="document.getElementById('dm').style.display='none'">Cancel</button></div>`;d.style.display='flex';
  $$('gx-file').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>6e6)return toast('❌ File is too large');const fr=new FileReader();fr.onload=()=>{$$('gx-paste').value=fr.result;gxDoImport()};fr.readAsText(f)}};
-function swapIn(raw,msg){if(!confirm(msg))return;try{const cur=localStorage.getItem(K);if(cur&&looks(cur))localStorage.setItem(K+'-preimport',cur);localStorage.setItem(K,raw)}catch(e){return toast('❌ Not enough storage for this')}window.__gxNoSave=1;location.reload()}
+function swapIn(raw,msg){if(!confirm(msg))return;try{const cur=localStorage.getItem(K);if(cur&&looks(cur)&&okSave(cur))localStorage.setItem(K+'-preimport',cur);localStorage.setItem(K,raw)}catch(e){return toast('❌ Not enough storage for this')}window.__gxNoSave=1;location.reload()}
+window.gxVerify=function(){const raw=localStorage.getItem(K),ok=!!(raw&&okSave(raw));
+ if(ok)return toast('✅ Your kingdom save is intact ('+raw.length.toLocaleString()+' characters)');
+ const d=$$('dm');d.innerHTML=`<div class="dbox"><b style="font-size:20px">⚠️ Save check failed</b><div class="mu">The current save did not pass validation. It has NOT been deleted. Restore an earlier backup, or keep a copy of the damaged data before deciding.</div><button onclick="gxBackups()">♻️ Restore automatic backup</button><button style="margin-top:6px" onclick="try{localStorage.setItem('crownlands2-damaged-'+Date.now(),localStorage.getItem('crownlands2'));toast('Damaged copy kept')}catch(e){toast('Could not copy: storage full')}">Keep a copy of the damaged save</button><button style="margin-top:6px" onclick="document.getElementById('dm').style.display='none'">Close</button></div>`;d.style.display='flex'};
+window.gxSaveInfo=function(){const raw=localStorage.getItem(K),s=raw&&okSave(raw);
+ return s?`${raw.length.toLocaleString()} characters · saved ${s.ts?new Date(s.ts).toLocaleString():'unknown'} · map ${s.n}×${s.n} · ${s.fp?'checksum verified':'legacy save (no checksum)'}`:'no valid save';};
 window.gxDoImport=function(){const t=($$('gx-paste').value||'').trim();let raw=null;if(t.length>6e6)return toast('❌ Text is too large');try{const o=JSON.parse(t);raw=o&&o.app=='crownlands'&&typeof o.data=='string'?o.data:(o&&o.v==2?t:null)}catch(e){}
  const s=raw&&okSave(raw);if(!s)return toast('❌ This is not a valid Crownlands kingdom');swapIn(raw,'Replace your current offline kingdom with the imported one?\nThe current one is kept as a backup.')};
-window.gxBackups=function(){const rows=[[BK[0],'Previous save'],[BK[1],'Earlier save'],[BK[2],'Oldest save'],[K+'-preimport','Before last import/restore'],[K+'-damaged','Damaged save (rescued)']].map(([k,l])=>{let r=null;try{r=localStorage.getItem(k)}catch(e){}const s=r&&okSave(r);return s?`<button onclick="gxRestore('${k}')">${l}<small>${s.ts?new Date(s.ts).toLocaleString():'unknown time'} · ${s.n}x${s.n} map</small></button>`:''}).join('');
+window.gxBackups=function(){const rows=[[BK[0],'Previous save'],[BK[1],'Earlier save'],[BK[2],'Oldest save'],[K+'-preimport','Before last import/restore'],[K+'-premigrate','Before the last game update'],[K+'-damaged','Damaged save (rescued)']].map(([k,l])=>{let r=null;try{r=localStorage.getItem(k)}catch(e){}const s=r&&okSave(r);return s?`<button onclick="gxRestore('${k}')">${l}<small>${s.ts?new Date(s.ts).toLocaleString():'unknown time'} · ${s.n}x${s.n} map</small></button>`:''}).join('');
  const d=$$('dm');d.innerHTML=`<div class="dbox"><b style="font-size:22px">♻️ Restore backup</b><div class="mu">Pick an earlier save of your offline kingdom. Your current one is kept as a backup first.</div>${rows||'<div class="mu" style="margin:10px 0">No automatic backups yet. They appear as you play.</div>'}<button style="margin-top:6px;text-align:center" onclick="document.getElementById('dm').style.display='none'">Close</button></div>`;d.style.display='flex'};
 window.gxRestore=function(k){const r=localStorage.getItem(k);if(!r||!okSave(r))return toast('❌ That backup is not valid');swapIn(r,'Restore this backup? Your current offline kingdom is kept as a backup.')};
+})();
+</script>
+<script>
+/* ===== Crownlands v6 launch layer =====
+   Loaded last, so it can build on everything above without rewriting it:
+   - save schema 3 (incremental migration, pre-update copy kept)
+   - kingdom development measure and size-scaled rewards (missions, side challenges, events, diplomacy)
+   - late game: Great Works (multi-stage projects), endless Milestones and strategic objectives
+   - rivals: memory, personalities, strategic war decisions, coalitions, difficulty = decision quality
+   - online fairness: reliable battle messages (outbox + server acks), sieges pause while the defender is offline */
+(()=>{
+const K=KEY,SV=3,NOW=()=>S?S.time:0;
+const fmt=n=>{n=Math.round(n);const a=Math.abs(n);return a<1e3?String(n):a<1e6?(n/1e3).toFixed(a<1e4?1:0).replace(/\.0$/,'')+'K':a<1e9?(n/1e6).toFixed(a<1e7?2:1).replace(/\.?0+$/,'')+'M':compactAmount(n)};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ---------- styles ---------- */
+const css=document.createElement('style');css.id='v6-css';css.textContent=`
+.gfxq{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0}
+.gfxq button{text-align:center;min-height:52px;padding:6px 4px}.gfxq button.on{border-color:#ffcf4a;box-shadow:0 0 0 2px #ffcf4a55 inset;background:#1d3d5c}
+#sh.noanim .mbtn,#sh.noanim .mbtn *{animation:none!important}
+.gfxq small{display:block;font-size:11px;opacity:.85}.gfxq button.on small{color:#3a2a00;opacity:1}
+#cl-tut2.v6hide,#cl-tut-ring.v6hide{display:none!important}#cl-tut2.v6top{bottom:auto!important;max-height:38vh}
+#market .mkrow{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}#market .mkrow button{min-height:40px;padding:4px 2px;font-size:13px;text-align:center}
+.v6-gw .cost span{margin-right:6px;white-space:nowrap}.v6-gw .paid{color:#8fe3bb}
+.v6-pill{display:inline-block;border-radius:9px;padding:1px 8px;font-size:12px;font-weight:800;background:#16324c;border:1px solid #3a638a}
+.v6-pill.h{background:#4a1a22;border-color:#ff6b6b;color:#ffb3b3}.v6-pill.w{background:#3d3416;border-color:#ffcf4a;color:#ffe9a0}.v6-pill.f{background:#123d2a;border-color:#3ddc97;color:#a8f0cd}
+`;document.head.appendChild(css);
+
+/* ---------- save schema 3 ----------
+   Incremental and repeatable: running it twice changes nothing, and fields this version does not know are kept.
+   Before the first upgrade of an offline save, the untouched save text is kept as "Before the last game update". */
+function migrate3(s){if(!s||typeof s!=='object')return s;
+  if(!s.st||typeof s.st!=='object')s.st={};
+  if(!s.aim||typeof s.aim!=='object')s.aim={};         // rival memory
+  if(!s.gw||typeof s.gw!=='object')s.gw={};           // great works
+  if(!s.mst||typeof s.mst!=='object')s.mst={};         // milestone levels
+  if(!s.sob||typeof s.sob!=='object')s.sob={};         // strategic objectives claimed
+  if(!(+s.incE>=0))s.incE=Math.max(0,+s.inc||0);       // smoothed income, the base of reward scaling
+  if(typeof s.st.capt!=='number')s.st.capt=0;
+  if((s.sv|0)<SV)s.sv=SV;return s}
+window.migrate3=migrate3;
+function ens(){if(S)migrate3(S)}
+if(S&&!S.on&&(S.sv|0)<SV){try{const raw=localStorage.getItem(K);if(raw&&raw.length<2.5e6)localStorage.setItem(K+'-premigrate',raw)}catch(e){}
+  migrate3(S);try{chron('🛠️','Kingdom updated to save format '+SV+' (a copy of the old save was kept)')}catch(e){}save()}
+ens();
+const _ng6=newGame;newGame=function(d){const r=_ng6(d);ens();return r};
+
+/* ---------- kingdom development: one smoothed measure used for scaling ---------- */
+const incE=()=>Math.max(1,S&&S.incE||0);
+const devTier=()=>{const i=incE();return i<4?0:i<12?1:i<40?2:i<120?3:i<400?4:5};
+/* value scale relative to an early kingdom (about 2.5 coins/s and 300 storage) */
+const VS=()=>Math.max(1,incE()/2.5),RVS=()=>Math.max(1,cap()/300);
+window.evVal=()=>({vs:clamp(VS(),1,800),rvs:clamp(RVS(),1,120)});
+window.kdevTier=devTier;
+
+/* ---------- size-scaled mission rewards ----------
+   A reward is worth at least its old fixed value, and otherwise a number of seconds of smoothed income
+   that grows with the mission's importance (30 s for small tasks, up to 5 min for big ones).
+   Resources scale with storage but never above 30% of it. Score points are never scaled. */
+const secsFor=base=>clamp(base*.25,30,300);
+function scaleRw(rw){if(!rw||!S)return rw;const [c,p,res,t]=rw,cp=cap(),o={};
+  for(const k in res||{})o[k]=Math.max(res[k],Math.min(Math.round(cp*.3),Math.round(res[k]*RVS())));
+  return[Math.max(c||0,Math.round(incE()*secsFor(c||40))),p,o,t]}
+window.scaleRw=scaleRw;
+const _give=give;give=function(rw){return _give(scaleRw(rw))};
+const _rwStr=rwStr;rwStr=function(rw){return _rwStr(scaleRw(rw))};
+
+/* ---------- endless side challenges whose goals grow with the kingdom ---------- */
+const rivalsAlive=()=>{for(let k=2;k<6;k++)if(S.tiles.some(t=>t.o===k))return true;return false};
+sideFill=function(){if(!S.side)S.side=[];
+  while(S.side.length<1&&S.time>=S.sideAt){const used=S.side.map(q=>q.k),alive=rivalsAlive();
+    const pool=STPL.filter(t=>!used.includes(t[0])&&!((t[0]=='won'||t[0]=='repelled')&&!alive)&&!(S.on&&t[0]=='repelled'));if(!pool.length)break;
+    const t=pool[rnd(0,pool.length)|0],gi=rnd(0,t[2].length)|0,tier=devTier(),mult=[1,1.4,1.9,2.6,3.4,4.4][tier]*(t[0]=='won'||t[0]=='repelled'?.7:1);
+    const g=Math.max(t[2][gi],Math.round(t[2][gi]*mult));
+    S.side.push({k:t[0],g,b:S.st[t[0]]||0,n:t[1].replace('{g}',g),rw:[Math.round(t[3]*t[2][gi]*(1+gi*.3)),8+t[2][gi]*3+tier*6,{}]});S.sideN=(S.sideN||0)+1}};
+window.v6SwapSide=function(){if(!S.side||!S.side.length)return;if((S.sideSw||-1e9)>S.time-300)return toast('You can swap a challenge once every 5 minutes');S.side=[];S.sideSw=S.time;S.sideAt=S.time;sideFill();lastMis='';renderMis();toast('🎲 New side challenge')};
+
+/* ---------- Great Works: long, expensive projects with permanent bonuses ----------
+   You contribute coins and materials whenever you like; a stage completes once it is fully paid.
+   Effects are added to the same bonus totals as research, so they show up everywhere. */
+const GW=[
+ {id:'granary',ic:'🏛️',n:'Royal Granary',d:'+12% storage capacity per stage',fx:{store:.12},req:()=>cities(1).length>=2,rq:'2 cities',m:1},
+ {id:'exchange',ic:'💱',n:'Grand Exchange',d:'+4% coin income and a tighter market spread per stage',fx:{inc:.04,spr:.006},req:()=>bl(5)>0,rq:'a Market',m:1.2},
+ {id:'deepmines',ic:'⛏️',n:'Deep Mines',d:'+8% output from every mine per stage',fx:{prod:.08},req:()=>(V.mines||0)>=4,rq:'4 mines',m:1.1},
+ {id:'citadel',ic:'🧱',n:'Citadel',d:'+6% fortification strength per stage',fx:{dfn:.06},req:()=>(V.forts||0)>=3,rq:'3 strongholds',m:1.1},
+ {id:'library',ic:'📚',n:'Great Library',d:'+12% research speed per stage',fx:{rps:.12},req:()=>bl(7)>0,rq:'an Academy',m:1.2},
+ {id:'warcollege',ic:'⚔️',n:'War College',d:'+4% army attack and +6 army limit per stage',fx:{atk:.04,ucap:6},req:()=>bl(6)>0,rq:'Barracks',m:1.3},
+ {id:'crown',ic:'👑',n:'Crown of the Realm',d:'+3% coin income and +250 mission score per stage; a royal title at the last stage',fx:{inc:.03},req:()=>bl(12)>0,rq:'the Monument',m:3,max:7}];
+const GWID={};GW.forEach(g=>GWID[g.id]=g);
+const gwMax=g=>g.max||5,gwSt=id=>((S.gw||{})[id]||{}).s||0;
+function gwCost(g,st){const m=g.m,o={coins:Math.round(5000*m*Math.pow(4,st)),wood:Math.round(500*m*Math.pow(2.4,st)),stone:Math.round(700*m*Math.pow(2.4,st)),silver:Math.round(40*m*Math.pow(2.3,st))};
+  if(st>=1)o.gold=Math.round(15*m*Math.pow(2.2,st-1));if(st>=2)o.diamond=Math.round(4*m*Math.pow(2.2,st-2));return o}
+let GWC=null,GWK='';
+function gwAdd(k){if(!S||!S.gw)return 0;const key=JSON.stringify(S.gw);if(key!==GWK){GWK=key;GWC={};for(const g of GW){const st=gwSt(g.id);if(st)for(const q in g.fx)GWC[q]=(GWC[q]||0)+g.fx[q]*st}}return GWC[k]||0}
+const gwTotal=()=>GW.reduce((n,g)=>n+gwSt(g.id),0);
+const _rt6=rt;rt=function(k){return _rt6(k)+gwAdd(k)};
+window.gwContribute=function(id){const g=GWID[id];if(!g||!S)return;if(!g.req())return toast('Needs '+g.rq);const st=gwSt(id);if(st>=gwMax(g))return;
+  const w=S.gw[id]||(S.gw[id]={s:0,paid:{}}),need=gwCost(g,st);let gave=0;
+  for(const k in need){const have=k=='coins'?S.coins:(S.res[k]||0),left=need[k]-(w.paid[k]||0),q=Math.floor(Math.max(0,Math.min(have,left)));if(q>0){if(k=='coins')S.coins-=q;else S.res[k]-=q;w.paid[k]=(w.paid[k]||0)+q;gave+=q}}
+  if(!gave)return toast('Nothing to contribute — gather coins or materials first');
+  if(Object.keys(need).every(k=>(w.paid[k]||0)>=need[k])){w.s=st+1;w.paid={};S.st.gwDone=(S.st.gwDone||0)+1;rtDirty();
+    if(id=='crown'){S.score+=250;if(w.s>=gwMax(g))S.title='Sovereign of the Isles'}
+    sfx('ach');chron(g.ic,`${g.n}: stage ${w.s} completed`);toast(`${g.ic} ${g.n} — stage ${w.s} complete!`)}
+  else{sfx('trade');toast(`${g.ic} Contribution made to ${g.n}`)}
+  buzz();save();hud();shK='';renderSheet()};
+function vGW(){let h=`<div class="mu">Great Works are the long-term projects of a kingdom. Contribute whenever you have spare coins or materials; each completed stage adds a permanent bonus. Later stages cost far more — they are built for a rich, late-game realm.</div>`;
+  for(const g of GW){const st=gwSt(g.id),mx=gwMax(g),done=st>=mx,ok=g.req(),w=(S.gw||{})[g.id]||{paid:{}},need=done?null:gwCost(g,st);
+    h+=`<div class="mi v6-gw ${done?'ready':ok?'':'locked'}"><div class="mh"><span>${g.ic}</span><b>${g.n}</b><em>${done?'Complete':'Stage '+st+'/'+mx}</em></div><div class="mu">${g.d}. Now: ${st?Object.keys(g.fx).map(k=>k=='ucap'?'+'+g.fx[k]*st+' army limit':k=='spr'?'−'+(g.fx[k]*st*100).toFixed(1)+'% spread':'+'+Math.round(g.fx[k]*st*100)+'% '+({store:'storage',inc:'income',prod:'mine output',dfn:'fortification',rps:'research',atk:'attack'}[k]||k)).join(', '):'no bonus yet'}.</div><div class="bar"><i style="width:${st/mx*100}%"></i></div>`;
+    if(!done){const pc=Math.min(1,Object.keys(need).reduce((a,k)=>a+Math.min(1,(w.paid[k]||0)/need[k]),0)/Object.keys(need).length);
+      h+=`<div class="mf cost"><span>${['coins',...RES].filter(k=>need[k]).map(k=>{const p=w.paid[k]||0;return `<span class="${p>=need[k]?'paid':''}">${ICON[k]} ${fmt(p)}/${fmt(need[k])}</span>`}).join(' ')}</span></div><div class="mu" style="font-size:12px">Stage ${st+1} funded ${Math.round(pc*100)}%</div>`+
+        (ok?`<button style="width:100%;margin-top:6px" onclick="gwContribute('${g.id}')">Contribute what I can<small>Pays as much of what is still missing as you hold now</small></button>`:`<div class="mf"><span>🔒 Needs ${g.rq}</span></div>`)}
+    h+='</div>'}
+  return['🏛️ Great Works',h]}
+window.XSH=Object.assign(window.XSH||{},{gw:vGW});
+
+/* ---------- Milestones (endless) and strategic objectives (once per kingdom) ---------- */
+let LT=null,LTK=null;
+function landInfo(){if(LTK===S.tiles&&LT)return LT;let land=0,veins=0;for(const t of S.tiles){if(t.t!='w')land++;if('SGD'.includes(t.t))veins++}LTK=S.tiles;LT={land,veins};return LT}
+const sumLv=()=>{let n=0;for(const t of S.tiles)if(t.o==1&&t.b)n+=t.l||1;return n};
+const ownVeins=()=>{let n=0;for(const t of S.tiles)if(t.o==1&&'SGD'.includes(t.t))n++;return n};
+const MST=[
+ {k:'land',ic:'🗺️',n:'Realm size',lab:'Tiles owned',v:()=>owned(1),g:l=>Math.round(50*Math.pow(1.35,l))},
+ {k:'inc',ic:'💰',n:'Treasury flow',lab:'Coin income per second',v:()=>Math.floor(Math.max(0,S.inc||0)),g:l=>Math.round(6*Math.pow(2,l))},
+ {k:'city',ic:'🏙️',n:'Great city',lab:'Highest city level',v:()=>maxCity(),g:l=>8+4*l,end:l=>8+4*l>(MAXL[1]||25)},
+ {k:'build',ic:'🏗️',n:'Master builder',lab:'Building levels in total',v:sumLv,g:l=>Math.round(30*Math.pow(1.45,l))},
+ {k:'tech',ic:'🎓',n:'Scholar kingdom',lab:'Research nodes',v:()=>Object.keys(S.tech||{}).length,g:l=>8+8*l,end:l=>8+8*l>TECH.length},
+ {k:'war',ic:'⚔️',n:'Battle-hardened',lab:'Battles won',v:()=>S.st.won||0,g:l=>Math.round(10*Math.pow(1.6,l))},
+ {k:'gw',ic:'🏛️',n:'Builder of wonders',lab:'Great Work stages',v:gwTotal,g:l=>3+4*l,end:l=>3+4*l>GW.reduce((n,g)=>n+gwMax(g),0)},
+ {k:'trade',ic:'⚖️',n:'Trade empire',lab:'Trades',v:()=>S.st.trades||0,g:l=>Math.round(40*Math.pow(1.7,l))}];
+const SOB=[
+ {id:'half',ic:'🌍',n:'Half the island',d:'Own half of all the land on the island.',v:()=>owned(1),g:()=>Math.ceil(landInfo().land*.5),sec:900,sc:300},
+ {id:'veins',ic:'💎',n:'Lord of the veins',d:'Hold every silver, gold and diamond vein on the island at the same time.',v:ownVeins,g:()=>Math.max(1,landInfo().veins),sec:900,sc:300},
+ {id:'capital',ic:'🏰',n:'Fall of a capital',d:'Capture a rival city of level 5 or higher.',v:()=>S.st.capt||0,g:()=>1,sec:600,sc:200},
+ {id:'unify',ic:'👑',n:'Unifier',d:'Defeat every rival kingdom on the island.',v:()=>(S.st.def||[]).length,g:()=>4,sec:1800,sc:600,t:'Unifier'},
+ {id:'wonder',ic:'✨',n:'Age of wonders',d:'Complete every stage of one Great Work.',v:()=>GW.some(g=>gwSt(g.id)>=gwMax(g))?1:0,g:()=>1,sec:1200,sc:400}];
+const mstLv=k=>(S.mst||{})[k]|0;
+const mstDone=m=>m.end&&m.end(mstLv(m.k));
+const mstReady=m=>!mstDone(m)&&m.v()>=m.g(mstLv(m.k));
+const mstRw=m=>{const l=mstLv(m.k),cp=cap();return[Math.round(incE()*(60+15*l)),40+20*l,{wood:Math.round(cp*.06),stone:Math.round(cp*.06),silver:Math.round(cp*.02)},null]};
+const sobRw=o=>{const cp=cap();return[Math.round(incE()*o.sec),o.sc,{silver:Math.round(cp*.06),gold:Math.round(cp*.03),diamond:Math.max(3,Math.round(cp*.01))},o.t||null]};
+const giveRaw=rw=>_give(rw);   /* already scaled: bypass the mission scaling above */
+window.mstClaim=function(k){const m=MST.find(q=>q.k==k);if(!m||!mstReady(m))return;const rw=mstRw(m);S.mst[k]=mstLv(k)+1;giveRaw(rw);S.st.missions=(S.st.missions||0)+1;sfx('mission');buzz();save();hud();toast('🏅 Milestone: '+m.n+' '+(mstLv(k))+' — '+_rwStr(rw));lastMis='';renderMis()};
+window.sobClaim=function(id){const o=SOB.find(q=>q.id==id);if(!o||S.sob[id]||o.v()<o.g())return;S.sob[id]=1;const rw=sobRw(o);giveRaw(rw);S.st.missions=(S.st.missions||0)+1;sfx('ach');chron(o.ic,'Strategic objective achieved: '+o.n);buzz();save();hud();toast('🌟 '+o.n+' — '+_rwStr(rw));lastMis='';renderMis()};
+function goalsReady(){if(!S||!S.mst)return 0;let n=0;for(const m of MST)if(mstReady(m))n++;for(const o of SOB)if(!S.sob[o.id]&&o.v()>=o.g())n++;return n}
+function goalsHtml(){let h=`<div class="mi"><div class="mh"><span>🏛️</span><b>Great Works</b><em>${gwTotal()} stages</em></div><div class="mu">Long projects that turn a rich treasury into permanent power.</div><button style="width:100%;margin-top:6px" onclick="closeMis();openSheet('gw')">Open Great Works</button></div>`;
+  h+=`<b style="display:block;margin:8px 4px 2px">🌟 Strategic objectives</b>`;
+  for(const o of SOB){const v=o.v(),g=o.g(),got=!!S.sob[o.id],rd=!got&&v>=g;h+=`<div class="mi ${rd?'ready':got?'claimed':''}"><div class="mh"><span>${o.ic}</span><b>${o.n}</b><em>${got?'Claimed':rd?'Ready!':'Active'}</em></div><div class="mu">${o.d}</div><div class="bar"><i style="width:${Math.min(100,v/g*100).toFixed(0)}%"></i></div><div class="mf"><span>${Math.min(v,g)}/${g}</span><span>🎁 ${_rwStr(sobRw(o))}</span></div>${rd?`<button style="width:100%;text-align:center;margin-top:6px" onclick="sobClaim('${o.id}')">Claim reward</button>`:''}</div>`}
+  h+=`<b style="display:block;margin:8px 4px 2px">🏅 Milestones <small class="mu">— they never run out, and rewards grow with your realm</small></b>`;
+  for(const m of MST){const l=mstLv(m.k),fin=mstDone(m),v=m.v(),g=fin?v:m.g(l),rd=mstReady(m);
+    h+=`<div class="mi ${rd?'ready':''}"><div class="mh"><span>${m.ic}</span><b>${m.n} ${['','I','II','III','IV','V','VI','VII','VIII','IX','X'][l+1]||(l+1)}</b><em>${fin?'Mastered':rd?'Ready!':'Level '+l}</em></div><div class="bar"><i style="width:${fin?100:Math.min(100,v/g*100).toFixed(0)}%"></i></div><div class="mf"><span>${m.lab}: ${fmt(Math.min(v,g))}/${fmt(g)}</span><span>${fin?'':'🎁 '+_rwStr(mstRw(m))}</span></div>${rd?`<button style="width:100%;text-align:center;margin-top:6px" onclick="mstClaim('${m.k}')">Claim reward</button>`:''}</div>`}
+  return h}
+const _renderMis6=renderMis;
+renderMis=function(){
+  if(misTab!='mile'){_renderMis6();const tb=document.querySelector('#mis .tabs');if(tb&&!tb.querySelector('[data-v6]')){const n=goalsReady(),b=document.createElement('button');b.dataset.v6='1';b.textContent='Goals'+(n?' ('+n+')':'');b.onclick=()=>setTab('mile');tb.appendChild(b)}
+    if(misTab=='side'){const l=$('mlist');if(l){l.innerHTML=l.innerHTML.replace('You have finished the side challenges for this game.','A new side challenge appears a few minutes after you finish one.');if(!l.querySelector('[data-swap]')&&S.side&&S.side.length){const b=document.createElement('button');b.dataset.swap=1;b.style.cssText='width:calc(100% - 24px);margin:4px 12px';b.textContent='🎲 Swap this challenge (free, every 5 min)';b.onclick=v6SwapSide;l.appendChild(b)}}}
+    return}
+  const tabs=[['act','Active'],['lock','Locked'],['done','Done'],['side','Side'],['mile','Goals']].map(([k,n])=>`<button class="${misTab==k?'on':''}" onclick="setTab('${k}')">${n}</button>`).join('');
+  const h=`<div class="mh" style="padding:10px"><b style="font-size:18px">🎯 Missions</b><span class="mu">⭐${S.score}${S.title?' · 🏷️'+S.title:''}</span><button onclick="closeMis()" style="margin-left:auto;text-align:center" aria-label="Close">✕</button></div><div class="tabs">${tabs}</div><div id="mlist">${goalsHtml()}</div>`;
+  if(h!==lastMis){const o=$('mlist'),sc=o&&!renderMis.tab?o.scrollTop:0;lastMis=h;renderMis.tab=0;$('mis').innerHTML=h;const n=$('mlist');if(n)n.scrollTop=sc}};
+const _misTick6=misTick;misTick=function(){_misTick6();try{if(goalsReady())$('mib').classList.add('dot')}catch(e){}};
+
+/* ---------- rival memory ----------
+   g = grudge toward you, f = fear of you, t = trust (tribute, pacts). All fade over a few minutes.
+   lost = tiles you took from them (they want them back); cool[k] = no attacks on kingdom k until then. */
+function mem(k){S.aim=S.aim||{};const m=S.aim[k]||(S.aim[k]={g:0,f:0,t:0,last:-1e9,lost:[],cool:{},war:{},fails:0,next:0,mode:'normal'});m.lost=m.lost||[];m.cool=m.cool||{};m.war=m.war||{};return m}
+window.v6Mem=mem;
+function attitude(m){const v=m.g-m.t*.8;return v>45?['Hostile','h']:v>18?['Wary','w']:m.t>25?['Friendly','f']:['Neutral','']}
+const _rs6=resolve;
+resolve=function(k,att,i,tac){const t=S.tiles[i],dk=t.o,b0=t.b,l0=t.l||0,r=_rs6(k,att,i,tac);
+  try{if(!S.on){
+    if(k==1&&dk>1){const m=mem(dk);m.g=Math.min(100,m.g+(r.win?14:7));m.last=S.time;if(r.win){m.lost.push(i);if(m.lost.length>12)m.lost.shift()}for(let j=2;j<6;j++)if(j!=dk)mem(j).f=Math.min(100,mem(j).f+(r.win?2:.5))}
+    if(k>1&&dk==1){const m=mem(k);if(r.win){m.f=Math.max(0,m.f-4);m.fails=0}else{m.f=Math.min(100,m.f+4);m.fails++;m.cool[1]=S.time+(m.fails>=2?240:90)}}
+    if(k>1&&dk>1){const m=mem(dk);m.war[k]=Math.min(100,(m.war[k]||0)+(r.win?15:8));if(!r.win){const a=mem(k);a.cool[dk]=S.time+120}}}
+    if(k==1&&dk>1&&r.win&&b0==1&&l0>=5)S.st.capt=(S.st.capt||0)+1;
+  }catch(e){console.error(e)}
+  return r};
+const _ss6=startSiege;startSiege=function(k,c,i){const dk=S.tiles[i]&&S.tiles[i].o;_ss6(k,c,i);try{if(!S.on&&k==1&&dk>1){const m=mem(dk);m.g=Math.min(100,m.g+5);m.last=S.time}}catch(e){}};
+
+/* ---------- diplomacy: costs follow the kingdom's size, and rivals remember ---------- */
+const DIPB={nonaggression:100,trade:150,tribute:60};
+const dipCost=(k,type)=>Math.round(DIPB[type]*Math.pow(VS(),.85)*(1+mem(k).g/60));
+window.clDiplomacyAction=function(k,type){if(!S||S.on)return toast('Diplomacy is available in offline games only.');
+  if(k<2||k>5||!S.tiles.some(t=>t.o===k))return toast('That rival no longer has a kingdom.');
+  const m=mem(k),cost=dipCost(k,type);
+  if(type=='nonaggression'&&m.g>70&&S.time-m.last<300)return toast(`${OWN[k].n} refuses: you attacked them ${Math.round(S.time-m.last)}s ago. Send tribute first.`);
+  if(S.coins<cost)return toast('You need 🪙'+fmt(cost)+' for this agreement.');
+  S.coins-=cost;S.clDiplomacy=S.clDiplomacy||{};S.clDiplomacy[k]={type,until:S.time+(type=='tribute'?240:180)};
+  if(type=='tribute'){m.g=Math.max(0,m.g-25);m.t=Math.min(100,m.t+10);chron('🕊️',`Sent tribute to ${OWN[k].n}; its attacks are discouraged for 4 minutes and its grudge eases.`)}
+  else if(type=='trade'){m.t=Math.min(100,m.t+8);chron('🤝',`Trade pact signed with ${OWN[k].n}; supplies arrive every 30 s for 3 minutes.`)}
+  else{m.t=Math.min(100,m.t+6);chron('🕊️',`Non-aggression pact signed with ${OWN[k].n} for 3 minutes.`)}
+  sfx('trade');save();hud();shK='';renderSheet();toast('Diplomatic agreement established')};
+const _vChron6=vChron;vChron=function(){const r=_vChron6();try{if(!S.on)for(let k=2;k<6;k++){if(!S.tiles.some(t=>t.o===k))continue;
+    r[1]=r[1].replace(`clDiplomacyAction(${k},'nonaggression')" style="min-height:38px">🕊️ Pact · 100🪙`,`clDiplomacyAction(${k},'nonaggression')" style="min-height:38px">🕊️ Pact · ${fmt(dipCost(k,'nonaggression'))}🪙`)
+      .replace(`clDiplomacyAction(${k},'trade')" style="min-height:38px">🤝 Trade · 150🪙`,`clDiplomacyAction(${k},'trade')" style="min-height:38px">🤝 Trade · ${fmt(dipCost(k,'trade'))}🪙`)
+      .replace(`clDiplomacyAction(${k},'tribute')" style="min-height:38px">🎁 Tribute · 60🪙`,`clDiplomacyAction(${k},'tribute')" style="min-height:38px">🎁 Tribute · ${fmt(dipCost(k,'tribute'))}🪙`)}}catch(e){}return r};
+
+/* ---------- rivals: personality, strategy and difficulty ----------
+   Difficulty changes how well rivals decide (target choice, counter-recruiting, timing, reserves),
+   and only mildly their income. The decision runs every 3 s and costs one pass over the map. */
+const QUAL=[.3,.5,.7,.85,1],INCB=[.9,1,1.08,1.16,1.25];
+const STY={
+ conqueror:{army:[.35,.3,.2,.15],tgt:20,per:1.1,share:.6,thr:.5,send:.75,cd:22,b:{city:4,up:2,5:1,6:4,11:1,fort:1.5,mine:1.5}},
+ merchant:{army:[.5,.4,.1,0],tgt:12,per:.6,share:.3,thr:.66,send:.55,cd:60,b:{city:6,up:3,5:4,6:.5,11:1,fort:1,mine:3}},
+ warden:{army:[.6,.35,0,.05],tgt:16,per:.9,share:.45,thr:.62,send:.5,cd:45,b:{city:4,up:2.5,5:1,6:1,11:3,fort:4,mine:1.5}},
+ opportunist:{army:[.3,.25,.45,0],tgt:14,per:.8,share:.45,thr:.55,send:.7,cd:25,b:{city:5,up:2,5:2,6:2,11:1,fort:1,mine:2}},
+ scholar:{army:[.45,.45,.1,0],tgt:12,per:.7,share:.35,thr:.62,send:.55,cd:50,b:{city:5,up:3,5:2,6:1,11:2,fort:2,mine:2}}};
+const UK=['inf','arc','cav','sie'];
+const quickPow=c=>{let v=0;for(const u of UK)v+=(c[u]||0)*(UN[u].atk*.6+UN[u].def*.6);return v};
+let COAL=false;
+function aiUnit(sty,q){const P=tally();let top='inf',tm=-1;for(const u of UK)if((P[u]||0)>tm){tm=P[u]||0;top=u}
+  if(tm>3&&Math.random()<q*.6)return{inf:'arc',arc:'cav',cav:'inf',sie:'cav'}[top];
+  let r=Math.random(),w=sty.army;for(let j=0;j<4;j++){r-=w[j];if(r<=0)return UK[j]}return'inf'}
+function aiBuild(k,list,a,sty,q){const m=DF().cost*.6,n=list.length,ts=list.map(i=>S.tiles[i]),opt=[];let want=null;
+  const free=f=>list.filter(i=>{const t=S.tiles[i];return!t.b&&t.t!='w'&&f(t)}),pick=x=>x[rnd(0,x.length)|0];
+  const add=(c,fn,w)=>{c=Math.round(c*m);if(a.c>=c)opt.push([c,fn,w]);else if(!want||w>want[2])want=[c,fn,w]};
+  const lvCap=4+n/6+q*3,cities=ts.filter(t=>t.b==1);
+  ts.forEach(t=>{const l=lv(t);if(t.b&&t.b<4&&l<MAXL[t.b]&&l<lvCap)add(UPC[t.b](t,l).coins,()=>{t.l=l+1},t.b==1?sty.b.city:t.b==3?sty.b.fort:sty.b.up);
+    else if(t.b>=5&&BLD[t.b]&&l<Math.min(BLD[t.b].max,3+n/15))add(bup(t.b,l).coins,()=>{t.l=l+1},sty.b[t.b]||1)});
+  const g=free(t=>t.t=='g');
+  if(g.length){if(cities.length<6&&n>=12*cities.length+6){const i=pick(g);add(120*Math.pow(1.5,cities.length),()=>{const t=S.tiles[i];t.b=1;t.l=1},sty.b.city+2)}
+    for(const b of [5,6,11])if(ts.filter(t=>t.b==b).length<Math.min(BLD[b].lim,1+n/12|0)){const i=pick(g);add(BLD[b].cost.coins,()=>{const t=S.tiles[i];t.b=b;t.l=1;t.q=1},sty.b[b])}
+    if(ts.filter(t=>t.b==3).length<1+n/(sty===STY.warden?9:14)){const i=pick(g);add(FC.coins,()=>{const t=S.tiles[i];t.b=3;t.l=1},sty.b.fort)}}
+  const rs=free(t=>t.t!='g'&&MR[t.t]);if(rs.length&&ts.filter(t=>t.b==2).length<1+n/9){const i=pick(rs);add(30*MM[S.tiles[i].t],()=>{const t=S.tiles[i];t.b=2;t.l=1},sty.b.mine)}
+  /* a smart rival saves for the project it wants most instead of spending on the first affordable thing */
+  if(want&&opt.length&&Math.random()<q*.5&&want[2]>Math.max(...opt.map(o=>o[2])))return;
+  if(!opt.length)return;let r=Math.random()*opt.reduce((s,o)=>s+o[2],0),p=opt[0];for(const o of opt){if((r-=o[2])<0){p=o;break}}a.c-=p[0];p[1]()}
+function tileValue(t){return(t.b==1?3+t.l*.6:t.b==2?2+(MM[t.t]||1)*.6:t.b==5||t.b==7||t.b==9||t.b==12?3:t.b==3?1.5:t.b?1.5:0)+('SGD'.includes(t.t)?1.5:0)+.3}
+aiTick=function(){if(!S||S.on)return;ens();try{window.clAIStyle&&clAIStyle(2)}catch(e){}
+  const d=DF(),di=S.diff==null?1:S.diff,q=QUAL[di]||.5,own={2:[],3:[],4:[],5:[]},border={2:new Map(),3:new Map(),4:new Map(),5:new Map()},inc={2:0,3:0,4:0,5:0};let pl=0,tot=0;
+  for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i],o=t.o;if(!o)continue;tot++;if(o==1){pl++;continue}if(o<2||o>5)continue;own[o].push(i);
+    if(t.b==1)inc[o]+=fx.inc(Math.min(t.l||1,25));else if(t.b==5)inc[o]+=.9*Math.pow(lv(t),.85);else if(t.b==2&&MR[t.t])inc[o]+=RATE[MR[t.t]]*fx.mine(lv(t))*BASE[MR[t.t]]*.4;
+    const x=i%N,y=(i/N)|0;for(const [p,qq] of D4){if(!ok(x+p,y+qq))continue;const j=(y+qq)*N+x+p,u=S.tiles[j].o;if(u&&u!=o){let mp=border[o].get(u);if(!mp)border[o].set(u,mp=[]);if(mp.length<40)mp.push(j)}}}
+  const alive=[2,3,4,5].filter(k=>own[k].length),coal=alive.length>=2&&tot>0&&pl/tot>.4;
+  if(coal!==COAL){COAL=coal;if(coal){chron('⚔️','The rival kingdoms have joined a coalition against you');toast('⚔️ Your rivals have formed a coalition against you!')}else chron('🕊️','The coalition against you has broken up')}
+  const pPow=quickPow(tally());
+  for(const k of alive){const list=own[k],a=S.ai[k]||(S.ai[k]={c:0,inf:0,arc:0,cav:0,sie:0});if(!(a.c>=0))a.c=0;const m=mem(k),st=(window.clAIStyle&&clAIStyle(k))||'conqueror',sty=STY[st]||STY.conqueror;
+    m.g*=.993;m.f*=.995;m.t*=.998;for(const j in m.war)m.war[j]*=.99;
+    /* income: from its real buildings, plus "ambition" when you outgrow the island (bounded, more on higher difficulty) */
+    const base=inc[k]+.05*list.length+.4,amb=clamp(Math.pow((incE()+1)/(base+1),.35),1,1+.4*(di+1));
+    a.inc=base*INCB[di]*amb;a.c+=a.inc*3*fxm('inc');
+    const myPow=quickPow(a),bP=border[k].get(1)||[],threatened=bP.length>0&&pPow>myPow*1.3&&(m.g>20||m.last>S.time-200);
+    m.mode=threatened?'defend':coal&&bP.length?'coalition':m.g>45&&bP.length?'revenge':'normal';
+    const race=bP.length?sum(tally())*(.35+.45*q)*(st=='merchant'?.7:1):0;
+    const target=Math.round(Math.max(sty.tgt+list.length*sty.per,race)*(m.mode=='defend'?1.35:1)*(.85+.3*q));
+    /* spending: army first when below target and threatened, otherwise by temperament */
+    if(sum(a)<target&&(m.mode!='normal'||Math.random()<sty.share)){const u=aiUnit(sty,q),v=uval(u)*(1-.15*q);if(a.c>=v){a.c-=v;a[u]=(a[u]||0)+1}}
+    else if(Math.random()<.75)aiBuild(k,list,a,sty,q);
+    /* expansion into free land (wardens and merchants grow slower but steadier) */
+    /* rivals pay for land like you do (a little cheaper), so expansion competes with armies and buildings */
+    const lc=(12+list.length*1.2)*d.cost*.6;
+    if(list.length<220&&a.c>=lc&&Math.random()<.5*d.ex*(st=='conqueror'?1.2:st=='opportunist'?1.1:.8)){const i=list[rnd(0,list.length)|0],x=i%N,y=(i/N)|0,o=D4.map(([p,qq])=>[x+p,y+qq]).filter(([p,qq])=>ok(p,qq)&&!T(p,qq).o&&(T(p,qq).t!='w'||T(p,qq).r));if(o.length){const [p,qq]=o[rnd(0,o.length)|0];T(p,qq).o=k;a.c-=lc}}
+    /* war decision */
+    if(S.time<m.next||sum(a)<3)continue;
+    const cands=[];for(const [j,tl] of border[k]){if(j<1||j>5||(m.cool[j]||0)>S.time)continue;
+      if(j==1){const p=S.clDiplomacy&&S.clDiplomacy[k];if(p&&p.until>S.time&&(p.type=='nonaggression'||p.type=='tribute'))continue;
+        if(S.time<(300-120*q)/Math.sqrt(d.ai))continue}   /* a short grace period at the start of a new kingdom */
+      if(j>1&&coal&&!(m.war[j]>30))continue;
+      const jp=j==1?pPow:quickPow(S.ai[j]||{}),weak=myPow/(myPow+jp+1);
+      let hos=j==1?(m.g/50+(coal?1:0)-m.t/60-m.f/120):((m.war[j]||0)/40);
+      if(st=='conqueror')hos+=.6;else if(st=='opportunist')hos+=weak*1.4;else if(st=='merchant')hos+=-.3;else if(st=='warden')hos+=(j==1&&m.lost.length?.8:-.4);
+      if(j==1&&m.mode=='defend')hos-=1;
+      const val=tl.slice(0,12).reduce((s,i)=>s+tileValue(S.tiles[i]),0)/Math.min(12,tl.length);
+      cands.push({j,tl,sc:hos+weak*1.2+val*.15+Math.random()*(1.2-q)})}
+    if(!cands.length){m.next=S.time+sty.cd;continue}
+    cands.sort((x,y)=>y.sc-x.sc);const c=Math.random()<q?cands[0]:cands[rnd(0,cands.length)|0];
+    if(c.sc<.15&&Math.random()<q){m.next=S.time+sty.cd*.6;continue}
+    /* pick the tile: value, weakness, and land they lost to you (they want it back) */
+    const tiles=c.tl.length>24?c.tl.slice().sort(()=>Math.random()-.5).slice(0,24):c.tl;let best=null,bs=-1e9;
+    for(const i of tiles){const t=S.tiles[i],x=i%N,y=(i/N)|0,dv=def(x,y),retake=m.lost.includes(i)?2.5:0,offline=t.off>S.time?1.5:0;
+      const sc=tileValue(t)*(st=='merchant'?1.5:1)+retake+(st=='opportunist'?offline*2:offline)-dv*(st=='conqueror'?.012:.02)+Math.random()*(1.5-q);
+      if(sc>bs){bs=sc;best=i}}
+    if(best==null||S.sieges.some(g=>g.idx==best)){m.next=S.time+10;continue}
+    const x=best%N,y=(best/N)|0,t=T(x,y),fort=t.b==1||t.b==3||t.w,comp={},send=sty.send*(m.mode=='defend'?.7:1);for(const u of UK)comp[u]=Math.floor((a[u]||0)*send);
+    if(sum(comp)<2){m.next=S.time+sty.cd;continue}
+    const dc=compOf(c.j,best),A=strength(comp,dc,true,x,y,'frontal')*1.2,D=strength(dc,comp,false,x,y,'')+fortV(x,y)*(window.guardX?guardX(c.j):1),p=winP(A,D);
+    const thr=sty.thr-(m.mode=='revenge'||m.mode=='coalition'?.07:0)+(Math.random()-.5)*(1-q)*.5;
+    if(p<thr){m.next=S.time+sty.cd*.5;continue}
+    const tac=fort&&comp.sie?'siege':p>.8?'frontal':'cautious';for(const u of UK)a[u]-=comp[u];
+    m.next=S.time+sty.cd*(1+m.fails*.5)/Math.sqrt(d.ai);
+    if(tac=='siege')startSiege(k,comp,best);else resolve(k,comp,best,tac)}};
+/* the old target picker is kept for online/AI-less paths; offline attacks now come only from the planner above */
+const _aiAtk6=aiAttack;aiAttack=function(k,mine,d){if(S&&S.on)return _aiAtk6(k,mine,d)};
+
+/* ---------- War room: how each rival sees you ---------- */
+const _vWar6=vWar;vWar=function(){const r=_vWar6();if(S.on)return r;let h=`<div class="mi"><b>🧠 Rival kingdoms</b><div class="mu">Each rival has a temperament and remembers what you did. Attacking one makes it hostile; tribute and pacts calm it down. ${COAL?'<b class="bad">They are united in a coalition against you because you hold over 40% of the land.</b>':'If you hold over 40% of the land, the rivals unite against you.'}</div>`;
+  for(let k=2;k<6;k++){if(!S.tiles.some(t=>t.o===k))continue;const m=mem(k),at=attitude(m),st=(window.clAIStyle&&clAIStyle(k))||'?',a=S.ai[k]||{},mode={defend:'fortifying its borders',coalition:'in the coalition against you',revenge:'planning revenge on you',normal:'growing its realm'}[m.mode||'normal'];
+    h+=`<div class="mf"><span><b style="color:${OWN[k].c}">${OWN[k].n}</b> · ${st[0].toUpperCase()+st.slice(1)}<br><small class="mu">${mode} · army about ${Math.round(sum(a)/5)*5||sum(a)} · income ${(a.inc||0).toFixed(1)}/s</small></span><span class="v6-pill ${at[1]}">${at[0]}</span></div>`}
+  r[1]+=h+'</div>';return r};
+
+/* ---------- the game tick: smoothed income, trade-pact deliveries, online siege pause ---------- */
+let tk=0;const _tick6=tick;
+tick=function(){_tick6();if(!S)return;tk++;
+  if(tk%10==0){ens();S.incE=(S.incE||0)+(Math.max(0,S.inc||0)-(S.incE||0))*.02;
+    if(!S.on&&tk%300==0)for(const [k,p] of Object.entries(S.clDiplomacy||{}))if(p.type=='trade'&&p.until>S.time){const n=Math.round(6*RVS());gainR('wood',n);gainR('stone',n);S.coins+=Math.round(4*VS())}}
+  /* fairness online: a siege against a player who is offline waits for them (up to 10 minutes in total) */
+  if(S.on&&window.ONL&&S.sieges)for(const g of S.sieges){if(g.k!=1)continue;const dk=S.tiles[g.idx]&&S.tiles[g.idx].o;if(dk>1&&ONL.off&&ONL.off[MPX.L(dk)]&&(g.pz||0)<600){g.t0+=.1;g.pz=(g.pz||0)+.1}}};
+const _vArmy6=vArmy;vArmy=function(){const r=_vArmy6();if(S.on&&window.ONL&&S.sieges.some(g=>g.k==1&&ONL.off&&ONL.off[MPX.L((S.tiles[g.idx]||{}).o||0)]&&(g.pz||0)<600))r[1]=`<div class="mi"><div class="mu">⏸️ A siege of yours is paused because the defender is offline. It resumes when they return (or after 10 minutes at most). Nobody loses a battle just because their connection dropped.</div></div>`+r[1];return r};
+
+/* ---------- reliable battle messages online ----------
+   Hits and sieges get an id, wait in an outbox until the server confirms them, and are re-sent after a reconnect.
+   The server ignores an id it has already seen, so nothing is ever applied twice. */
+const OBK='cl-obx';const OBX={l:[],n:0,sess:Math.random().toString(36).slice(2,8)};
+try{OBX.l=JSON.parse(localStorage.getItem(OBK)||'[]').filter(x=>x&&x.o&&Date.now()-x.at<36e5)}catch(e){OBX.l=[]}
+const obxPut=()=>{try{localStorage.setItem(OBK,JSON.stringify(OBX.l.slice(-60)))}catch(e){}};
+window.obxSend=o=>{o.mid=OBX.sess+'.'+(++OBX.n);const code=window.ONL&&ONL.code;const acks=!!(MPX.caps()||{}).ack;
+  if(MPX.open()){MPX.send(o);if(!acks)return}OBX.l.push({o,at:Date.now(),room:code});obxPut();try{saveSoon()}catch(e){}};
+window.obxAck=mid=>{const n=OBX.l.length;OBX.l=OBX.l.filter(x=>x.o.mid!==mid);if(OBX.l.length!==n)obxPut()};
+window.obxFlush=()=>{if(!MPX.open()||!window.ONL)return;const acks=!!(MPX.caps()||{}).ack;OBX.l=OBX.l.filter(x=>Date.now()-x.at<36e5);
+  for(const x of OBX.l)if(x.room===ONL.code)MPX.send(x.o);if(!acks)OBX.l=OBX.l.filter(x=>x.room!==ONL.code);obxPut()};
+/* save to the server right after a battle, so a crash cannot undo losses or repeat a conquest */
+let svT=0;function saveSoon(){if(!S||!S.on)return;clearTimeout(svT);svT=setTimeout(()=>{try{MPX.upSave()}catch(e){}},800)}
+const _rs6b=resolve;resolve=function(k,att,i,tac){const r=_rs6b(k,att,i,tac);if(S&&S.on&&(k==1||S.tiles[i].o==1))saveSoon();return r};
+const _ln6=launch;launch=function(tac){_ln6(tac);saveSoon()};
+const _rt6b=retreat;retreat=function(j){_rt6b(j);saveSoon()};
+/* connection status on the island badge */
+setInterval(()=>{if(!S||!S.on)return;const b=$('mpb');if(!b)return;if(!MPX.open()){if(!b.dataset.off){b.dataset.off=1;b.textContent='🌐 Reconnecting… your realm is safe'}}else if(b.dataset.off){delete b.dataset.off;try{MPX.badge()}catch(e){}}},1000);
+
+/* ---------- tutorial never blocks the game ----------
+   While a full screen (sheet, market, missions, overview, research) is open the guide card steps aside;
+   while a tile panel is open at the bottom, the card moves to the top so "Claim land" etc. stay reachable. */
+setInterval(()=>{const c=$('cl-tut2'),ring=$('cl-tut-ring');if(!c)return;const vis=id=>{const e=$(id);return!!e&&e.style.display!='none'&&getComputedStyle(e).display!='none'&&e.offsetHeight>0};
+  const full=vis('sh')||vis('market')||vis('mis')||vis('cl-overview')||vis('dev-screen')||vis('achievement-screen')||vis('dm');
+  c.classList.toggle('v6hide',full);if(ring)ring.classList.toggle('v6hide',full);
+  const top=!full&&vis('panel');c.classList.toggle('v6top',top);if(top){const h=$('hud');c.style.top=((h?h.getBoundingClientRect().bottom:110)+8)+'px'}else c.style.top=''},250);
+/* ---------- interface: land counter opens the Kingdom Overview; menu entries ---------- */
+const _hud6=hud;hud=function(){_hud6();const ld=document.querySelector('#hud .land:not(.rkc)');if(ld){ld.onclick=()=>{try{closeSheet()}catch(e){}openKingdomOverview()};ld.setAttribute('aria-label','Kingdom overview')}};
+/* the overview lists what rivals are up to and the next goals */
+const _ov6=window.openKingdomOverview;window.openKingdomOverview=function(){_ov6();try{const box=document.querySelector('#cl-overview .ovbody');if(!box||S.on)return;let th='';
+  for(let k=2;k<6;k++){if(!S.tiles.some(t=>t.o===k))continue;const m=mem(k);if(m.mode=='revenge'||m.mode=='coalition')th+=`<div class="ovthreat"><span>🐺</span><div>${OWN[k].n} is ${m.mode=='revenge'?'planning revenge for your attacks':'part of the coalition against you'}.</div></div>`}
+  const n=goalsReady();const g=`<div class="ovcard wide"><h4>🏛️ Long-term goals</h4><div class="ovr"><span>Great Work stages</span><b>${gwTotal()}</b></div><div class="ovr"><span>Milestones & objectives ready</span><b>${n}</b></div><div class="ovfoot" style="padding:6px 0 0;border:0;background:none"><button onclick="closeKingdomOverview();openSheet('gw')">🏛️ Great Works</button><button onclick="closeKingdomOverview();openMis();setTab('mile')">🏅 Goals</button></div></div>`;
+  if(th){const cards=[...box.querySelectorAll('.ovcard.wide')];if(cards[0])cards[0].insertAdjacentHTML('beforeend',th)}box.insertAdjacentHTML('beforeend',g)}catch(e){console.error(e)}};
 })();
 </script>
 </body></html>
