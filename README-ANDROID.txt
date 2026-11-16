@@ -12,3 +12,5 @@ server address is typed in the app (Online screen) - the install page shows it w
 6. Put crownlands.apk into the  public  folder of the game server. The "Download Android app" button now appears
    on the install page. On the phone: tap it, open the file, allow "install unknown apps" when asked.
 To update the app after changing the game: replace android-build\www\index.html, upload again, run the workflow again.
+
+Testowy wpis.
