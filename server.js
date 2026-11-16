@@ -16,9 +16,59 @@ const SHIELD_ONLINE = 8 * 60e3, SHIELD_OFFLINE = 25 * 60e3, SHIELD_BIG = 3;
 const START = [null, [28, 43], [12, 15], [44, 15], [45, 33], [12, 34]];   // must match the client's start positions
 fs.mkdirSync(DATA, { recursive: true });
 
+/* ---------- data safety: validation, atomic writes, backups, recovery ---------- */
+const zlib = require('zlib'), fsp = fs.promises;
+const BK = path.join(DATA, 'backups'), SCHEMA = 1;
+const log = (l, m) => (l === 'error' || l === 'warn' ? console.error : console.log)(`[${new Date().toISOString()}] [${l}] ${m}`);
+const okAcc = s => { try { const o = JSON.parse(s); return !!(o && o.users && typeof o.users === 'object' && o.keys && typeof o.keys === 'object'); } catch (e) { return false; } };
+const okRooms = s => { try { const o = JSON.parse(s); return Array.isArray(o) && o.every(r => r && typeof r.code === 'string' && Array.isArray(r.tiles) && Array.isArray(r.pl)); } catch (e) { return false; } };
+const KINDS = { accounts: { file: DBF, ok: okAcc }, rooms: { file: RF, ok: okRooms } };
+fs.mkdirSync(BK, { recursive: true });
+const wq = {}; const enqueue = (k, fn) => (wq[k] = (wq[k] || Promise.resolve()).then(fn).catch(e => log('error', 'write queue: ' + e.message)));
+async function atomicWrite(kind, str) { const { file, ok } = KINDS[kind];
+  if (!ok(str)) { log('error', `refusing to save invalid ${kind} data (previous file kept)`); return false; }
+  try { await fsp.writeFile(file + '.tmp', str);
+    try { const cur = await fsp.readFile(file, 'utf8'); if (cur !== str && ok(cur)) await fsp.copyFile(file, file + '.prev'); } catch (e) {}
+    await fsp.rename(file + '.tmp', file); return true; }
+  catch (e) { log('error', `save failed for ${kind}: ${e.message}`); return false; } }
+const writeData = (kind, str) => enqueue(kind, () => atomicWrite(kind, str));
+const lastBk = {};
+const bkMeta = (kind, str) => { try { const o = JSON.parse(str); return kind === 'accounts' ? { users: Object.keys(o.users).length } : { rooms: o.length, codes: o.map(r => r.code), players: o.reduce((a, r) => a + r.pl.length, 0) }; } catch (e) { return {}; } };
+async function backup(kind, str, why) {
+  if (!KINDS[kind].ok(str)) return log('error', `backup of ${kind} skipped: data invalid`);
+  const h = crypto.createHash('sha1').update(str).digest('hex'); if (why === 'scheduled' && lastBk[kind] === h) return;
+  try { const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const z = zlib.gzipSync(JSON.stringify({ schema: SCHEMA, kind, at: Date.now(), why, ...bkMeta(kind, str), data: str }));
+    const f = path.join(BK, `${kind}-${stamp}.json.gz`); await fsp.writeFile(f + '.tmp', z); await fsp.rename(f + '.tmp', f);
+    lastBk[kind] = h; log('info', `backup ${kind} ok (${why}, ${z.length} bytes)`);
+    const names = (await fsp.readdir(BK)).filter(n => n.startsWith(kind + '-') && n.endsWith('.json.gz')).sort().reverse(), keep = new Set(names.slice(0, 12)), days = new Set();
+    for (const n of names) { const d = n.slice(kind.length + 1, kind.length + 11); if (!days.has(d) && days.size < 21) { days.add(d); keep.add(n); } }
+    for (const n of names) if (!keep.has(n)) await fsp.unlink(path.join(BK, n)).catch(() => {});
+    remote.push(kind + '.bk' + (Math.floor(Date.now() / 36e5) % 3), str); // rolling copies outside the app disk (when the Upstash mirror is enabled)
+  } catch (e) { log('error', `backup ${kind} failed: ${e.message}`); } }
+async function recoverData() {
+  log('info', 'data directory: ' + DATA + (remote.enabled ? ' | remote mirror: ON (Upstash)' : ' | remote mirror: OFF'));
+  if (!remote.enabled) log('warn', 'No UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN set. Data survives deployments only if DATA_DIR points to a persistent disk. Without one, a Render deploy wipes accounts and islands.');
+  for (const kind of Object.keys(KINDS)) { const { file, ok } = KINDS[kind];
+    let cur = null; try { cur = fs.readFileSync(file, 'utf8'); } catch (e) {}
+    if (cur && ok(cur)) continue;
+    if (cur) { const d = `${file}.corrupt-${Date.now()}`; try { fs.writeFileSync(d, cur); log('error', `${kind}: file is damaged, copy kept as ${path.basename(d)}`); } catch (e) {} }
+    const c = [];
+    if (remote.enabled) { try { c.push(['remote mirror', await remote.pull(kind)]); } catch (e) { log('error', 'remote pull failed: ' + e.message); } }
+    try { c.push(['previous save', fs.readFileSync(file + '.prev', 'utf8')]); } catch (e) {}
+    try { for (const n of fs.readdirSync(BK).filter(n => n.startsWith(kind + '-') && n.endsWith('.json.gz')).sort().reverse()) { try { c.push(['backup ' + n, JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(BK, n))).toString()).data]); } catch (e) {} } } catch (e) {}
+    if (remote.enabled) for (let i = 0; i < 3; i++) { try { c.push(['remote backup ' + i, await remote.pull(kind + '.bk' + i)]); } catch (e) {} }
+    const hit = c.find(x => x[1] && ok(x[1]));
+    if (hit) { fs.writeFileSync(file, hit[1]); log('warn', `${kind}: RECOVERED from ${hit[0]}`); }
+    else log(cur ? 'error' : 'info', cur ? `${kind}: no valid copy found; damaged file preserved, starting empty` : `${kind}: no data yet (new server)`); } }
+process.on('uncaughtException', e => log('error', 'uncaught: ' + (e && e.stack || e)));
+process.on('unhandledRejection', e => log('error', 'unhandled rejection: ' + (e && e.stack || e)));
+(async () => { await recoverData();
+
 let db = { users: {}, keys: {} };
 try { db = JSON.parse(fs.readFileSync(DBF, 'utf8')); } catch (e) {}
-const saveDb = () => { const j = JSON.stringify(db); fs.writeFile(DBF, j, () => {}); remote.push('accounts', j); };
+if (!db.v) db.v = SCHEMA;   // explicit data version; unknown fields are always preserved
+const saveDb = () => { const j = JSON.stringify(db); if (!okAcc(j)) return log('error', 'account data invalid, not saved'); writeData('accounts', j); remote.push('accounts', j); };
 
 /* ---------- rooms (persisted) ---------- */
 const rooms = new Map();
@@ -34,12 +84,10 @@ try {
   }
 } catch (e) {}
 let dirty = 0;
-const persist = () => { if (dirty) return; dirty = setTimeout(() => { dirty = 0;
-  const out = [...rooms.values()].map(r => ({ code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield,
+const snapshotRooms = () => [...rooms.values()].map(r => ({ code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield,
     tiles: [...r.tiles], mkt: r.mkt, chat: (r.chat || []).slice(-80), cid: r.cid || 0,
     pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc, fx: p.fx })) }));
-  const j = JSON.stringify(out); remote.push('rooms', j);
-  fs.writeFile(RF + '.tmp', j, e => { if (!e) fs.rename(RF + '.tmp', RF, () => {}); }); }, 3000); };
+const persist = () => { if (dirty) return; dirty = setTimeout(() => { dirty = 0; const j = JSON.stringify(snapshotRooms()); if (!okRooms(j)) return log('error', 'room snapshot invalid, not saved'); remote.push('rooms', j); writeData('rooms', j); }, 3000); };
 
 /* ---------- http ---------- */
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml',
@@ -106,7 +154,7 @@ function attach(ws) { // connect a signed-in user to the island they used most r
   for (const r of rooms.values()) { const p = r.pl.find(q => q.u === ws.u); if (p && (!best || (p.last || 0) > (bp.last || 0))) { best = r; bp = p; } }
   if (!best) return;
   if (bp.ws && bp.ws !== ws) try { bp.ws.close(); } catch (e) {}
-  bp.ws = ws; ws.room = best; bp.last = Date.now();
+  bp.ws = ws; ws.room = best; bp.last = Date.now(); log('info', `player reconnected: room ${best.code} slot ${bp.s}`);
   send(ws, roomMsg(best, bp, true)); bp.pend = []; touch(best); bc(best);
 }
 function leave(ws) {
@@ -245,8 +293,18 @@ function handle(ws, m) {
 wss.on('connection', ws => {
   ws.alive = true; ws.on('pong', () => ws.alive = true);
   ws.on('message', raw => { let m; try { m = JSON.parse(raw); } catch (e) { return; } if (m && typeof m === 'object') try { handle(ws, m); } catch (e) { console.error(e); } });
-  ws.on('close', () => { const r = ws.room; if (!r) return; const p = r.pl.find(q => q.ws === ws); if (p) { p.ws = null; bc(r); } });
+  ws.on('close', () => { const r = ws.room; if (!r) return; const p = r.pl.find(q => q.ws === ws); if (p) { p.ws = null; bc(r); log('info', `player disconnected (no penalty, island kept): room ${r.code} slot ${p.s}`); } });
 });
 setInterval(() => wss.clients.forEach(ws => { if (!ws.alive) return ws.terminate(); ws.alive = false; ws.ping(); }), 30000);
 setInterval(() => { const n = Date.now(); for (const [c, r] of rooms) if (n - r.at > (r.started ? 30 * DAY : 2 * 36e5) && !r.pl.some(p => p.ws)) rooms.delete(c); persist(); }, 6e5);
 srv.listen(PORT, () => console.log('Crownlands server on http://localhost:' + PORT + '  (data: ' + DATA + ')'));
+
+// Backups: at start-up, every 15 minutes when something changed, and on shutdown.
+const runBackups = why => { backup('accounts', JSON.stringify(db), why); backup('rooms', JSON.stringify(snapshotRooms()), why); };
+setTimeout(() => runBackups('boot'), 8000); setInterval(() => runBackups('scheduled'), 15 * 6e4);
+let closing = false;
+async function shutdown(sig) { if (closing) return; closing = true; log('info', sig + ': saving everything before exit');
+  try { const a = JSON.stringify(db), r = JSON.stringify(snapshotRooms()); await writeData('accounts', a); await writeData('rooms', r); remote.push('accounts', a); remote.push('rooms', r); await backup('accounts', a, 'shutdown'); await backup('rooms', r, 'shutdown'); await remote.flushAll(); log('info', 'shutdown save complete'); } catch (e) { log('error', 'shutdown save failed: ' + e.message); }
+  process.exit(0); }
+process.on('SIGTERM', () => shutdown('SIGTERM')); process.on('SIGINT', () => shutdown('SIGINT'));
+})().catch(e => { console.error('FATAL start-up error', e); process.exit(1); });
