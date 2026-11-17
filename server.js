@@ -1,5 +1,5 @@
 // Crownlands multiplayer server v4 (v3 + seasons, world events and exactly-once reward claims).  npm install && npm start   (Node 18+)
-// - accounts (scrypt), invite-key islands (max 5), tile/combat relay
+// - accounts (scrypt), invite-key islands (max 7, joinable after the start), tile/combat relay
 // - islands are saved to disk and (optionally) mirrored to Upstash Redis, so realms survive restarts,
 //   redeploys and crashes; attacks against offline players are queued and delivered when they return
 // - automatic, verified, compressed backups with retention; admin API to list, create and restore them
@@ -22,11 +22,13 @@ const PORT = process.env.PORT || 8080, DATA = process.env.DATA_DIR || __dirname;
 const DBF = path.join(DATA, 'accounts.json'), RF = path.join(DATA, 'rooms.json');
 const BK = path.join(DATA, 'backups'), ARCH = path.join(DATA, 'archive');
 const ROOTS = [path.join(__dirname, 'www'), path.join(__dirname, 'public')];
-const NCOL = 128, MAXP = 5, NT = 56 * 56 + NCOL * NCOL, DAY = 864e5, UNITS = ['inf', 'arc', 'cav', 'sie'];
+const NCOL = 128, MAXP = 7, NT = 56 * 56 + NCOL * NCOL, DAY = 864e5, UNITS = ['inf', 'arc', 'cav', 'sie'];
 // Conquest shield: after a realm loses land to another player, nobody may conquer from it for a while.
 // Longer when the victim is offline (they cannot defend) and x3 when a city or stronghold fell.
 const SHIELD_ONLINE = 8 * 60e3, SHIELD_OFFLINE = 25 * 60e3, SHIELD_BIG = 3;
-const START = [null, [28, 43], [12, 15], [44, 15], [45, 33], [12, 34]];   // must match the client's start positions
+const START = [null, [28, 43], [12, 15], [44, 15], [45, 33], [12, 34]];   // must match the client's start positions (slots 1-5)
+// Slots 6-7, and anyone who joins after the start, have no fixed start: their game picks a spot on the real terrain
+// (free land first, then claimed land with the fewest buildings) and sends it as a 'spawn' message; it is kept as p.sp.
 const SCHEMA = 3, SCORE_MAX = 1500;
 /*@@CORE7@@*/
 /* ===== CORE7: shared by the server and the game. Pure functions, no DOM, no Node APIs.
@@ -273,7 +275,7 @@ const saveDb = () => { const j = JSON.stringify(db); if (!okAcc(j)) return log('
 /* ---------- rooms (persisted) ---------- */
 const rooms = new Map();
 function seed(r) { // every player's starting land belongs to them from the start, so it is protected too
-  for (const p of r.pl) { const [sx, sy] = START[p.s];
+  for (const p of r.pl) { const st = p.sp || (!p.late && START[p.s]); if (!st) continue; const [sx, sy] = st;
     for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) if (x * x + y * y <= 9) {
       const i = (sy + y) * 56 + sx + x; if (!r.tiles.has(i)) r.tiles.set(i, [p.s, x === 0 && y === 0 ? 1 : 0, 1, 0]); } }
 }
@@ -284,7 +286,7 @@ catch (e) { if (e.code !== 'ENOENT') log('error', 'rooms load failed: ' + e.mess
 let dirty = 0;
 const snapRoom = r => ({ v: Math.max(r.v || 0, SCHEMA), code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield || {},
     tiles: [...r.tiles], mkt: r.mkt, chat: (r.chat || []).slice(-80), cid: r.cid || 0,
-    pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last || 0, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc || null, fx: p.fx, mids: (p.mids || []).slice(-300) })) });
+    pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last || 0, sp: p.sp || null, late: p.late ? 1 : 0, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc || null, fx: p.fx, mids: (p.mids || []).slice(-300) })) });
 const snapshotRooms = () => [...rooms.values()].map(snapRoom);
 function persistNow() { const list = snapshotRooms(), j = JSON.stringify(list); if (!okRooms(j)) return log('error', 'room snapshot invalid, not saved');
   remote.pushRooms(list); remote.push('rooms', j); return writeData('rooms', j); }
@@ -550,13 +552,28 @@ function handle(ws, m) {
       const x = rooms.get(String(m.code || '').toUpperCase().trim());
       if (!x) return send(ws, { t: 'err', m: 'No island with that key' });
       if (!x.pl.some(p => p.u === ws.u)) {
-        if (x.started) return send(ws, { t: 'err', m: 'That game has already started' });
-        if (x.pl.length >= MAXP) return send(ws, { t: 'err', m: 'Island is full (5/5)' });
-        leave(ws); const s = [1, 2, 3, 4, 5].find(n => !x.pl.some(p => p.s === n)); x.pl.push({ s, u: ws.u, ws, last: Date.now(), mids: [] });
+        if (x.pl.length >= MAXP) return send(ws, { t: 'err', m: `Island is full (${MAXP}/${MAXP})` });
+        leave(ws); const s = [1, 2, 3, 4, 5, 6, 7].find(n => !x.pl.some(p => p.s === n));
+        x.pl.push({ s, u: ws.u, ws, last: Date.now(), mids: [], late: x.started ? 1 : 0 });   // joining a started island: land comes from 'spawn'
+        if (x.started) { log('info', `player joined a started island: ${x.code} slot ${s}`); x.pl.forEach(p => { if (p.u !== ws.u) send(p.ws, { t: 'joined', s, n: dname(ws.u) }); }); }
       } else x.pl.find(p => p.u === ws.u).last = Date.now();
       touch(x); return attach(ws);
     }
-    case 'start': if (r && !r.started && r.host === ws.u && r.pl.length >= 2) { r.started = true; seed(r); touch(r); bc(r); log('info', `island started: ${r.code} (${r.pl.length} players)`); } else if (r && r.host === ws.u) send(ws, { t: 'err', m: 'Need at least 2 players' }); return;
+    case 'start': if (r && !r.started && r.host === ws.u && r.pl.length >= 2) { r.started = true; seed(r); touch(r); r.pl.forEach(p => send(p.ws, roomMsg(r, p, true))); log('info', `island started: ${r.code} (${r.pl.length} players)`); } else if (r && r.host === ws.u) send(ws, { t: 'err', m: 'Need at least 2 players' }); return;
+    case 'spawn': { // a realm with no land on the home island gets a starting circle (radius 3) where its game chose
+      if (!r || !r.started || !me || !num(m.c, 0, 3135) || !Array.isArray(m.d)) return bad(ws, 'spawn');
+      const now = Date.now(); if (me.spAt && now - me.spAt < 3000) return; me.spAt = now;
+      for (const [i, v] of r.tiles) if (i < 3136 && v[0] === me.s) return send(ws, { t: 'spawnok', had: 1 });   // already has land
+      const cx = m.c % 56, cy = (m.c / 56) | 0, held = i => { const c = r.tiles.get(i); return c && c[0] && c[0] !== me.s && c[1]; };
+      if (cx < 3 || cy < 3 || cx > 52 || cy > 52 || held(m.c)) return send(ws, { t: 'spawnno' });
+      const set = new Set([m.c]);
+      for (const i of m.d.slice(0, 40)) { if (!num(i, 0, 3135)) continue; const x = i % 56, y = (i / 56) | 0; if ((x - cx) ** 2 + (y - cy) ** 2 <= 9) set.add(i); }
+      const ok = [];
+      for (const i of set) { if (held(i)) continue;            // other players' buildings are never taken
+        const v = [me.s, i === m.c ? 1 : 0, 1, 0]; r.tiles.set(i, v); ok.push([i, ...v]); }
+      me.sp = [cx, cy]; me.late = 0; log('info', `spawned: room ${r.code} slot ${me.s} at ${cx},${cy} (${ok.length} tiles)`);
+      r.pl.forEach(p => send(p.ws, { t: 'tiles', d: ok, sp: me.s })); send(ws, { t: 'spawnok' }); touch(r); bc(r); return;
+    }
     case 'leave': return leave(ws);
     case 'trade': { // a trade at the island's shared market; filled along the price curve like the offline market
       if (!r || !r.started || !me) return; if (!r.mkt) r.mkt = mkNew(); const m0 = r.mkt, res = String(m.r), n = Math.floor(+m.n);
@@ -621,7 +638,7 @@ function handle(ws, m) {
         if (!po && cq) { po = Math.floor((cq - 1) / 20); pb = (cq - 1) % 20; }
         if (po && po !== me.s) {                               // this is a conquest
           if (!cq) { badT.push([i, ...cur]); continue; }        // lost a race: resync the sender
-          if (po >= 1 && po <= 5 && (r.shield[po] || 0) > now) { badT.push([i, ...(cur || [po, pb, 1, 0])]); blocked = po; continue; }
+          if (po >= 1 && po <= MAXP && (r.shield[po] || 0) > now) { badT.push([i, ...(cur || [po, pb, 1, 0])]); blocked = po; continue; }
           conq.set(po, Math.max(conq.get(po) || 0, pb === 1 || pb === 3 ? SHIELD_BIG : 1));
         } else if (!po && i < 3136 && !cq) { claims.push([i, o, b, l, w]); continue; }   // a neutral claim on the home island: must touch the realm
         r.tiles.set(i, [o, b, l, w || 0]); ok.push([i, o, b, l, w || 0]);
@@ -646,7 +663,7 @@ function handle(ws, m) {
       me.tal = me.tal && !('inf' in me.tal) ? me.tal : {}; me.tal[rr] = u; others(r, ws, { t: 'tally', from: me.s, r: rr, u }); persist();
     } return;
     case 'hit': case 'siege': { // relay to the target; queue it if they are offline. Each id is applied once.
-      if (!r || !r.started || !me || !num(m.to, 1, 5) || !num(m.i, 0, NT - 1)) return bad(ws, m.t);
+      if (!r || !r.started || !me || !num(m.to, 1, MAXP) || !num(m.i, 0, NT - 1)) return bad(ws, m.t);
       if (m.mid != null) { if (seen(me, m.mid)) return send(ws, { t: 'ack', mid: m.mid }); send(ws, { t: 'ack', mid: m.mid }); }
       const to = r.pl.find(p => p.s === m.to); if (!to || to === me) return;
       const ld = {}; if (m.ld) for (const k of UNITS) ld[k] = Math.max(0, Math.min(999, Math.floor(+m.ld[k] || 0)));

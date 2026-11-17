@@ -74,11 +74,12 @@ Search for these anchors:
 | `shared market` | `mkNew`, `mkStep`. |
 | `function auth(` | Login/resume (scrypt, session keys). |
 | `w7Handle` | World-event messages `we`, `wec`, `wecl`, `scl`. |
-| `function handle(` | Main switch on `m.t`: `create join start leave trade score gscore lb fx chat save tiles tally hit siege`. |
+| `function handle(` | Main switch on `m.t`: `create join start leave spawn trade score gscore lb fx chat save tiles tally hit siege`. |
 
 **Client and server must agree** on these:
 
-- `START` spawn points
+- `START` spawn points for slots 1–5 (slots 6–7 and late joiners send a `spawn` message instead; kept as `p.sp`)
+- up to 7 players per island (`MAXP`); local owner ids 1–7 map to global slots with `L(s)`
 - shared-market pacing (server `mkStep` mirrors the offline market)
 - tile index layout (`56*56` home + `128*128` shared)
 - tile message `[i, owner, b, l, w, conquest]`, with `l ≤ 40`

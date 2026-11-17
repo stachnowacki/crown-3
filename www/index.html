@@ -390,7 +390,7 @@ function newGame(d){
     t.e=v;const r=rg(x,y,8,50)*.75+rg(x,y,4,70)*.25;
     if(v>.38&&r>.88){t.e=r;const q=Math.random();t.t=r>.95?(q<.15?'D':q<.5?'G':'S'):r>.92?(q<.15?'G':q<.5?'S':'m'):(q<.12?'S':'m')}
     else if(v>.3&&f(x,y,10,200)*.8+f(x,y,3,300)*.2>.56)t.t='f'});
-  const ST0=[0,[28,43],[12,15],[44,15],[45,33],[12,34]],st=ST0.map((_,k)=>k&&window.ONL?ST0[k==window.ONL.slot?1:k==1?window.ONL.slot:k]:ST0[k]);
+  const ST0=[0,[28,43],[12,15],[44,15],[45,33],[12,34]],st=ST0.map((_,k)=>k&&window.ONL?ST0[k==window.ONL.slot?1:k==1?window.ONL.slot:k]||ST0[k]:ST0[k]);
   for(let k=1;k<6;k++){const [sx,sy]=st[k];for(let y=-3;y<=3;y++)for(let x=-3;x<=3;x++)if(x*x+y*y<=9){const t=g[(sy+y)*N+sx+x];t.o=k;if(t.t=='w'){t.t='g';t.e=.5}}for(let y=-2;y<=2;y++)for(let x=-2;x<=2;x++)if(x*x+y*y<=4){const t=g[(sy+y)*N+sx+x];t.t='g';t.e=.5}const c=g[sy*N+sx];c.t='g';c.b=1;c.l=(k==1||window.ONL)?1:3}
   [[31,43,'f'],[25,43,'m'],[28,46,'f'],[26,41,'S']].forEach(([x,y,t])=>{const c=g[y*N+x];c.t=t;c.e=t=='f'?.6:.92});
   const dd=DIFFS[d];
@@ -1544,16 +1544,20 @@ function onMsg(e){let m;try{m=JSON.parse(e.data)}catch(x){return}
   else if(m.t=='ack'){try{window.obxAck&&obxAck(m.mid)}catch(x){}}
   else if(m.t=='kicked'){MP.room=null;toast('🔒 '+(m.m||'Your realm was opened on another device.')+' Reload to play here again.')}
   else if(m.t=='room'){MP.room=m;
-    if(m.started){if(!window.ONL)startOn(m);else{m.pl.forEach(p=>{ONL.names[p.s]=p.n;ONL.off[p.s]=!p.on});if(m.init){syncOut();applyInit(m.init)}}badge();if(m.init){try{window.obxFlush&&obxFlush()}catch(x){}}}
+    if(m.started){if(!window.ONL)startOn(m);else{ONL.act=m.pl.map(p=>p.s);m.pl.forEach(p=>{ONL.names[p.s]=p.n;ONL.off[p.s]=!p.on;const k=L(p.s);if(k!=1&&S){OWN[k].n=p.n;if(S.ai&&!S.ai[k])S.ai[k]={c:0,inf:0,arc:0,cav:0,sie:0}}});if(m.init){syncOut();applyInit(m.init)}}badge();if(m.init){try{window.obxFlush&&obxFlush()}catch(x){}}}
     else{MP.v='lobby';MP.open=1}
     try{window.srvRoom&&window.srvRoom(m)}catch(e){console.error(e)}
     ui()}
   else if(!S||!S.on)return;
-  else if(m.t=='snap'||m.t=='tiles')applyTiles(m.d);
+  else if(m.t=='snap'||m.t=='tiles'){if(m.sp&&m.sp!=ONL.slot&&S.realm!='c'){const lost=m.d.filter(([i,o])=>i<ONL.CO&&S.tiles[i]&&S.tiles[i].o==1&&o!=ONL.slot).length;applyTiles.q=1;try{applyTiles(m.d)}finally{applyTiles.q=0}
+    if(lost){const nm=ONL.names[m.sp]||'A new realm';toast(`🏝️ ${nm} landed on the island and took ${lost} unbuilt tile${lost>1?'s':''} of yours`);chron('🏝️',`${nm} landed and took ${lost} unbuilt tile${lost>1?'s':''}`)}}else applyTiles(m.d)}
   else if(m.t=='mkt'||m.t=='tr'||m.t=='chat'||m.t=='lb'){try{window.srvMsg&&window.srvMsg(m)}catch(e){console.error(e)}}
   else if(m.t=='tally')setTallyIn(m.from,m.r=='c'?'c':'h',m.u)
   else if(m.t=='shield'){SHD[m.s]=m.until;const mins=Math.max(1,Math.ceil((m.until-Date.now())/6e4)),k=L(m.s);
     if(m.s==ONL.slot){toast(`🛡 Your realm is shielded for ${mins} min`);chron('🛡️',`Your realm is shielded for ${mins} min`)}else toast(`🛡 ${OWN[k].n} is shielded for ${mins} min`)}
+  else if(m.t=='joined'){toast('🏝️ '+m.n+' joined the island!');chron('🏝️',m.n+' joined the island')}
+  else if(m.t=='spawnok'){ONL.spAt=0;if(!m.had){toast('🏰 Your realm has landed on the island!');setTimeout(()=>{try{home()}catch(e){}},300)}}
+  else if(m.t=='spawnno'){ONL.spAt=Date.now()-3000}
   else if(m.t=='hit')onHit(m);
   else if(m.t=='siege')onSiege(m)}
 function onSiege(m){const x=m.i%N,y=(m.i/N)|0;sfx('warn');toast(`⚠️ ${OWN[L(m.from)].n} besieges (${x},${y}) — 25s to prepare`);chron('🏰',`${OWN[L(m.from)].n} began a siege at (${x},${y})`)}
@@ -1566,7 +1570,7 @@ function startOn(m){
   if(I.save){const keep={tiles:S.tiles,cam:S.cam,ai:S.ai,on:S.on};Object.assign(S,I.save,keep);S.sel=null;try{onlRestore(I.save,keep)}catch(e){console.error(e)}ensureM();
     const off=Math.min(7200,(Date.now()-(I.save.ts||Date.now()))/1000),g=off>60?Math.floor((S.inc||0)*off*.5):0;
     if(g>0){S.coins+=g;setTimeout(()=>toast(`Welcome back! Your realm earned 🪙${compactAmount(g)} while you were away`),900)}}
-  applyInit(I);MP.open=0;closeM();S.sel=null;last='';render();hud();badge();
+  applyInit(I);MP.open=0;closeM();S.sel=null;last='';render();hud();badge();setTimeout(()=>{try{needSpawn()}catch(e){}},600);
   toast(`Island ${m.code} — ${m.pl.length} players. Good luck!`)}
 const _ng=newGame;
 newGame=function(d){
@@ -1575,10 +1579,25 @@ newGame=function(d){
   Math.random=()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
   try{_ng(d)}finally{Math.random=R}
   S.on={code:ONL.code,slot:ONL.slot};S.ai=S.ai||{};
-  for(let k=2;k<6;k++){S.ai[k]={c:0,inf:0,arc:0,cav:0,sie:0};const g=L(k);
-    if(!ONL.act.includes(g)){S.tiles.forEach(t=>{if(t.o==k){t.o=0;t.b=0;t.l=0}});if(!S.st.def.includes(k))S.st.def.push(k)}
-    else OWN[k].n=ONL.names[g]||OWN[k].n}
+  for(let k=2;k<=7;k++){S.ai[k]={c:0,inf:0,arc:0,cav:0,sie:0};const g=L(k);
+    if(ONL.act.includes(g))OWN[k].n=ONL.names[g]||OWN[k].n;else if(k<6&&!S.st.def.includes(k))S.st.def.push(k)}
+  S.tiles.forEach(t=>{if(t.o){t.o=0;t.b=0;t.l=0;delete t.w}});   // every realm's land comes from the server snapshot (applyInit)
   LAST=S.tiles.map(sig);home()};
+function pickSpawn(){const n=56,g=S.tiles,cl=t=>t.t!='w'||t.r,cities=[];g.forEach((t,i)=>{if(t.o>1&&(t.b==1||t.b==3))cities.push(i)});
+  const salt=(ONL.slot*7919)%97;let best=null;
+  for(let y=4;y<n-4;y++)for(let x=4;x<n-4;x++){const ci=y*n+x,c=g[ci];if(!cl(c)||c.t=='w'||(c.o>1&&c.b))continue;
+    const d=[];let cost=c.t=='g'?0:6;
+    for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){if(dx*dx+dy*dy>9)continue;const i=(y+dy)*n+x+dx,t=g[i];if(!cl(t))continue;
+      if(t.o>1&&t.b){cost+=30+(t.b==1?120:t.b==3?60:0);continue}   // a building stays with its owner: avoid it
+      if(t.o>1)cost+=5;d.push(i)}
+    if(d.length<16)continue;cost+=(29-d.length)*3;
+    let near=99;for(const j of cities){const q=Math.abs(j%n-x)+Math.abs(((j/n)|0)-y);if(q<near)near=q}if(near<7)cost+=(7-near)*10;
+    cost+=((x*31+y*17+salt)%13)*.01;                               // two new players never pick the very same spot
+    if(!best||cost<best.cost)best={c:ci,d,cost}}
+  return best}
+function needSpawn(){if(!S||!S.on||!window.ONL||S.realm=='c'||!S.tiles||S.tiles.length!=56*56)return;if(S.tiles.some(t=>t.o==1))return;
+  if(ONL.spAt&&Date.now()-ONL.spAt<5000)return;const p=pickSpawn();if(!p)return;ONL.spAt=Date.now();wsend({t:'spawn',c:p.c,d:p.d})}
+setInterval(()=>{try{needSpawn()}catch(e){}},2500);
 function applyInit(I){try{window.srvInit&&window.srvInit(I)}catch(e){console.error(e)}Object.assign(SHD,I.shield||{});applyTiles(I.snap||[]);for(const s in I.tal||{}){const v=I.tal[s];if(v&&'inf' in v)setTallyIn(+s,'h',v);else for(const r in v||{})setTallyIn(+s,r,v[r])}(I.pend||[]).forEach(h=>h.t=='hit'?onHit(h):onSiege(h))}
 function upSave(){if(!S||!S.on||!MP.ws||MP.ws.readyState!=1)return;const d={};for(const k in S)if(!['tiles','cam','sel','ai','on','rl'].includes(k))d[k]=S[k];if(S.rl){d.rl={};for(const k in S.rl){const r=Object.assign({},S.rl[k]);delete r.tiles;d.rl[k]=r}}d.ts=Date.now();wsend({t:'save',d})}
 setInterval(upSave,15000);addEventListener('pagehide',upSave);
@@ -1605,7 +1624,7 @@ function applyTiles(d){for(const [i,o,b,l,w] of d){const r=i>=ONL.CO?'c':'h',ix=
   const t=R.tiles[ix];if(!t)continue;const was=t.o,lo=o?L(o):0,cur=R===S,n=R.n||(r=='c'?NL_CN:56);
   t.o=lo;t.b=b;t.l=l;if(w)t.w=w;else delete t.w;if(b>=5&&!t.q)t.q=1;if(cur){LAST[ix]=sig(t);BA[ix]=performance.now()}
   if(was==1&&lo!=1){delete R.gar[ix];S.st.lost++;S.st.hold=0;if(cur&&S.sel&&S.sel[1]*N+S.sel[0]==ix)S.sel=null;
-    const x=ix%n,y=(ix/n)|0;toast(`${OWN[lo].n} captured (${x},${y})!`);chron('🚩',`${OWN[lo].n} captured (${x},${y})`)}}
+    const x=ix%n,y=(ix/n)|0;if(!applyTiles.q)toast(`${OWN[lo].n} captured (${x},${y})!`),chron('🚩',`${OWN[lo].n} captured (${x},${y})`)}}
   last='';render();hud()}
 function setTallyIn(slot,r,u){const k=L(slot),R=(r=='c')===(S.realm=='c')?S:(S.rl&&S.rl[r=='c'?'c':'h']);if(R&&R.ai)R.ai[k]=Object.assign(R.ai[k]||{c:0},u)}
 function onHit(m){const x=m.i%N,y=(m.i/N)|0,g=S.gar[m.i];let n=0;
@@ -1662,16 +1681,17 @@ const B=(l,f,x)=>`<button ${x||''} onclick="${f}">${l}</button>`;
 function ui(){const d=$('dm');if(!MP.open){d.style.display='none';return}
   const er=MP.err?`<div class="bad">${E(MP.err)}</div>`:'';let h;
   if(MP.v=='mode')h=`<b style="font-size:22px">Crownlands</b><div class="mu">Choose how to play.</div>`
+    +(S&&S.on&&MP.room&&MP.room.started?`<b>Island key</b><div class="code">${E(MP.room.code)}</div><div class="mu" style="text-align:center">${MP.room.pl.length}/7 players · friends can join with this key at any time</div>`+B('📤 Invite friends<small>Share the key and the install link</small>',"mp.share()")+MP.room.pl.map(p=>`<div class="pl"><i style="background:${OWN[MPX.L(p.s)]?OWN[MPX.L(p.s)].c:'#ccc'}"></i><b>${E(p.n)}</b>${p.s==MP.room.slot?' (you)':''}<span class="mu" style="margin-left:auto">${p.on?'online':'offline'}</span></div>`).join(''):'')
     +B('🤖 Play offline<small>Solo against AI kingdoms that build, upgrade and fight each other</small>',"mp.off()")
-    +B('🌐 Play online<small>Account + invite key · up to 5 players per island</small>',"mp.on()")+B('📤 Share the game<small>Send friends the install link</small>',"mp.share()")
+    +B('🌐 Play online<small>Account + invite key · up to 7 players per island</small>',"mp.on()")+B('📤 Share the game<small>Send friends the install link</small>',"mp.share()")
     +(S&&S.on?B('🚪 Leave online game<small>Return to your offline realm</small>',"location.reload()"):'')
     +B('Close',"mp.close()");
   else if(MP.v=='auth')h=`<b style="font-size:22px">Online account</b>${er}<input id="mu" placeholder="Username" maxlength="16" autocomplete="username" autocapitalize="off"><input id="mpw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><input id="msv" value="${E(MP.url)}" aria-label="Server address"><div class="mu">Server address (wss:// or ws://)</div>`
     +B('Log in',"mp.auth('login')")+B('Create account',"mp.auth('reg')")+B('Back',"mp.back()");
   else if(MP.v=='home')h=`<b style="font-size:22px">Hello, ${E(MP.name)}</b>${er}${MP.st?`<div class="mu" style="font-size:12px">${MP.st.durable?'🛡️ This server stores realms permanently and keeps automatic backups.':'⚠️ This server has no permanent storage configured: realms may be lost when it restarts. Ask the server owner to set it up.'}</div>`:''}<div class="mu">Host a new island:</div><select id="mdf">${DIFFS.map((x,i)=>`<option value="${i}"${i==1?' selected':''}>${x.n}</option>`).join('')}</select>`
-    +B('🏝️ Create island<small>You get an invite key to share</small>',"mp.create()")+`<div class="mu">…or join friends with their key:</div><input id="mcd" placeholder="KEY" maxlength="6" autocapitalize="characters" style="text-transform:uppercase;letter-spacing:4px;text-align:center">`
+    +B('🏝️ Create island<small>You get an invite key to share</small>',"mp.create()")+`<div class="mu">…or join friends with their key (even after their game has started):</div><input id="mcd" placeholder="KEY" maxlength="6" autocapitalize="characters" style="text-transform:uppercase;letter-spacing:4px;text-align:center">`
     +B('🔑 Join island',"mp.join()")+B('Sign out',"mp.out()")+B('Back',"mp.back()");
-  else if(MP.v=='lobby'&&MP.room){const R=MP.room;h=`<b>Island key</b><div class="code">${R.code}</div><div class="mu" style="text-align:center">Share it — ${R.pl.length}/5 players</div>${er}`
+  else if(MP.v=='lobby'&&MP.room){const R=MP.room;h=`<b>Island key</b><div class="code">${R.code}</div><div class="mu" style="text-align:center">Share it — ${R.pl.length}/7 players · friends can also join later</div>${er}`
     +B('📤 Share key + install link',"mp.share()")+R.pl.map(p=>`<div class="pl"><i style="background:${OWN[p.s].c}"></i><b>${E(p.n)}</b>${p.s==R.slot?' (you)':''}${p.n==R.host?' 👑':''}<span class="mu" style="margin-left:auto">${p.on?'online':'offline'}</span></div>`).join('')
     +(R.isHost?B(`⚔️ Start game<small>${R.pl.length<2?'Needs at least 2 players':'Everyone starts on the same island'}</small>`,"mp.start()",R.pl.length<2?'disabled':''):'<div class="mu">Waiting for the host to start…</div>')+B('Leave island',"mp.leave()")}
   else h=`<b>Connecting…</b>`+B('Back',"mp.back()");
@@ -1705,7 +1725,7 @@ if(!EVT._x){EVT._x=1;
     const ov=(NEW[e.id]||[])[j];o.d=ov||d}))}
 
 const _vm=vMenu;
-vMenu=function(){const r=_vm();r[1]=mb('📤','Share the game','Send friends the install link'+(MP.room?' + island key':''),"mp.share()")+mb('🌐',S&&S.on?'Online island':'Online play',S&&S.on?'Island key, players, leave':'Account, invite key, up to 5 players',"mp.menu()")+r[1];return r};
+vMenu=function(){const r=_vm();r[1]=mb('📤','Share the game','Send friends the install link'+(MP.room?' + island key':''),"mp.share()")+mb('🌐',S&&S.on?'Online island':'Online play',S&&S.on?'Island key, players, leave':'Account, invite key, up to 7 players',"mp.menu()")+r[1];return r};
 window.MPX={send:o=>wsend(o),open:()=>!!(MP.ws&&MP.ws.readyState==1),srv:()=>({url:MP.url,key:MP.key}),L:s=>L(s),sig:t=>sig(t),syncOut:()=>syncOut(),setLast:a=>{LAST=a},upSave:()=>upSave(),st:()=>MP.st||null,caps:()=>MP.caps||{},room:()=>MP.room,badge:()=>badge()};
 window.mp={
   menu(){MP.open=1;MP.err='';MP.v=MP.room&&!MP.room.started?'lobby':'mode';ui()},
