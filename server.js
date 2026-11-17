@@ -1,4 +1,4 @@
-// Crownlands multiplayer server v3.  npm install && npm start   (Node 18+)
+// Crownlands multiplayer server v4 (v3 + seasons, world events and exactly-once reward claims).  npm install && npm start   (Node 18+)
 // - accounts (scrypt), invite-key islands (max 5), tile/combat relay
 // - islands are saved to disk and (optionally) mirrored to Upstash Redis, so realms survive restarts,
 //   redeploys and crashes; attacks against offline players are queued and delivered when they return
@@ -28,6 +28,102 @@ const NCOL = 128, MAXP = 5, NT = 56 * 56 + NCOL * NCOL, DAY = 864e5, UNITS = ['i
 const SHIELD_ONLINE = 8 * 60e3, SHIELD_OFFLINE = 25 * 60e3, SHIELD_BIG = 3;
 const START = [null, [28, 43], [12, 15], [44, 15], [45, 33], [12, 34]];   // must match the client's start positions
 const SCHEMA = 3, SCORE_MAX = 1500;
+/*@@CORE7@@*/
+/* ===== CORE7: shared by the server and the game. Pure functions, no DOM, no Node APIs.
+   The server runs this to decide the world; the offline game runs the same code locally. ===== */
+const CORE7=(()=>{
+const DAY=864e5,T0=Date.UTC(2026,0,1),EP=14*DAY;
+const h32=s=>{s=String(s);let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0};
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ---------- seasons: calendar months (UTC). Add a theme to THEMES, or an entry to OVERRIDE keyed by season index, to change what a season is. ---------- */
+const THEMES=[
+ {k:'conquest',n:'The Age of Conquest',ic:'⚔️',col:'#ff6b5a',w:{eco:.7,mil:1.6,exp:1,dev:.7,spec:1},intro:'Banners rise along every border. This season rewards those who march, besiege and hold what they win.',desc:'Military and conquest',em:'Laurel of Conquest',ti:'Season Victor'},
+ {k:'trade',n:'The Golden Trade Era',ic:'💰',col:'#ffd34a',w:{eco:1.7,mil:.6,exp:.9,dev:.9,spec:1},intro:'Caravans fill the roads and prices sing. This season rewards merchants, builders of markets and the well-stocked.',desc:'Trade and prosperity',em:'Golden Scale',ti:'Merchant of the Era'},
+ {k:'winter',n:'Winter of the North',ic:'❄️',col:'#8fe0ff',w:{eco:1,mil:.9,exp:.6,dev:1.5,spec:1},intro:'The north wind closes the passes. This season rewards kingdoms that prepare, research and build solid foundations.',desc:'Endurance and development',em:'Frost Crest',ti:'Warden of Winter'},
+ {k:'expansion',n:'The Great Expansion',ic:'🗺️',col:'#7bd88f',w:{eco:.8,mil:.9,exp:1.8,dev:.8,spec:1},intro:'New horizons open for every ruler. This season rewards those who claim, settle and discover.',desc:'Territory and settlement',em:'Pathfinder Wreath',ti:'Pathfinder'},
+ {k:'discovery',n:'The Age of Discovery',ic:'🧭',col:'#61d1d9',w:{eco:.9,mil:.7,exp:1.3,dev:1.2,spec:1.4},intro:'Ruins, relics and rumours draw explorers out. This season rewards curiosity, research and the world events that shape the realm.',desc:'Exploration and events',em:'Compass Rose',ti:'Discoverer'},
+ {k:'dragon',n:"The Dragon's Awakening",ic:'🐉',col:'#b58cff',w:{eco:.8,mil:1.4,exp:.8,dev:1.1,spec:1.3},intro:'Something ancient stirs in the mountains. This season rewards strong armies, strong walls and steady nerves.',desc:'Defence and strength',em:'Dragon Scale',ti:'Dragonwatch'},
+ {k:'renaissance',n:'The Imperial Renaissance',ic:'🏛️',col:'#f2bd54',w:{eco:1.1,mil:.7,exp:.9,dev:1.7,spec:1},intro:'Scholars, masons and artists flourish. This season rewards research, great works and well-built cities.',desc:'Learning and great works',em:'Imperial Seal',ti:'Renaissance Patron'}];
+const OVERRIDE={};   // e.g. OVERRIDE[11]={n:'A special winter',...} replaces the theme of season index 11
+function seasonFor(now){const d=new Date(Math.max(now,T0));let idx=(d.getUTCFullYear()-2026)*12+d.getUTCMonth();if(idx<0)idx=0;
+ const th=OVERRIDE[idx]||THEMES[idx%THEMES.length],start=Date.UTC(2026,idx,1),end=Date.UTC(2026,idx+1,1);
+ return Object.assign({idx,id:'s'+idx,start,end,len:end-start,left:Math.max(0,end-now)},th)}
+function seasonAt(idx){const th=OVERRIDE[idx]||THEMES[idx%THEMES.length];return Object.assign({idx,id:'s'+idx,start:Date.UTC(2026,idx,1),end:Date.UTC(2026,idx+1,1)},th)}
+/* the season track: points needed -> reward id. Server and game both use the ids. */
+const TRACK=[{id:'m1',p:20,k:'small'},{id:'m2',p:50,k:'small',g:3},{id:'m3',p:90,k:'cos'},{id:'m4',p:130,k:'med',g:5},{id:'m5',p:170,k:'rare'},{id:'m6',p:210,k:'med',g:6},{id:'fin',p:250,k:'final',g:15},{id:'b1',p:300,k:'bonus',g:10},{id:'b2',p:340,k:'bonus',g:10}];
+
+/* ---------- major world events: one every 14 days, known in advance from the calendar ---------- */
+const WE={
+ invasion:{n:'The Great Invasion',ic:'⚔️',col:'#ff5a5a',days:6,
+  intro:'A vast host has crossed the edge of the known world and is marching on the border kingdoms. No single realm can turn it back. Hold the line together.',
+  st:[{n:'Muster the defences',ic:'🛡️',kind:'supply',gp:50,t:'Send supplies to the border forts.'},{n:'Meet the host',ic:'⚔️',kind:'act',key:'won',per:4,gp:48,t:'Win battles against any enemy.'},{n:'Hold the passes',ic:'🧱',kind:'supply',gp:56,t:'Reinforce the mountain passes.'}],
+  out:{win:'The host broke against the combined defences and fled the world. Every kingdom that stood is honoured.',partial:'The host retreated after heavy losses, leaving scars on the borderlands.',fail:'The invaders overran several frontier regions before winter halted them.'},
+  mod:{win:{n:'Victory feast',ic:'🎉',inc:1.08,days:2},partial:{n:'Scarred borders',ic:'🩹',def:1.05,days:2},fail:{n:'Occupied frontier',ic:'🏴',prod:.95,days:2}},
+  rw:[{s:25,r:.04,sp:10},{s:70,r:.08,g:4,sp:20},{s:140,r:.14,g:10,sp:35,ti:'defender'}]},
+ trade:{n:'The Golden Trade Era',ic:'💰',col:'#ffd34a',days:7,
+  intro:'A grand charter opens the trade roads across the world. Merchants will pay well for those who produce, trade and invest. The most successful will be remembered.',
+  st:[{n:'Open the roads',ic:'🐪',kind:'act',key:'trades',per:.6,gp:54,t:'Make trades at the market.'},{n:'Fill the caravans',ic:'📦',kind:'supply',gp:52,t:'Send goods to the caravans.'},{n:'Build the trade houses',ic:'🏦',kind:'supply',gp:58,t:'Invest coins in trade infrastructure.'}],
+  out:{win:'The roads are open. A lasting trade route now serves every kingdom.',partial:'The charter was signed, but only some of the roads opened.',fail:'The merchants moved on before the roads were ready.'},
+  mod:{win:{n:'Golden trade route',ic:'🐪',inc:1.06,spr:.99,days:3},partial:{n:'Trade charter',ic:'📜',inc:1.03,days:2},fail:null},
+  rw:[{s:30,r:.04,sp:10},{s:80,r:.09,g:4,sp:20},{s:160,r:.15,g:10,sp:35,ti:'merchant'}]},
+ drought:{n:'The Great Drought',ic:'☀️',col:'#f0a040',days:7,
+  intro:'Rivers fall and fields crack across many regions. Prepare, trade for supplies and help your neighbours. Those who share their stores will not be forgotten.',
+  st:[{n:'Dig the wells',ic:'⛏️',kind:'supply',gp:50,t:'Contribute materials for wells and cisterns.'},{n:'Buy and move grain',ic:'🌾',kind:'act',key:'trades',per:.6,gp:50,t:'Trade to bring food and goods to the dry regions.'},{n:'Share the stores',ic:'🤝',kind:'supply',gp:56,t:'Donate to the neighbouring kingdoms in need.'}],
+  out:{win:'Rain returned to a world that had shared its stores. A bumper harvest follows.',partial:'The worst was averted, though the recovery will be slow.',fail:'The drought ran its course. The recovery will take time.'},
+  mod:{win:{n:'Bumper harvest',ic:'🌾',prod:1.08,days:2},partial:{n:'Slow recovery',ic:'🌦️',prod:1.02,days:2},fail:{n:'Lingering dry spell',ic:'☀️',prod:.95,days:2}},
+  rw:[{s:25,r:.05,sp:10},{s:70,r:.1,g:4,sp:20},{s:140,r:.16,g:10,sp:35,ti:'steward'}]},
+ empire:{n:'The Lost Empire',ic:'🏺',col:'#d7a6ff',days:7,
+  intro:'Surveyors report the ruins of an ancient empire beneath the sands. Fund the expeditions and uncover what it left behind. Each expedition may bring home something different.',
+  st:[{n:'Fund the expeditions',ic:'🧭',kind:'supply',gp:52,t:'Contribute supplies to the expeditions.'},{n:'Decipher the archive',ic:'📜',kind:'act',key:'techs',per:8,gp:44,t:'Complete research in the development tree.'},{n:'Open the vault',ic:'🗝️',kind:'supply',gp:58,t:'Pay for the final excavation.'}],
+  out:{win:'The vault was opened. The empire\'s lost works now enrich every kingdom that helped.',partial:'Part of the archive was recovered before the sands shifted.',fail:'The sands buried the dig. Only a few relics were saved.'},
+  mod:{win:{n:'Ancient knowledge',ic:'📚',inc:1.04,days:3},partial:{n:'Recovered scrolls',ic:'📜',inc:1.02,days:2},fail:null},
+  rw:[{s:25,r:.05,sp:10},{s:75,r:.1,g:5,sp:20},{s:150,r:.16,g:12,sp:35,ti:'discoverer'}],relics:true},
+ succession:{n:'The Succession War',ic:'👑',col:'#9d6cff',days:6,fac:['House Valmar','House Orrin'],
+  intro:'The neighbouring throne is empty and two claimants raise banners. Back a side, trade with the factions, or keep to your own counsel. The world will live with the result.',
+  st:[{n:'Raise the banners',ic:'🚩',kind:'supply',gp:50,t:'Send supplies to your chosen claimant.'},{n:'March to the claimant',ic:'⚔️',kind:'act',key:'won',per:4,gp:46,t:'Win battles in support of the war.'},{n:'Crown the victor',ic:'👑',kind:'supply',gp:56,t:'Fund the coronation and the peace.'}],
+  out:{win:'The war ended with a single crown and a settled peace across the border.',partial:'A fragile truce holds, with the crown still contested.',fail:'The realm splintered. The border remains unsettled.'},
+  mod:{win:{n:'Settled borders',ic:'🕊️',def:1.05,inc:1.03,days:3},partial:{n:'Fragile truce',ic:'🕯️',def:1.03,days:2},fail:{n:'Unsettled border',ic:'🔥',def:.97,days:2}},
+  rw:[{s:25,r:.05,sp:10},{s:75,r:.1,g:4,sp:20},{s:150,r:.16,g:10,sp:35,ti:'kingmaker'}],fw:{0:{n:'House Valmar crowned',inc:1.03},1:{n:'House Orrin crowned',def:1.04}}}};
+const KINDS=Object.keys(WE);
+const NPC=.4,PCAP=1.6,MINU=8,RUNIT=12;
+const pcOf=s=>Math.round(s.gp*PCAP);
+const RELICS=['Bronze Astrolabe','Sun Disc','Jade Mask','Sealed Codex','Iron Crown Shard','Moonstone Idol','Cartographer\'s Slate','Emerald Signet'];
+const relicsOf=(acc,w)=>{const u=sumU(w.pl[acc]),out=[];for(let i=1;i<=Math.floor(u/RUNIT);i++){const r=h32(acc+'|'+w.id+'|'+w.start+'|'+i)%RELICS.length;if(!out.includes(r))out.push(r)}return out};
+
+function kindOf(e){let prev=-1,k=0;for(let i=0;i<=e;i++){k=h32('we'+i)%KINDS.length;if(k===prev)k=(k+1+h32('x'+i)%(KINDS.length-1))%KINDS.length;prev=k}return KINDS[k]}
+function schedule(now){const e=Math.max(0,Math.floor((now-T0)/EP)),mk=ep=>{const id=kindOf(ep),d=WE[id],start=T0+ep*EP+DAY+(h32('o'+ep)%2)*DAY*.5;return{ep,id,start,end:start+d.days*DAY,announce:T0+ep*EP}};
+ const a=mk(e),b=mk(e+1);let cur=null,next=null;
+ if(now<a.start)next=a;else if(now<a.end)cur=a;else next=b;
+ return{cur,next,ep:e}}
+const sumU=p=>p&&p.s?p.s.reduce((a,b)=>a+(b|0),0):0;
+const stageWin=(w,k)=>{const D=(w.end-w.start)/3;return[w.start+k*D,w.start+(k+1)*D]};
+const stageAt=(w,now)=>cl(Math.floor((now-w.start)/((w.end-w.start)/3)),0,2);
+function newEvent(sch){return{v:1,id:sch.id,ep:sch.ep,start:sch.start,end:sch.end,pl:{},ok:[0,0,0],res:null}}
+function totals(w,k,now){const s=WE[w.id].st[k],pc=pcOf(s),acc=Object.keys(w.pl),n=Math.max(1,acc.length),G=Math.round(s.gp*Math.pow(n,.85));let mine=0;for(const a of acc)mine+=Math.min(pc,(w.pl[a].s||[])[k]|0);
+ const[a,b]=stageWin(w,k),f=cl((now-a)/(b-a),0,1),npc=Math.round(G*NPC*f);return{G,mine,npc,tot:mine+npc,n,pc}}
+/* idempotent: safe to call at any time, any number of times, after any gap */
+function evaluate(w,now){if(!w||w.res)return w;for(let k=0;k<3;k++){if(w.ok[k])continue;const t=totals(w,k,now);if(t.tot>=t.G)w.ok[k]=1;else if(now>=stageWin(w,k)[1])w.ok[k]=2}
+ if(now>=w.end){for(let k=0;k<3;k++)if(!w.ok[k])w.ok[k]=2;finalize(w)}return w}
+function finalize(w){if(w.res)return;const def=WE[w.id],n=w.ok.filter(x=>x==1).length,o=n>=3?'win':n==2?'partial':'fail';
+ const rows=Object.keys(w.pl).map(a=>[a,Math.min(3e3,sumU(w.pl[a]))]).sort((x,y)=>y[1]-x[1]||(x[0]<y[0]?-1:1));
+ let fac=null;if(def.fac){const f=[0,0];for(const a in w.pl){const q=w.pl[a];if(q.f===0||q.f===1)f[q.f]+=sumU(q)}fac=f[0]>f[1]?0:f[1]>f[0]?1:2}
+ let mod=def.mod[o]?Object.assign({},def.mod[o]):null;if(mod&&def.fw&&fac!=null&&fac<2&&o!='fail')mod=Object.assign(mod,def.fw[fac],{ic:mod.ic});
+ if(mod)mod.until=w.end+(mod.days||2)*DAY;
+ w.res={o,ok:w.ok.slice(),fac,top:rows.slice(0,3).map(r=>r[0]),n:rows.length,units:rows.reduce((a,r)=>a+r[1],0),mod,at:w.end}}
+/* what a participant earns: tier 0 none, 1 participant, 2 contributor, 3 champion */
+function rewardFor(w,acc){if(!w||!w.res)return null;const p=w.pl[acc];if(!p)return{tier:0};const def=WE[w.id];let u=0,m=0;for(let k=0;k<3;k++){const c=pcOf(def.st[k]);u+=Math.min(c,(p.s||[])[k]|0);m+=c}
+ const f=u/m,tier=u<MINU?0:f>=.7?3:f>=.35?2:1,o=w.res.o,mult=o=='win'?1:o=='partial'?.7:.45,top=w.res.top.indexOf(acc);
+ const wonSide=def.fac&&w.res.fac!=null&&w.res.fac<2&&p.f===w.res.fac;
+ return{tier,mult:mult*(wonSide?1.2:1),o,top:top>=0&&u>=MINU?top+1:0,units:u,rel:def.relics?relicsOf(acc,w):null,side:wonSide?1:0,fac:p.f}}
+/* a player's contribution message, validated: returns units actually accepted */
+function contribute(w,acc,k,n,f,now){evaluate(w,now);if(w.res||now<w.start||now>=w.end)return 0;if(k!==stageAt(w,now))return 0;n=n|0;if(n<1||n>10)return 0;
+ const def=WE[w.id],s=def.st[k],pc=pcOf(s);let p=w.pl[acc];if(!p){if(Object.keys(w.pl).length>=500)return 0;p=w.pl[acc]={s:[0,0,0],f:2}}
+ if(def.fac&&(f===0||f===1)&&p.f===2)p.f=f;
+ const room=pc-(p.s[k]|0),a=Math.min(room,n);if(a<=0)return 0;p.s[k]+=a;p.t=now;evaluate(w,now);return a}
+return{DAY,T0,EP,THEMES,TRACK,WE,KINDS,RELICS,NPC,PCAP,MINU,RUNIT,pcOf,seasonFor,seasonAt,schedule,kindOf,newEvent,evaluate,totals,stageAt,stageWin,contribute,rewardFor,relicsOf,sumU,h32,cl}})();
+
+/*@@END CORE7@@*/
 const BACKUP_EVERY = Math.max(5, +process.env.BACKUP_EVERY_MIN || 15) * 60e3, ARCHIVE_AFTER = Math.max(30, +process.env.ROOM_ARCHIVE_DAYS || 120) * DAY;
 for (const d of [DATA, BK, ARCH]) fs.mkdirSync(d, { recursive: true });
 
@@ -202,7 +298,7 @@ const srv = http.createServer((req, res) => {
   if (req.url.split('?')[0] === '/status') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ ok: true, schema: SCHEMA, ...storageInfo(),
       storage: remote.enabled ? (process.env.DATA_DIR ? 'upstash+disk:' + DATA : 'upstash') : process.env.DATA_DIR ? 'disk:' + DATA : 'app-folder (NOT permanent)',
-      accounts: Object.keys(db.users).length, rooms: rooms.size, online: wss ? wss.clients.size : 0,
+      accounts: Object.keys(db.users).length, rooms: rooms.size, world: { season: CORE7.seasonFor(Date.now()).id, active: (() => { const s = w7Sched(Date.now()); return s.cur ? s.cur.id : null; })() }, online: wss ? wss.clients.size : 0,
       backups: { accounts: backupFiles('accounts').length, rooms: backupFiles('rooms').length, ok: bkStats.ok, failed: bkStats.fail, last: bkStats.last ? new Date(bkStats.last).toISOString() : null },
       remoteHealth: remote.health ? remote.health() : null })); }
   if (req.url.split('?')[0].startsWith('/admin/')) return adminApi(req, res);
@@ -235,6 +331,10 @@ async function adminApi(req, res) {
   if (tok.length !== want.length || !crypto.timingSafeEqual(Buffer.from(tok), Buffer.from(want))) { log('warn', 'admin: rejected request from ' + (req.socket.remoteAddress || '?')); return sendJ(401, { error: 'Unauthorised' }); }
   const u = new URL(req.url, 'http://x'), route = u.pathname, q = k => u.searchParams.get(k) || '', post = req.method === 'POST';
   try {
+    if (route === '/admin/world') {   // inspect, or (POST) force-start / clear a world event. Times come from this server.
+      tickWorld(); if (post) { if (q('clear')) { W.force = null; } else { const id = q('kind'); if (!CORE7.WE[id]) return sendJ(400, { error: 'kind must be one of ' + CORE7.KINDS.join(', ') }); const now = Date.now(), hrs = Math.max(.002, Math.min(24 * 14, +q("hours") || CORE7.WE[id].days * 24)); W.force = { id, ep: -1, start: now, end: now + hrs * 36e5 }; }
+        saveDb(); tickWorld(); w7Cast(); log('warn', 'admin: world event ' + (q('clear') ? 'override cleared' : 'forced: ' + q('kind'))); }
+      return sendJ(200, { force: W.force, schedule: CORE7.schedule(Date.now()), season: CORE7.seasonFor(Date.now()), events: Object.fromEntries(Object.entries(W.ev).map(([k, e]) => [k, { ok: e.ok, players: Object.keys(e.pl).length, res: e.res && e.res.o, claims: Object.keys(e.cl || {}).length }])), hist: W.hist }); }
     if (route === '/admin/backups') {
       return sendJ(200, { schema: SCHEMA, storage: storageInfo(), backups: ['accounts', 'rooms'].map(kind => ({ kind, copies: backupFiles(kind).map(n => {
         const b = loadBackup(path.join(BK, n), kind); return { file: n, valid: !!b, at: b ? new Date(b.at).toISOString() : null, why: b ? b.why : null,
@@ -341,12 +441,12 @@ function leave(ws) {
   touch(r); bc(r);
 }
 const newCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do { c = Array.from({ length: 6 }, () => A[crypto.randomInt(A.length)]).join(''); } while (rooms.has(c)); return c; };
-const CAPS = { ack: 1, px: 1, kicked: 1 };
+const CAPS = { ack: 1, px: 1, kicked: 1, world: 1 };
 
 function auth(ws, m) {
   if (m.t === 'resume') {
     const u = db.keys[m.k]; if (!u || !db.users[u]) return send(ws, { t: 'auth', ok: 0, err: 'Session expired' });
-    ws.u = u; send(ws, { t: 'auth', ok: 1, name: dname(u), key: m.k, st: storageInfo(), caps: CAPS }); if (m.lb) return; return attach(ws);
+    ws.u = u; send(ws, { t: 'auth', ok: 1, name: dname(u), key: m.k, st: storageInfo(), caps: CAPS }); send(ws, wView(u)); if (m.lb) return; return attach(ws);
   }
   const name = String(m.u || '').trim(), pw = String(m.p || ''), id = name.toLowerCase();
   if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return send(ws, { t: 'auth', ok: 0, err: 'Name: 3-16 letters, digits or _' });
@@ -362,7 +462,7 @@ function auth(ws, m) {
     if (!u || !crypto.timingSafeEqual(Buffer.from(u.h, 'hex'), Buffer.from(hash(pw, u.salt), 'hex'))) { authFails[fk].push(n); return send(ws, { t: 'auth', ok: 0, err: 'Wrong name or password' }); }
   }
   const key = crypto.randomBytes(18).toString('hex'); db.keys[key] = id; saveDb();
-  ws.u = id; send(ws, { t: 'auth', ok: 1, name: dname(id), key, st: storageInfo(), caps: CAPS }); attach(ws);
+  ws.u = id; send(ws, { t: 'auth', ok: 1, name: dname(id), key, st: storageInfo(), caps: CAPS }); send(ws, wView(id)); attach(ws);
 }
 const authFails = {};
 setInterval(() => { const n = Date.now(); for (const k in authFails) if (!authFails[k].some(t => n - t < 10 * 60e3)) delete authFails[k]; }, 10 * 60e3);
@@ -379,13 +479,66 @@ function checkSave(d) {
 }
 /* score is a 0-1300 index; it cannot jump faster than real progress allows */
 function okScore(prev, s, now) { const el = prev && prev.at ? (now - prev.at) / 60e3 : 1e9; return !prev || s <= (prev.s || 0) + 25 + 40 * el; }
+const tit = v => typeof v === 'string' && /^[A-Za-z' ]{1,28}$/.test(v) ? v : '';
 const seen = (p, mid) => { if (typeof mid !== 'string' || mid.length > 40) return false; p.mids = p.mids || []; if (p.mids.includes(mid)) return true; p.mids.push(mid); if (p.mids.length > 400) p.mids.splice(0, p.mids.length - 300); return false; };
 const nb = (i, f) => { if (i < 3136) { const x = i % 56, y = (i / 56) | 0; return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => { const X = x + a, Y = y + b; return X >= 0 && Y >= 0 && X < 56 && Y < 56 && f(Y * 56 + X); }); }
   const j = i - 3136, x = j % NCOL, y = (j / NCOL) | 0; return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => { const X = x + a, Y = y + b; return X >= 0 && Y >= 0 && X < NCOL && Y < NCOL && f(3136 + Y * NCOL + X); }); };
 
+
+/* ---------- v4: world events, season claims. State lives inside the accounts data, so the existing backups,
+   verification, restore API and Upstash mirror protect it too. Time always comes from this server's clock. ---------- */
+db.world = db.world && typeof db.world === 'object' ? db.world : {}; const W = db.world;
+W.v = 1; W.ev = W.ev && typeof W.ev === 'object' ? W.ev : {}; W.hist = Array.isArray(W.hist) ? W.hist : []; if (!('force' in W)) W.force = null;
+const evKey = e => e.id + '@' + e.start;
+let w7Save = 0; const w7Soon = () => { if (w7Save) return; w7Save = setTimeout(() => { w7Save = 0; saveDb(); }, 4000); };
+let w7Bc = 0; const w7Cast = () => { if (w7Bc) return; w7Bc = setTimeout(() => { w7Bc = 0; for (const c of wss.clients) if (c.u && c.readyState === 1) send(c, wView(c.u)); }, 2500); };
+const w7Sched = now => { const f = W.force; if (f && now < f.end + 8 * DAY && f.id && CORE7.WE[f.id]) { const cur = now >= f.start && now < f.end ? f : null; if (cur || now < f.start) return { cur, next: cur ? null : f }; } return CORE7.schedule(now); };
+function tickWorld() { const now = Date.now(); let ch = false;
+  const sc = w7Sched(now); if (sc.cur) { const k = evKey(sc.cur); if (!W.ev[k]) { W.ev[k] = CORE7.newEvent(sc.cur); ch = true; log('info', `world event started: ${CORE7.WE[sc.cur.id].n}`); } }
+  for (const k of Object.keys(W.ev)) { const e = W.ev[k]; if (!e || !CORE7.WE[e.id]) { delete W.ev[k]; ch = true; continue; } if (e.res) continue;
+    CORE7.evaluate(e, now); if (e.res) { ch = true; W.hist.unshift({ key: k, id: e.id, o: e.res.o, at: e.end, n: e.res.n, units: e.res.units }); if (W.hist.length > 30) W.hist.length = 30; log('info', `world event ended: ${CORE7.WE[e.id].n} - ${e.res.o}, ${e.res.n} participants`); } }
+  for (const k of Object.keys(W.ev)) if (W.ev[k].res && now - W.ev[k].end > 75 * DAY) { delete W.ev[k]; ch = true; }   // old finished events are dropped, their summary stays in the history
+  if (ch) { saveDb(); w7Cast(); } }
+function wView(acc) { const now = Date.now(); let cur = null, rec = [];
+  for (const k of Object.keys(W.ev)) { const e = W.ev[k], my = e.pl[acc];
+    const v = { key: k, id: e.id, start: e.start, end: e.end, ok: e.ok, stage: CORE7.stageAt(e, now), tot: [0, 1, 2].map(i => CORE7.totals(e, i, Math.min(now, e.end))), n: Object.keys(e.pl).length,
+      my: my ? { s: my.s, f: my.f } : null };
+    if (!e.res) cur = v;
+    else { v.res = e.res; const rw = my ? CORE7.rewardFor(e, acc) : null; v.my = my ? { s: my.s, f: my.f, rw, claimed: !!(e.cl && e.cl[acc]) } : null; if (now - e.end < 12 * DAY || (v.my && v.my.rw && v.my.rw.tier && !v.my.claimed)) rec.push(v); } }
+  const sch = w7Sched(now), mods = []; for (const k of Object.keys(W.ev)) { const m = W.ev[k].res && W.ev[k].res.mod; if (m && m.until > now) mods.push(Object.assign({ key: k }, m)); }
+  const u = db.users[acc] || {}, sc = u.x7 && u.x7.sc || {};
+  return { t: 'world', now, cur, recent: rec.sort((a, b) => b.end - a.end).slice(0, 4), next: sch.cur ? CORE7.schedule(sch.cur.end + 1).next : sch.next, hist: W.hist.slice(0, 10), mods, sc, acc }; }
+const w7Rate = (o, key, ms) => { const n = Date.now(); if (o[key] && n - o[key] < ms) return true; o[key] = n; return false; };
+const dupAcc = (u, mid) => { if (typeof mid !== 'string' || mid.length > 40) return true; const x = u.x7 = u.x7 || {}; x.mids = x.mids || []; if (x.mids.includes(mid)) return true; x.mids.push(mid); if (x.mids.length > 120) x.mids.splice(0, x.mids.length - 80); return false; };
+const w7Mins = {};
+function w7Handle(ws, m) {
+  const u = db.users[ws.u]; if (!u) return;
+  if (m.t === 'we') { if (w7Rate(ws, 'weAt', 1500)) return; tickWorld(); return send(ws, wView(ws.u)); }
+  if (m.t === 'wec') {   // a contribution to the current stage. Counted once per message id; capped per stage and per minute.
+    const now = Date.now(); tickWorld(); const sc = w7Sched(now), e = sc.cur && W.ev[evKey(sc.cur)]; if (!e || e.res) return send(ws, { t: 'wecok', mid: m.mid, a: 0, why: 'no event' });
+    if (dupAcc(u, m.mid)) return send(ws, { t: 'wecok', mid: m.mid, a: 0, dup: 1 });
+    const mm = w7Mins[ws.u] = (w7Mins[ws.u] || []).filter(q => now - q[0] < 60e3), used = mm.reduce((a, q) => a + q[1], 0);
+    if (!Number.isInteger(m.k) || m.k < 0 || m.k > 2 || !Number.isInteger(m.n) || m.n < 1 || m.n > 10 || used + m.n > 60) { bad(ws, 'event contribution'); return send(ws, { t: 'wecok', mid: m.mid, a: 0, why: 'rejected' }); }
+    const a = CORE7.contribute(e, ws.u, m.k, m.n, m.f, now); if (a) mm.push([now, a]);
+    if (a) { w7Soon(); w7Cast(); } const p = e.pl[ws.u]; return send(ws, { t: 'wecok', mid: m.mid, a, k: m.k, my: p ? { s: p.s, f: p.f } : null }); }
+  if (m.t === 'wecl') {   // claim the reward of a finished event: granted at most once per account
+    if (w7Rate(ws, 'clAt', 700)) return; const e = typeof m.key === 'string' && W.ev[m.key]; if (!e || !e.res) return send(ws, { t: 'weclok', key: m.key, no: 1 });
+    const rw = CORE7.rewardFor(e, ws.u); e.cl = e.cl || {}; const had = !!e.cl[ws.u];
+    if (!rw || !rw.tier) return send(ws, { t: 'weclok', key: m.key, tier: 0 });
+    if (!had) { e.cl[ws.u] = Date.now(); saveDb(); log('info', `world event reward claimed: ${ws.u} ${m.key} tier ${rw.tier}`); }
+    return send(ws, { t: 'weclok', key: m.key, id: e.id, rw, d: CORE7.WE[e.id].rw[rw.tier - 1], dup: had ? 1 : 0 }); }
+  if (m.t === 'scl') {   // season milestone claim: once per account per season, current or previous season only
+    if (w7Rate(ws, 'sclAt', 500)) return; const now = Date.now(), cur = CORE7.seasonFor(now), ok = m.sid === cur.id || m.sid === 's' + (cur.idx - 1);
+    const tr = CORE7.TRACK.find(t => t.id === m.m); if (!ok || !tr) { bad(ws, 'season claim'); return send(ws, { t: 'sclok', sid: m.sid, m: m.m, no: 1 }); }
+    const x = u.x7 = u.x7 || {}; x.sc = x.sc || {}; const L = x.sc[m.sid] = x.sc[m.sid] || [], had = L.includes(m.m);
+    if (!had) { L.push(m.m); saveDb(); }
+    return send(ws, { t: 'sclok', sid: m.sid, m: m.m, dup: had ? 1 : 0 }); }
+}
+setInterval(tickWorld, 30000); setTimeout(tickWorld, 1500);
 function handle(ws, m) {
   if (m.t === 'auth' || m.t === 'resume') return auth(ws, m);
   if (!ws.u) return;
+  if (m.t === 'we' || m.t === 'wec' || m.t === 'wecl' || m.t === 'scl') return w7Handle(ws, m);
   const r = ws.room, me = r && r.pl.find(p => p.u === ws.u);
   switch (m.t) {
     case 'create': {
@@ -419,16 +572,16 @@ function handle(ws, m) {
       if (!r || !r.started || !me || !m.s || typeof m.s !== 'object') return; const now = Date.now(); if (me.scAt && now - me.scAt < 8000) return; me.scAt = now;
       let s = cl(Math.floor(+m.s.s) || 0, 0, SCORE_MAX); const p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 100)) : null;
       if (!okScore(me.sc, s, now)) { bad(ws, 'score jump'); s = Math.floor((me.sc.s || 0) + 25 + 40 * (now - me.sc.at) / 60e3); }
-      me.sc = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now }; const u = db.users[ws.u]; if (u) { u.is = { s, p, d: me.sc.d, at: now }; saveDb(); } bc(r); touch(r); return;
+      me.sc = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now, ti: tit(m.s.ti) }; const u = db.users[ws.u]; if (u) { u.is = { s, p, d: me.sc.d, at: now, ti: me.sc.ti }; saveDb(); } bc(r); touch(r); return;
     }
     case 'gscore': { // an offline (solo) island of a logged-in player
       const u = db.users[ws.u]; if (!u || !m.s || typeof m.s !== 'object') return; const now = Date.now(); if (ws.gsAt && now - ws.gsAt < 8000) return; ws.gsAt = now;
       let s = cl(Math.floor(+m.s.s) || 0, 0, SCORE_MAX); const p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 100)) : null;
       if (u.gs && !okScore(u.gs, s, now)) { bad(ws, 'solo score jump'); s = Math.floor((u.gs.s || 0) + 25 + 40 * (now - u.gs.at) / 60e3); }
-      u.gs = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now }; saveDb(); return;
+      u.gs = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now, ti: tit(m.s.ti) }; saveDb(); return;
     }
     case 'lb': { // world ranking: every account's best island
-      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs, b = u.is; const best = !a ? (b ? [b, 'online'] : null) : !b ? [a, 'solo'] : (b.s > a.s ? [b, 'online'] : [a, 'solo']); if (best && best[0].s > 0) rows.push({ id, n: u.name || id, s: Math.min(SCORE_MAX, best[0].s), m: best[1], p: best[0].p, d: best[0].d }); }
+      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs, b = u.is; const best = !a ? (b ? [b, 'online'] : null) : !b ? [a, 'solo'] : (b.s > a.s ? [b, 'online'] : [a, 'solo']); if (best && best[0].s > 0) rows.push({ id, n: u.name || id, s: Math.min(SCORE_MAX, best[0].s), m: best[1], p: best[0].p, d: best[0].d, ti: best[0].ti || '' }); }
       rows.sort((x, y) => y.s - x.s); const mine = rows.findIndex(x => x.id === ws.u);
       send(ws, { t: 'lb', top: rows.slice(0, 50).map(({ id, ...q }) => q), total: rows.length, me: mine < 0 ? null : { rank: mine + 1, s: rows[mine].s, m: rows[mine].m } }); return;
     }
