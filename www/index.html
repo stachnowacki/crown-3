@@ -582,7 +582,7 @@ function draw(){
 let GXZ=0,GXM=0,GXCX=-1,GXCY=-1,GXLZ=0;window.GXHID=0;
 const QSL=[12,14,16,18,20,23,26,30,34,38,43,48,54,60,68,76,86,96,108,122,138,156];
 function QSN(ts){if(ts>170)return Math.round(ts/8)*8;let b=12,d=1e9;for(let i=0;i<QSL.length;i++){const e=Math.abs(QSL[i]-ts)/QSL[i];if(e<d){d=e;b=QSL[i]}}return b}
-function loop(ts){const n=performance.now(),busy=n-GXZ<220||n-GXM<220;if(!window.GXHID&&ts-lastF>(LOW?33:busy?15:31)){lastF=ts;draw()}requestAnimationFrame(loop)}
+function loop(ts){const n=performance.now(),busy=n-GXZ<220||n-GXM<220;if(!window.GXHID&&ts-lastF>(LOW?33:busy?15:31)){lastF=ts;try{draw()}catch(e){if(!window.__drawErr){window.__drawErr=1;console.error('draw',e)}}}requestAnimationFrame(loop)}
 
 /* ===== interface ===== */
 function hud(){const c=cap();
@@ -1252,7 +1252,7 @@ function draw(){if(VYU)VYU();
     if((!e||((e.ts<ts*.85||e.ts>ts*1.18)&&!busyZ))&&performance.now()<bud){e=renderChunk(ci,cj,ts);CHK.set(k,e)}
     const px=ci*CH*ts-cm.x,py=cj*CH*ts-cm.y;
     if(e){cx.drawImage(e.g,px,py,CH*ts+.5,CH*ts+.5);ents.push([e,px,py])}else{cx.fillStyle='#1b5f93';cx.fillRect(px,py,CH*ts+.5,CH*ts+.5)}}
-  for(const [e,px,py] of ents){const s=ts/e.ts;cx.drawImage(e.o,px-e.mx*s,py-e.mt*s,e.o.width/PR*s,e.o.height/PR*s)}
+  for(const [e,px,py] of ents){const s=ts/e.ts;cx.drawImage(e.o,px-e.mx*s,py-e.mt*s,e.o.width/(e.pr||PR)*s,e.o.height/(e.pr||PR)*s)}
   if(CHK.size>90)for(const k of [...CHK.keys()]){const [a,b]=k.split(',').map(Number);if(a<ci0-2||a>ci1+2||b<cj0-2||b>cj1+2)CHK.delete(k)}
   const own={},bd={},B=[],dots=new Path2D(),gl=new Path2D();
   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const t=T(x,y),px=x*ts-cm.x,py=y*ts-cm.y,mx=px+ts/2,my=py+ts/2;
@@ -4917,6 +4917,55 @@ const _vmQ=vMenu;vMenu=function(){const r=_vmQ();try{const d=document.createElem
  if(ac)ac.insertAdjacentHTML('afterend',hb);else d.insertAdjacentHTML('beforeend',hb);r[1]=d.innerHTML}catch(e){console.error(e)}return r};
 
 setTimeout(()=>{try{if(S&&S.tiles){dq();sideFill();qBadges(true)}}catch(e){console.error(e)}},800);
+})();
+</script>
+<script>
+/* ===== map performance: canvas memory budget =====
+   The map caches pre-rendered terrain chunks (CHK) and building sprites (SPR) as canvases. Unbounded, a phone at full zoom
+   could hold ~700 MB of them after panning the island, until the GPU dropped the canvas (frozen, then black map).
+   - Both caches are LRU with a pixel budget sized from the device's memory; evicted canvases are released (width=0) right
+     after the frame, so the browser frees their memory at once instead of waiting for garbage collection.
+   - Chunk backing stores are capped at MAXSIDE pixels per side (a barely visible softening only at the highest zoom).
+   - A lost canvas is recovered (caches rebuilt), and a building that fails to paint can no longer stop the whole map. */
+(function(){
+'use strict';
+const DM=+navigator.deviceMemory||4,SMALL=DM<=4||/Android|iPhone|iPad/i.test(navigator.userAgent);
+const MP=1e6,BUD={chk:(SMALL?22:48)*MP,spr:(SMALL?5:10)*MP},KEEP={chk:8,spr:40},MAXSIDE=SMALL?1024:1600;
+const pend=[];let pendT=0;
+const flush=()=>{pendT=0;for(const c of pend.splice(0)){try{c.width=0;c.height=0}catch(e){}}};
+const release=(...cs)=>{for(const c of cs)if(c&&c.width)pend.push(c);if(!pendT)pendT=setTimeout(flush,0)};
+const area=c=>c?c.width*c.height:0;
+const STAT={chk:0,spr:0,evict:0,lost:0,errs:0};window.__mapMem=STAT;
+function budget(map,name,size,rel){
+ const g=Map.prototype.get.bind(map),s=Map.prototype.set.bind(map),d=Map.prototype.delete.bind(map),cl=map.clear.bind(map),sz=new Map();let tot=0;
+ const drop=k=>{const v=g(k);if(v===undefined)return false;tot-=sz.get(k)||0;sz.delete(k);d(k);rel(v);return true};
+ map.get=k=>{const v=g(k);if(v!==undefined){d(k);s(k,v)}return v};                 /* touch: most recent at the end */
+ map.set=(k,v)=>{const o=g(k);if(o!==undefined&&o!==v)drop(k);else if(o!==undefined){tot-=sz.get(k)||0;d(k)}
+  s(k,v);const a=size(v);sz.set(k,a);tot+=a;
+  while(tot>BUD[name]&&map.size>KEEP[name]){const old=map.keys().next().value;if(old===k)break;drop(old);STAT.evict++}
+  STAT[name]=Math.round(tot*4/MP);return map};
+ map.delete=k=>{const r=drop(k);STAT[name]=Math.round(tot*4/MP);return r};
+ map.clear=()=>{for(const v of map.values())rel(v);sz.clear();tot=0;STAT[name]=0;cl()};
+ for(const [k,v] of [...map.entries()]){sz.set(k,size(v));tot+=sz.get(k)}}
+budget(CHK,'chk',e=>area(e.g)+area(e.o),e=>release(e.g,e.o));
+budget(SPR,'spr',s=>area(s.c),s=>release(s.c));
+
+/* chunk resolution cap: the overlay is drawn with the chunk's own pixel ratio (e.pr) */
+const _rc=renderChunk;renderChunk=function(ci,cj,ts){const p0=PR,side=CH*ts*1.25;PR=Math.max(.5,Math.min(PR,MAXSIDE/side));try{const e=_rc(ci,cj,ts);e.pr=PR;return e}finally{PR=p0}};
+
+/* one broken building must not take the map down */
+const blank=()=>({c:mkc(1,1),ox:0,oy:0,w:0,h:0});
+const _sp=sprite;sprite=function(key,...a){try{return _sp(key,...a)}catch(e){STAT.errs++;if(STAT.errs<4)console.error('sprite',key,e);const b=blank();SPR.set(key,b);return b}};
+const _sb=spriteBig;spriteBig=function(key,...a){try{return _sb(key,...a)}catch(e){STAT.errs++;if(STAT.errs<4)console.error('spriteBig',key,e);const b=blank();SPR.set(key,b);return b}};
+const _pb=paintB;paintB=function(...a){try{return _pb(...a)}catch(e){STAT.errs++;if(STAT.errs<4)console.error('paintB',e)}};
+
+/* a lost canvas (GPU reset, app sent to the background) comes back with fresh caches instead of staying black */
+const recover=()=>{try{CHK.clear();SPR.clear();resize();last='';render()}catch(e){}};
+cv.addEventListener('contextlost',e=>{STAT.lost++;try{e.preventDefault()}catch(x){}});
+cv.addEventListener('contextrestored',recover);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&typeof cx.isContextLost==='function'&&cx.isContextLost())recover()});
+/* memory pressure from the rest of the page: drop off-screen chunks while hidden */
+document.addEventListener('visibilitychange',()=>{if(document.hidden)try{SPR.clear()}catch(e){}});
 })();
 </script>
 </body></html>
