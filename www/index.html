@@ -136,9 +136,9 @@ input[type=range]{width:100%;accent-color:#ffcf4a}.sw{display:inline-block;width
 .dbox .pl i{width:12px;height:12px;border-radius:50%}
 </style></head><body>
 <div id="hud"></div>
-<div id="wrap"><canvas id="c"></canvas><div id="toast"></div><div id="zoom"><button onclick="zoomBy(1.25)" aria-label="Zoom in">+</button><button onclick="zoomBy(.8)" aria-label="Zoom out">−</button></div></div>
+<div id="wrap"><canvas id="c"></canvas><div id="toast"></div><div id="zoom"><button onclick="home()" aria-label="Centre on your capital">🏠</button><button onclick="zoomBy(1.25)" aria-label="Zoom in">+</button><button onclick="zoomBy(.8)" aria-label="Zoom out">−</button></div></div>
 <div id="panel"></div>
-<div id="dock"><button onclick="home()">🏠<small>Home</small></button><button class="bdg" id="mib" onclick="openMis()">🎯<small>Missions</small></button><button id="mk" onclick="openM()">📈 Market<small>Trade &amp; sell</small></button><button class="bdg" id="amb" onclick="openSheet('army')">⚔️<small>Army</small></button><button class="bdg" id="mnb" onclick="openSheet('menu')">☰<small>Menu</small></button></div>
+<div id="dock"><button class="bdg" id="evb" onclick="X7.openEC()">🌍<small>Events</small></button><button class="bdg" id="mib" onclick="openMis()">🎯<small>Missions</small></button><button id="mk" onclick="openM()">📈 Market<small>Trade &amp; sell</small></button><button class="bdg" id="amb" onclick="openSheet('army')">⚔️<small>Army</small></button><button class="bdg" id="mnb" onclick="openSheet('menu')">☰<small>Menu</small></button></div>
 <div id="msb"></div><div id="mis"></div><div id="sh"></div><div id="market"></div><div id="dm"></div>
 <div id="achievement-screen" role="dialog" aria-modal="true" aria-labelledby="achievement-title"><header class="ach-head"><b id="achievement-title">🏆 Achievement tree</b><span class="mu">Follow each branch from your realm to its rewards.</span><button class="ach-close" onclick="closeAchievements()" aria-label="Close achievement tree">✕</button></header><div class="ach-viewport" id="ach-viewport"><div class="ach-zoom"><button onclick="zoomAchievements(1.15)" aria-label="Zoom in">+</button><button onclick="zoomAchievements(.87)" aria-label="Zoom out">−</button></div><div class="ach-stage" id="ach-stage"><div class="ach-art" id="ach-art"></div></div></div><div class="ach-detail" id="ach-detail" aria-live="polite"></div></div>
 <div id="dev-screen" role="dialog" aria-modal="true" aria-labelledby="dev-title"><header class="ach-head"><b id="dev-title">🌳<span class="dtl"> Development</span></b><span class="mu" id="dev-rp"></span><button class="ach-close" onclick="devOverview()" aria-label="Overview" style="margin-left:8px">📊</button><button class="ach-close" onclick="closeDev()" aria-label="Close development tree" style="margin-left:6px">✕</button></header><div class="ach-viewport" id="dev-vp"><div class="ach-zoom"><button onclick="devZoom(1.2)" aria-label="Zoom in">+</button><button onclick="devZoom(.83)" aria-label="Zoom out">−</button></div><div class="dev-stage" id="dev-stage"><div class="dev-art" id="dev-art"></div></div></div><div class="ach-detail" id="dev-detail" aria-live="polite"></div></div>
@@ -699,7 +699,7 @@ function misTick(){
   snap();const quiet=!S.mb;READY=0;
   for(const m of MIS){const r=S.ms[m.id]||(S.ms[m.id]={});if(r.c)continue;if(m.req&&!(S.ms[m.req]&&S.ms[m.req].d))continue;
     const v=V[m.key]||0;
-    if(!r.n){r.n=1;if(m.req&&!quiet)NQ.push('🎯 New mission: '+m.name)}
+    if(!r.n){r.n=1}
     if(v>=m.goal){if(!r.d){r.d=1;if(!quiet){NQ.push('✅ Mission complete: '+m.name+' — claim your reward');buzz()}}READY++}
     else if(!r.h&&m.goal>=4&&v>=m.goal/2){r.h=1;if(!quiet)NQ.push(`📈 ${m.name}: halfway (${v}/${m.goal})`)}}
   for(const q of S.side)if(S.st[q.k]-q.b>=q.g){if(!q.d){q.d=1;if(!quiet)NQ.push('✅ Side challenge complete: '+q.n)}READY++}
@@ -1868,7 +1868,7 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
   const CHAPTERS=[
   {id:'welcome',t:'Welcome to Crownlands',ic:'👑',steps:[
     {title:'Your realm, your rules',body:'You rule one kingdom on an island shared with rival realms. Land, wealth, armies and knowledge all matter — a realm that ignores one of them stalls.',target:'#hud',action:['Open kingdom overview',()=>{try{openKingdomOverview()}catch(e){}}]},
-    {title:'What you are looking at',body:'The map is the world. The top bar shows your coins, income per second and five resources. The buttons along the bottom open Missions, Market, Army and the Menu.',target:'#dock'},
+    {title:'What you are looking at',body:'The map is the world. The top bar shows your coins, income per second and five resources. The buttons along the bottom open Events, Missions, Market, Army and the Menu.',target:'#dock'},
     {title:'Time runs in real time',body:'Buildings, sieges and events count real seconds. While the game is closed your realm earns half its income (up to 2 hours) and nothing is taken from you.',target:'#hud .coin'}
   ]},
   {id:'kingdom',t:'Understanding your kingdom',ic:'🏰',steps:[
@@ -3013,7 +3013,7 @@ const hid=()=>{window.GXHID=($$('tre')&&$$('tre').style.display=='flex')||($$('c
 window.openTre=function(t){if(t)TT=t;closeSheet();closeMis();const e=tre();delete e.dataset.tt;e.style.display='flex';hid();treR()};window.closeTre=()=>{$$('tre').style.display='none';hid()};
 const _vm=vMenu;vMenu=function(){const r=_vm(),d=document.createElement('div');d.innerHTML=r[1];let ks=[...d.children].filter(k=>!/Share the game|Download updated ZIP|Admin code|Admin tools/.test(k.textContent));const take=re=>{const i=ks.findIndex(k=>re.test(k.textContent));return i<0?'':ks.splice(i,1)[0].outerHTML};
  const tre=`<button class="mbtn gemv" style="--h:275" onclick="openTre()"><i class="mic"><i class="gm"></i></i><span class="mtx"><b>Treasury</b><small>${fmt(M.gems)} gems · ${Object.values(M.chests).reduce((a,b)=>a+b,0)} chests · styles</small></span><i class="chev">›</i></button>`,o=take(/Online (play|island)/),rk=take(/Ranking/),ch=take(/Chronicle/),kd=take(/Kingdom development/),ac=take(/Achievement tree/),wr=take(/War room/),vy=take(/Voyages/),hp=take(/Help & tutorial/),st=take(/Settings/),dev=mb('🧑‍💻','Developer mode',isDev()?'Admin tools · gems · chests · black effects':'Enter the password',isDev()?'adm.open()':'adm.code()');
- r[1]=tre+o+mb('🏰','Kingdom overview','Resources, income, army, threats and objectives','openKingdomOverview()')+rk+ch+mb('🏛️','Great Works','Long projects with permanent bonuses',"openSheet('gw')")+kd+ac+wr+vy+ks.map(k=>k.outerHTML).join('')+hp+st+dev;return r};
+ r[1]=tre+o+mb('🏰','Kingdom overview','Resources, income, army, threats and objectives','openKingdomOverview()')+rk+ch+kd+ac+wr+vy+ks.map(k=>k.outerHTML).join('')+hp+st+dev;return r};
 /* ---------- HUD: gem badge + rising resource effects ---------- */
 const _hud=hud;hud=function(){_hud();const tp=document.querySelector('#hud .top');if(tp&&!tp.querySelector('.gemb')){const g=document.createElement('div');g.className='gemb';g.setAttribute('role','button');g.setAttribute('aria-label','Gems and chests');g.innerHTML=GI+'<b id="gemn">'+fmt(M.gems)+'</b>';g.onclick=()=>openTre();tp.insertBefore(g,tp.lastElementChild)}applyRc()};
 function fly(txt,cls,col){if(LOW||RM)return;const h=$$('hud');if(!h||h.querySelectorAll('.gx-f').length>4)return;const t=cls=='gemb'?h.querySelector('.gemb'):h.querySelector('[data-hud-coins]');if(!t)return;const r=t.getBoundingClientRect(),hr=h.getBoundingClientRect(),d=document.createElement('div');d.className='gx-f';d.style.cssText=`left:${r.left-hr.left}px;top:${r.bottom-hr.top-4}px;color:${col}`;d.innerHTML=txt;d.addEventListener('animationend',()=>d.remove());h.style.position='relative';h.appendChild(d)}
@@ -3512,6 +3512,7 @@ function goalsHtml(){let h=`<div class="mi"><div class="mh"><span>🏛️</span>
   for(const m of MST){const l=mstLv(m.k),fin=mstDone(m),v=m.v(),g=fin?v:m.g(l),rd=mstReady(m);
     h+=`<div class="mi ${rd?'ready':''}"><div class="mh"><span>${m.ic}</span><b>${m.n} ${['','I','II','III','IV','V','VI','VII','VIII','IX','X'][l+1]||(l+1)}</b><em>${fin?'Mastered':rd?'Ready!':'Level '+l}</em></div><div class="bar"><i style="width:${fin?100:Math.min(100,v/g*100).toFixed(0)}%"></i></div><div class="mf"><span>${m.lab}: ${fmt(Math.min(v,g))}/${fmt(g)}</span><span>${fin?'':'🎁 '+_rwStr(mstRw(m))}</span></div>${rd?`<button style="width:100%;text-align:center;margin-top:6px" onclick="mstClaim('${m.k}')">Claim reward</button>`:''}</div>`}
   return h}
+window.V6G={MST,SOB,mstLv,mstDone,mstReady,mstRw,sobRw,GW,gwSt,gwMax,gwCost,gwTotal,rwStr:rw=>_rwStr(rw),fmt};
 const _renderMis6=renderMis;
 renderMis=function(){
   if(misTab!='mile'){_renderMis6();const tb=document.querySelector('#mis .tabs');if(tb&&!tb.querySelector('[data-v6]')){const n=goalsReady(),b=document.createElement('button');b.dataset.v6='1';b.textContent='Goals'+(n?' ('+n+')':'');b.onclick=()=>setTab('mile');tb.appendChild(b)}
@@ -3690,7 +3691,7 @@ const _hud6=hud;hud=function(){_hud6();const ld=document.querySelector('#hud .la
 /* the overview lists what rivals are up to and the next goals */
 const _ov6=window.openKingdomOverview;window.openKingdomOverview=function(){_ov6();try{const box=document.querySelector('#cl-overview .ovbody');if(!box||S.on)return;let th='';
   for(let k=2;k<6;k++){if(!S.tiles.some(t=>t.o===k))continue;const m=mem(k);if(m.mode=='revenge'||m.mode=='coalition')th+=`<div class="ovthreat"><span>🐺</span><div>${OWN[k].n} is ${m.mode=='revenge'?'planning revenge for your attacks':'part of the coalition against you'}.</div></div>`}
-  const n=goalsReady();const g=`<div class="ovcard wide"><h4>🏛️ Long-term goals</h4><div class="ovr"><span>Great Work stages</span><b>${gwTotal()}</b></div><div class="ovr"><span>Milestones & objectives ready</span><b>${n}</b></div><div class="ovfoot" style="padding:6px 0 0;border:0;background:none"><button onclick="closeKingdomOverview();openSheet('gw')">🏛️ Great Works</button><button onclick="closeKingdomOverview();openMis();setTab('mile')">🏅 Goals</button></div></div>`;
+  const n=goalsReady();const g=`<div class="ovcard wide"><h4>🏛️ Long-term goals</h4><div class="ovr"><span>Great Work stages</span><b>${gwTotal()}</b></div><div class="ovr"><span>Milestones & objectives ready</span><b>${n}</b></div><div class="ovfoot" style="padding:6px 0 0;border:0;background:none"><button onclick="closeKingdomOverview();openMis('won')">🏛️ Wonders</button><button onclick="closeKingdomOverview();openMis('goal')">🌟 Goals</button></div></div>`;
   if(th){const cards=[...box.querySelectorAll('.ovcard.wide')];if(cards[0])cards[0].insertAdjacentHTML('beforeend',th)}box.insertAdjacentHTML('beforeend',g)}catch(e){console.error(e)}};
 })();
 </script>
@@ -4276,7 +4277,7 @@ function onMsg7(m){
 let ANN=[];
 function announce(key,ic,title,text,kind){const x=X();if(x.we.seen['a:'+key])return;x.we.seen['a:'+key]=1;ANN.push({ic,title,text,kind});showAnn()}
 function showAnn(){if(document.getElementById('x7ann')||!ANN.length)return;if(window.TUTON)return;const a=ANN.shift(),d=document.createElement('div');d.id='x7ann';
- d.innerHTML=`<div class="x7a"><div class="x7ai">${a.ic}</div><b>${esc(a.title)}</b><p>${esc(a.text)}</p><div class="x7ab"><button onclick="X7.openEC();X7.closeAnn()">Open Event Centre</button><button class="x7g" onclick="X7.closeAnn()">Later</button></div></div>`;document.body.appendChild(d)}
+ d.innerHTML=`<div class="x7a"><div class="x7ai">${a.ic}</div><b>${esc(a.title)}</b><p>${esc(a.text)}</p><div class="x7ab">${a.kind=='monument'?`<button onclick="X7.closeAnn();openMis('won')">Open Wonders</button>`:`<button onclick="X7.openEC();X7.closeAnn()">Open Events</button>`}<button class="x7g" onclick="X7.closeAnn()">Later</button></div></div>`;document.body.appendChild(d)}
 window.X7={closeAnn(){const d=document.getElementById('x7ann');if(d)d.remove();setTimeout(showAnn,400)}};
 
 /* ===================== 6. EVENT CENTRE ===================== */
@@ -4353,7 +4354,7 @@ function worldEC(){const v=WV(),x=X();let h='';
    if(stt=='active'&&!e.res){if(s.kind=='supply'){const cs=n=>unitCost(e.id,k,n);h+=`<div class="x7s">1 unit costs ${costStr(cs(1))}</div><div class="x7r">${[1,5,10].map(n=>`<button ${my>=pc?'disabled':''} onclick="X7.give(${k},${n})">+${n}</button>`).join('')}</div>`}else h+=`<div class="x7s">⚔️ Counts automatically from what you do: ${s.per>=1?s.per+' units':'1 unit per '+Math.round(1/s.per)} each.</div>`}
    h+='</div>'}
   if(d.relics){const rel=(e.my&&e.my.s)?(()=>{const ac=S.on&&SRV.w&&SRV.w.acc||'me';return C0.relicsOf(ac,{id:e.id,start:e.start,pl:{[ac]:{s:e.my.s}}})})():[];h+=`<div class="x7c"><div class="x7h"><b>🏺 Relics found</b><em>${rel.length}/${C0.RELICS.length}</em></div><div class="x7s">${rel.length?rel.map(r=>C0.RELICS[r]).join(', '):'Every 12 units you contribute may uncover a relic. Different kingdoms find different relics.'}</div></div>`}}
- else{const n=v.next;h+=`<div class="x7c"><div class="x7h"><span>🌍</span><b>No world event is active</b>${chip('QUIET','e')}</div><div class="x7s">${n?`Next scheduled: <b>${esc(WEF[n.id].n)}</b> ${WEF[n.id].ic} — begins ${dstr(n.start)}, lasts ${WEF[n.id].days} days.`:'The calendar is clear.'}</div></div>`}
+ else{const n=v.next;h+=`<div class="x7c"><div class="x7h"><span>🌍</span><b>No world event is active</b>${chip('QUIET','e')}</div><div class="x7s">${n?`Next scheduled: <b>${esc(WEF[n.id].n)}</b> ${WEF[n.id].ic} — begins ${dstr(n.start)}, lasts ${WEF[n.id].days} days.`:'Nothing is scheduled yet.'}</div></div>`}
  for(const e of v.recent||[]){if(!e.res)continue;const d=WEF[e.id],rw=e.my&&e.my.rw,cl=e.my&&e.my.claimed;
   h+=`<div class="x7c ${rw&&rw.tier&&!cl?'act':''}"><div class="x7h"><span>${d.ic}</span><b>${esc(d.n)}</b>${chip({win:'VICTORY',partial:'PARTIAL',fail:'FAILED'}[e.res.o],e.res.o=='win'?'a':e.res.o=='partial'?'u':'e')}</div><div class="x7s">${esc(d.out[e.res.o])}${e.res.mod?` World effect: ${e.res.mod.ic} ${esc(e.res.mod.n)} until ${dstr(e.res.mod.until)}.`:''}${d.fac&&e.res.fac!=null?` ${e.res.fac<2?esc(d.fac[e.res.fac])+' prevailed.':'The war ended in a draw.'}`:''}</div><div class="x7s">${e.res.n} kingdoms took part · ${e.res.units} units</div>
   ${rw&&rw.tier?(cl?`<div class="x7s">✔ You earned: <b>${TIERW[rw.tier]}</b>${rw.top?` · rank ${rw.top}`:''}</div>`:`<button class="x7a1" onclick="X7.wclaim('${e.key}')">Claim ${TIERW[rw.tier]} reward${rw.top?` (rank ${rw.top})`:''}</button>`):`<div class="x7s">${rw?'Contribute at least 8 units to earn a reward next time.':'You did not take part.'}</div>`}</div>`}
@@ -4377,13 +4378,6 @@ function realmEC(){const x=X();let h='';const pl=prLevel(),a=PRL[pl-1]||0,b=PRL[
  h+=`<div class="x7h" style="margin-top:8px"><b>Titles</b></div>`;const ids=Object.keys(x.ti);
  h+=`<div class="x7c"><div class="x7s">Shown on your overview, the missions page and the rankings.</div><div class="x7r" style="grid-template-columns:1fr 1fr">${ids.length?ids.map(id=>`<button style="${x.shown==id?'border-color:#ffcf4a':''}" onclick="X7.title('${id}')">🏷️ ${esc(x.ti[id].n)}</button>`).join('')+`<button onclick="X7.title('')">No title</button>`:'<div class="x7s">No titles yet.</div>'}</div></div>`;
  const open=Object.keys(TIT).filter(id=>!x.ti[id]);if(open.length)h+=`<div class="x7s">To earn: ${open.map(id=>`${esc(TIT[id][0])} (${esc(TIT[id][1])})`).join(' · ')}</div>`;
- h+=`<div class="x7h" style="margin-top:10px"><b>Monuments</b><em>${MON.filter(m=>monSt(m.id)>=3).length}/${MON.length} complete</em></div>`;
- for(const m of MON){const s=monSt(m.id),o=x.mon[m.id]||{paid:{}},ok=m.req(),need=s<4?monCost(m,s):null;
-  h+=`<div class="x7c ${s>=3?'done':ok?'':'lock'}"><div class="x7m">${monArt(m,s)}<div><div class="x7h"><b>${m.ic} ${esc(m.n)}</b></div><div class="x7s">${esc(m.d)}</div><div class="x7s">${esc(m.fxt)}</div><div class="x7s"><b>${s>=4?'Ascended':s>=3?'Complete':MSTN[s]+' next'}</b> · stage ${Math.min(s,4)}/4</div></div></div>`;
-  if(need&&ok){const pc=Object.keys(need).reduce((q,k)=>q+Math.min(1,(o.paid[k]||0)/need[k]),0)/Object.keys(need).length;h+=`<div class="x7s" style="margin-top:4px">${MSTN[s]}: ${['coins',...RES].filter(k=>need[k]).map(k=>`${ICON[k]}${fm(o.paid[k]||0)}/${fm(need[k])}`).join(' ')}</div>${bar(pc)}<button class="x7a1" onclick="X7.mon('${m.id}')">Contribute what I can</button>`}
-  else if(!ok)h+=`<div class="x7s" style="margin-top:4px">🔒 Needs ${esc(m.rq)}</div>`;h+='</div>'}
- h+=`<div class="x7h" style="margin-top:10px"><b>Rare building upgrades</b></div><div class="x7s">Select a building on the map: eligible ones show an upgrade card. Each is a one-off, and only works while the building keeps its level.</div>`;
- for(const r of RU){const idx=Object.keys(x.up).find(i=>x.up[i]==r.id),on=idx!=null&&ruOn(+idx);h+=`<div class="x7c ${on?'done':''}"><div class="x7h"><span>${r.ic}</span><b>${esc(r.n)}</b>${on?chip('ACTIVE','a'):idx!=null?chip('INACTIVE','u'):''}</div><div class="x7s">${esc(r.d)} ${esc(r.fxt)}. Needs ${esc(r.rq)}.</div>${idx!=null?`<button class="x7a1" onclick="X7.ruGo(${idx})">Show on map</button>`:''}</div>`}
  h+=`<div class="x7h" style="margin-top:10px"><b>Honours</b><em>${Object.keys(x.ach).length}/${HON.length}</em></div>`;
  for(const q of HON){const got=x.ach[q.id];h+=`<div class="x7c ${got?'done':''}"><div class="x7h"><span>${q.ic}</span><b>${esc(q.n)}</b>${got?chip('EARNED','a'):''}</div><div class="x7s">${esc(q.d)}${got?' · '+dstr(got):''}</div></div>`}
  const emb=Object.keys(Object.assign({},META7().emb,x.emb));if(emb.length)h+=`<div class="x7h" style="margin-top:10px"><b>Season emblems</b></div><div class="x7c"><div class="x7s">${emb.map(s=>{const th=C0.seasonAt(+s.slice(1));return`${th.ic} ${esc(th.em)} (${esc(th.n)})`}).join('<br>')}</div></div>`;
@@ -4391,24 +4385,41 @@ function realmEC(){const x=X();let h='';const pl=prLevel(),a=PRL[pl-1]||0,b=PRL[
 function alertEC(){const x=X();let h=`<div class="x7r" style="grid-template-columns:1fr 1fr"><button onclick="X7.readAll()">Mark all as read</button><button onclick="X7.clearAlerts()">Clear</button></div>`;
  if(!x.notif.length)return h+`<div class="x7s" style="margin-top:8px">No notifications yet.</div>`;
  return h+x.notif.map(n=>`<div class="x7c ${n.r?'':'act'}"><div class="x7h"><span>${n.ic}</span><b style="font-weight:600">${esc(n.tx)}</b></div><div class="x7s">${dstr(n.t)}</div></div>`).join('')}
-function ovEC(){const x=X(),cur=C0.seasonFor(nowMs()),sn=x.sn,v=WV();let h='';
- h+=`<div class="x7c act" style="border-color:${cur.col}" onclick="X7.tab('se')"><div class="x7h"><span style="font-size:26px">${cur.ic}</span><b>${esc(cur.n)}</b>${chip(dt1(cur.left)+' left','u')}</div>${bar(sn?sn.pts/250:0)}<div class="x7s">${sn?sn.pts:0} / 250 points for the season reward · ${sn?sn.ch.filter(c=>c.d).length:0}/${sn?sn.ch.length:0} challenges</div></div>`;
- if(v.cur){const d=WEF[v.cur.id],k=v.cur.stage,t=v.cur.tot[k];h+=`<div class="x7c act" style="border-color:${d.col}" onclick="X7.tab('wo')"><div class="x7h"><span style="font-size:26px">${d.ic}</span><b>${esc(d.n)}</b>${chip(dt1(v.cur.end-v.now)+' left','u')}</div>${bar(t.tot/t.G)}<div class="x7s">Stage ${k+1}: ${esc(d.st[k].n)} · you gave ${myUnits(v,k)} units</div></div>`}
- else if(v.next){const d=WEF[v.next.id];h+=`<div class="x7c" onclick="X7.tab('ca')"><div class="x7h"><span>${d.ic}</span><b>Next: ${esc(d.n)}</b>${chip('SCHEDULED','u')}</div><div class="x7s">Begins ${dstr(v.next.start)} (in ${dt1(v.next.start-v.now)})</div></div>`}
- const w=x.ev.act.length;h+=`<div class="x7c ${w?'act':''}" onclick="X7.tab('ev')"><div class="x7h"><span>📜</span><b>${w?w+' decision'+(w>1?'s':'')+' waiting':'No decisions waiting'}</b></div><div class="x7s">${w?'Open Events to decide.':'Events arrive while you play. Nothing is lost while you are away.'}</div></div>`;
- const ready=sn?C0.TRACK.filter(t=>sn.pts>=t.p&&!sn.cl[t.id]).length:0;if(ready)h+=`<div class="x7c act" onclick="X7.tab('se')"><div class="x7h"><span>🎁</span><b>${ready} season reward${ready>1?'s':''} ready</b></div></div>`;
- for(const e of v.recent||[]){const rw=e.my&&e.my.rw;if(rw&&rw.tier&&!e.my.claimed)h+=`<div class="x7c act" onclick="X7.tab('wo')"><div class="x7h"><span>🎁</span><b>${esc(WEF[e.id].n)} reward ready</b></div></div>`}
- const m=(v.mods||[]);if(m.length)h+=`<div class="x7s" style="margin-top:6px">World effects: ${m.map(q=>`${q.ic} ${esc(q.n)} (${dt1(q.until-v.now)})`).join(' · ')}</div>`;
+function ovEC(){return nowEC()}
+function nowEC(){const x=X(),cur=C0.seasonFor(nowMs()),sn=x.sn,v=WV(),n=evNeeds();let h='';
+ let top='';
+ for(const e of v.recent||[]){const rw=e.my&&e.my.rw;if(rw&&rw.tier&&!e.my.claimed)top+=`<div class="x7c act q-claim"><div class="x7h"><span>🎁</span><b>${esc(WEF[e.id].n)}: ${TIERW[rw.tier]} reward</b>${chip('READY','u')}</div><button class="x7a1" onclick="X7.wclaim('${e.key}')">Claim reward</button></div>`}
+ if(n.sr)top+=`<div class="x7c act q-claim"><div class="x7h"><span>🎁</span><b>${n.sr} season reward${n.sr>1?'s':''} ready</b>${chip('CLAIM','u')}</div><button class="x7a1" onclick="X7.tab('se')">Go to the season track</button></div>`;
+ if(n.dec)top+=`<div class="x7c act q-claim"><div class="x7h"><span>❗</span><b>${n.dec} decision${n.dec>1?'s':''} waiting</b>${chip('DECIDE','u')}</div><button class="x7a1" onclick="X7.tab('ev')">Decide now</button></div>`;
+ if(top)h+=`<div class="q-sec">To do now</div>`+top;
+ const row=(ic,t,s,c,on)=>`<div class="q-run"${on?` onclick="${on}"`:''}><span>${ic}</span><div><b>${t}</b><small>${s}</small></div>${c}</div>`;
+ let run=row(cur.ic,esc(cur.n),`Season · ${sn?sn.pts:0}/250 points · ${sn?sn.ch.filter(c=>c.d).length:0}/${sn?sn.ch.length:0} challenges`,chip(dt1(cur.left)+' left','u'),"X7.tab('se')");
+ if(v.cur){const d=WEF[v.cur.id];run+=row(d.ic,esc(d.n),`World event · stage ${v.cur.stage+1} of 3: ${esc(d.st[v.cur.stage].n)}`,chip(dt1(v.cur.end-v.now)+' left','u'))}
+ run+=row('📜',n.dec?`${n.dec} decision${n.dec>1?'s':''} waiting`:'Kingdom decisions','They arrive every so often while you play',n.dec?chip('WAITING','u'):chip('QUIET','e'),"X7.tab('ev')");
+ for(const m of v.mods||[])run+=row(m.ic,esc(m.n),'World effect · '+[['inc','coin income'],['prod','mine output'],['def','defence']].filter(([k])=>m[k]).map(([k,q])=>`${q} ×${m[k]}`).join(' · '),chip(dt1(m.until-v.now)+' left','a'));
+ for(const f of (S.efx||[]).slice(0,4))run+=row(f.ic||'✨',esc(f.n),'Kingdom effect',chip(mmss(f.until-S.time),'a'));
+ h+=`<div class="q-sec">Happening now</div><div class="x7c">${run}</div>`;
+ h+=`<div class="q-sec">World event</div>`+worldEC();
+ h+=`<div class="q-sec">Coming up</div>`+comingEC();
  const d7=dev7();h+=`<div class="x7s" style="margin-top:8px">Kingdom development: <b>${TIERN[d7.tier]}</b> (${Math.round(d7.sc)}/100) — territory ${Math.round(d7.ind.terr*100)}% · buildings ${Math.round(d7.ind.bld*100)}% · production ${Math.round(d7.ind.prod*100)}% · wealth ${Math.round(d7.ind.econ*100)}% · army ${Math.round(d7.ind.mil*100)}% · research ${Math.round(d7.ind.res*100)}%</div>`;return h}
-function vEC(){const x=X(),un=unread(),w=x.ev.act.length,v=WV();
- const tabs=[['ov','🏠','Overview'],['se','📅','Season'],['ev','📜','Events',w],['wo','🌍','World',(v.recent||[]).some(e=>e.my&&e.my.rw&&e.my.rw.tier&&!e.my.claimed)?'!':''],['ca','🗓️','Calendar'],['re','🏛️','Realm'],['al','🔔','Alerts',un||'']];
- const th=`<div class="x7t">${tabs.map(([k,i,n,b])=>`<button class="${ecTab==k?'on':''}" onclick="X7.tab('${k}')">${i}<br>${n}${b?`<i>${b}</i>`:''}</button>`).join('')}<button onclick="closeSheet()">✕<br>Close</button></div>`;
- const body={ov:ovEC,se:()=>secEC()+archEC(),ev:evPersonal,wo:worldEC,ca:calEC,re:realmEC,al:alertEC}[ecTab]();
- return['🌍 Event Centre',th+body]}
-window.XSH=Object.assign(window.XSH||{},{ev7:vEC});
+function comingEC(){const now=nowMs(),cur=C0.seasonFor(now),nxt=C0.seasonAt(cur.idx+1),v=WV();let h='';
+ if(v.next){const d=WEF[v.next.id];h+=`<div class="x7c"><div class="x7h"><span>${d.ic}</span><b>${esc(d.n)}</b>${chip('in '+dt1(v.next.start-now),'u')}</div><div class="x7s">World event · ${dstr(v.next.start)} – ${dstr(v.next.end)} · ${d.days} days</div></div>`}
+ h+=`<div class="x7c"><div class="x7h"><span>${nxt.ic}</span><b>${esc(nxt.n)}</b>${chip('in '+dt1(nxt.start-now),'u')}</div><div class="x7s">Next season · begins ${dstr(nxt.start)}. ${esc(nxt.desc)}</div></div>`;
+ return h+`<div class="x7s">Only what is really scheduled is listed. Kingdom decisions arrive while you play, so they cannot be dated in advance.</div>`}
+function evNeeds(){const x=X(),v=WV(),sn=x.sn;const dec=x.ev.act.length,sr=sn?C0.TRACK.filter(t=>sn.pts>=t.p&&!sn.cl[t.id]).length:0,wr=(v.recent||[]).filter(e=>e.my&&e.my.rw&&e.my.rw.tier&&!e.my.claimed).length;
+ let ar=0;const cur=C0.seasonFor(nowMs());for(const s of x.sh){if(S.on&&s.id!=='s'+(cur.idx-1))continue;ar+=C0.TRACK.filter(t=>s.pts>=t.p&&!s.cl.includes(t.id)).length}
+ return{dec,sr:sr+ar,wr,tot:dec+sr+ar+wr}}
+function vEC(){const x=X(),un=unread(),n=evNeeds();
+ if(!{ov:1,se:1,ev:1,al:1}[ecTab])ecTab='ov';
+ const tabs=[['ov','⚡','Now',n.wr],['se','📅','Season',n.sr],['ev','📜','Decisions',n.dec],['al','🔔','Alerts',un]];
+ const th=`<div class="x7t q-tabs">${tabs.map(([k,i,nm,b])=>`<button class="${ecTab==k?'on':''}${b&&k!='al'?' q-hot':''}" onclick="X7.tab('${k}')"><span class="qi">${i}</span>${nm}${b?`<i class="${k=='al'?'q-soft':''}">${b}</i>`:''}</button>`).join('')}</div>`;
+ const body={ov:nowEC,se:()=>secEC()+archEC(),ev:evPersonal,al:alertEC}[ecTab]();
+ return['🌍 Events',th+body]}
+window.XSH=Object.assign(window.XSH||{},{ev7:vEC,hon:()=>['🏅 Titles & honours',realmEC()]});
 Object.assign(window.X7,{
  openEC(t){if(t)ecTab=t;openSheet('ev7')},tab(t){ecTab=t;if(t=='al'){const x=X();x.notif.forEach(n=>n.r=1)}shK='';renderSheet()},
  claimMs,choose:choose7,give:weGive,fac:setFac,wclaim:weClaim,mon:monPay,ruGo,title:setShown,readAll(){X().notif.forEach(n=>n.r=1);shK='';renderSheet()},clearAlerts(){X().notif=[];shK='';renderSheet()},
+ needs:evNeeds,pts:(n,src)=>addPts(n,src),mons:()=>({MON,monSt,monCost,monArt,MSTN,RU,ruOn,mon:X().mon,up:X().up}),honN:()=>{const x=X();return{ti:Object.keys(x.ti).length,hon:Object.keys(x.ach).length,pr:prLevel()}},
  msg:onMsg7,state:()=>({x:X(),srv:SRV,dev:dev7(),bon:BON,modc:MODC,ann:ANN.length})});
 
 /* ===================== 6b. MAP, HUD, MENU, TILE PANEL ===================== */
@@ -4440,12 +4451,9 @@ function overlay7(){if(!S||!S.cam||!S.tiles)return;const ts=T0*zoom;if(ts<16)ret
  cx.restore()}
 const _hud7=hud;hud=function(){_hud7();try{const f=document.querySelector('#hud .fxr'),x=S&&S.x7;if(!f||!x)return;let h='';const w=x.ev.act.length,v=WV();
  if(w)h+=`<button type="button" class="event-waiting" onclick="X7.openEC('ev')">❗ ${w} decision${w>1?'s':''} waiting</button>`;
- else if(v.recent&&v.recent.some(e=>e.my&&e.my.rw&&e.my.rw.tier&&!e.my.claimed))h+=`<button type="button" class="event-waiting" onclick="X7.openEC('wo')">🎁 Event reward ready</button>`;
+ else if(v.recent&&v.recent.some(e=>e.my&&e.my.rw&&e.my.rw.tier&&!e.my.claimed))h+=`<button type="button" class="event-waiting" onclick="X7.openEC('ov')">🎁 Event reward ready</button>`;
  for(const m of v.mods||[])h+=`<span>${m.ic} ${esc(m.n)} ${dt1(m.until-v.now)}</span>`;
- if(h)f.insertAdjacentHTML('afterbegin',h);const mb_=$('mnb');if(mb_&&(w||unread()>0||(x.sn&&C0.TRACK.some(t=>x.sn.pts>=t.p&&!x.sn.cl[t.id]))))mb_.classList.add('dot')}catch(e){}};
-const _vm7=vMenu;vMenu=function(){const r=_vm7();try{const x=X(),v=WV(),sn=x.sn,cur=C0.seasonFor(nowMs()),ready=sn?C0.TRACK.filter(t=>sn.pts>=t.p&&!sn.cl[t.id]).length:0,w=x.ev.act.length;
- const sub=w?`❗ ${w} decision${w>1?'s':''} waiting`:ready?`🎁 ${ready} season reward${ready>1?'s':''} ready`:v.cur?`${WEF[v.cur.id].ic} ${WEF[v.cur.id].n} is active`:`${cur.ic} ${cur.n}`;
- const btn=mb('🌍','Event Centre',sub,"X7.openEC()"),k='openKingdomOverview()',i=r[1].indexOf(k);if(i>=0){const j=r[1].indexOf('</button>',i)+9;r[1]=r[1].slice(0,j)+btn+r[1].slice(j)}else r[1]=btn+r[1]}catch(e){console.error(e)}return r};
+ if(h)f.insertAdjacentHTML('afterbegin',h)}catch(e){}};
 const _xh7=xtraHtml;xtraHtml=function(x,y,t){let h=_xh7(x,y,t);try{if(t.o==1&&t.b&&!S.x7)X();if(t.o==1&&[1,3,5,6,7,10].includes(t.b)){const xx=X(),i=y*N+x,cur=xx.up[i],r=cur?RUID[cur]:RU.find(q=>q.b==t.b&&!Object.values(xx.up).includes(q.id));
   if(r){const lv_=t.l||1,c=ruCost(r);h+=`<div class="mi v7-ru"><div class="mh"><span>${r.ic}</span><b>${r.n}</b><em>${cur?(ruOn(i)?'Active':'Inactive'):'Rare upgrade'}</em></div><div class="mu">${r.d} ${r.fxt}.</div>`;
    if(cur)h+=ruOn(i)?`<div class="mu">👑 Built here.</div>`:`<div class="mu">Needs level ${r.lvl} again to work.</div>`;
@@ -4600,6 +4608,295 @@ function drawUFX(){if(!S||!UFX.length)return;const now=performance.now(),ts=T0*z
 const _dw=draw;draw=function(){_dw();try{drawUFX()}catch(e){}};
 
 Object.assign(window,{demo,gxUpMax,gxDmClose:dmClose,gxDmGo:dmGo});
+})();
+</script>
+<style id="q-css">
+/* ===== missions redesign ===== */
+#mis{max-height:78%}
+#mlist,#shl{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+#mis .q-head{padding:10px;display:flex;align-items:center;gap:8px}#mis .q-head b{font-size:18px}
+.q-tabs{display:grid!important;grid-template-columns:repeat(5,1fr);gap:5px;padding:0 8px 6px}
+.x7t.q-tabs{grid-template-columns:repeat(4,1fr);padding:0}
+.q-tabs button{position:relative;min-height:50px;padding:4px 2px;font-size:11.5px;line-height:1.15;text-align:center;overflow:visible}
+.q-tabs button .qi{display:block;font-size:19px;line-height:1.1}
+.q-tabs button>i:not(.qi){position:absolute;top:-6px;right:-3px;min-width:18px;height:18px;box-sizing:border-box;padding:0 4px;border-radius:9px;background:#ff3b4a;color:#fff;font:800 11px/18px sans-serif;font-style:normal;border:2px solid #0f2236;z-index:2}
+.q-tabs button>i.q-soft{background:#3d6a96}
+.q-hot{animation:qGlow 1.5s ease-in-out infinite}
+@keyframes qGlow{0%,100%{box-shadow:0 0 0 1px #ffcf4a66,0 0 4px #ffcf4a55}50%{box-shadow:0 0 0 2px #ffe27a,0 0 16px #ffcf4acc}}
+.q-tier{margin:0 8px 4px;padding:7px 10px;border-radius:10px;background:#0b1a2a;border:1px solid #2c4a6e;font-size:12.5px;display:flex;align-items:center;gap:8px;line-height:1.3}
+.q-pips{display:inline-flex;gap:3px;flex:none}.q-pips i{width:8px;height:8px;border-radius:50%;background:#2c4a6e}.q-pips i.on{background:#ffcf4a;box-shadow:0 0 4px #ffcf4a}
+.q-sec{font-weight:800;font-size:13px;letter-spacing:.3px;text-transform:uppercase;opacity:.85;margin:12px 10px 2px}
+.q-sec.hot{color:#ffe27a;opacity:1}
+#mis .q-card .mh em{font-style:normal}
+.q-card .q-rw{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:6px;font-size:12.5px}
+.q-card .q-rw span{background:#0b1626;border:1px solid #2c4a6e;border-radius:8px;padding:1px 7px}
+.q-card .q-rw span.ch{border-color:#b98cff;color:#e3d2ff}
+.q-btns{display:flex;gap:6px;margin-top:8px}.q-btns button{flex:1;text-align:center;min-height:42px}
+.q-btns button.q-sm{flex:0 0 auto;font-size:12.5px;padding:4px 10px}
+.q-step{font-size:11.5px;opacity:.75;margin-left:4px}
+.q-done{margin:10px 8px;border:1px solid #2c4a6e;border-radius:12px;background:#0b1a2a}
+.q-done summary{padding:10px 12px;cursor:pointer;font-weight:700;list-style:none}.q-done summary::-webkit-details-marker{display:none}
+.q-done summary::after{content:' ▾';opacity:.6}.q-done[open] summary::after{content:' ▴'}
+.q-done .q-li{padding:6px 12px;border-top:1px solid #1d3550;font-size:13px;display:flex;gap:8px;align-items:center}.q-done .q-li small{margin-left:auto;opacity:.7}
+.q-streak{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:8px 0}
+.q-day{border:1px solid #2c4a6e;border-radius:10px;background:#0b1626;text-align:center;padding:5px 2px;font-size:11px;line-height:1.2}
+.q-day b{display:block;font-size:18px;line-height:1.3}
+.q-day.got{background:#123d2a;border-color:#3ddc97;opacity:.8}.q-day.now{border-color:#ffcf4a;background:#3d3416;animation:qGlow 1.5s ease-in-out infinite}
+.q-fire{font-size:15px;font-weight:800;color:#ffb35a}
+.q-wonder{display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:start}
+.q-wonder svg{width:76px;height:auto;border-radius:8px;background:linear-gradient(#27456b,#0f2036)}
+.q-cost{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;font-size:12px}
+.q-cost span{border:1px solid #2c4a6e;border-radius:8px;padding:1px 6px;background:#0b1626}.q-cost span.ok{border-color:#3ddc97;color:#a8f0cd}
+.q-run{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid #1d3550}.q-run:last-child{border-bottom:0}
+.q-run>span:first-child{font-size:22px;flex:none;width:28px;text-align:center}.q-run>.x7p{flex:none;white-space:nowrap}.q-run>div{flex:1;min-width:0}.q-run b{display:block;font-size:13.5px}.q-run small{display:block;font-size:12px;opacity:.8}
+.x7c.q-claim{box-shadow:0 0 12px #ffcf4a55}
+/* dock + menu markers: a number badge and a glow on the way to every reward */
+.bdg.dot[data-n]::after{content:attr(data-n);width:auto;min-width:20px;height:20px;box-sizing:border-box;padding:0 5px;top:-5px;right:-5px;border-radius:10px;font:800 11.5px/16px sans-serif;color:#fff;text-align:center;border:2px solid #0b1a2a;background:#ff3b4a;z-index:3}
+#dock button.q-glow{animation:qGlow 1.4s ease-in-out infinite;overflow:visible}
+.mbtn{position:relative}.mbtn.q-hot{border-color:#ffcf4a}
+.mbtn .q-bd{position:absolute;top:-6px;right:-4px;min-width:20px;height:20px;box-sizing:border-box;padding:0 5px;border-radius:10px;background:#ff3b4a;color:#fff;font:800 11.5px/16px sans-serif;font-style:normal;border:2px solid #0f2236;text-align:center}
+@media (prefers-reduced-motion:reduce){.q-hot,#dock button.q-glow,.q-day.now{animation:none}}
+</style>
+<script>
+/* ===== Crownlands missions redesign (loaded last) =====
+   - One mission screen, five tiers from small to big: Daily (gift streak + 3 tasks), Tasks (simple, instant resources),
+     Quests (side challenges, chest), Goals (objectives + milestones, rare chest), Wonders (Great Works + Monuments together).
+   - Ready rewards are always on top; a number badge and a glow lead from the dock, through the tab, to the claim button.
+   - Events replace Home in the dock (Home moves to the map controls).
+   - Open screens refresh by patching their DOM instead of rebuilding it, so scrolling stays smooth. */
+(function(){
+'use strict';
+const $q=id=>document.getElementById(id),fm=n=>compactAmount(Math.round(n||0)),GX=()=>window.__gx||null;
+const incQ=()=>Math.max(1,(S&&(S.incE||S.inc))||1),secs=n=>Math.max(40,Math.round(incQ()*n)),frac=f=>Math.max(5,Math.round(cap()*f));
+const GI='<i class="gm"></i>';
+
+/* ---------- 1. scroll-safe refresh ---------- */
+function sync(a,b){const an=a.childNodes,bn=b.childNodes;
+ for(let i=0;i<bn.length;i++){const x=an[i],y=bn[i];
+  if(!x){a.appendChild(y.cloneNode(true));continue}
+  if(x.nodeType!==y.nodeType||x.nodeName!==y.nodeName){a.replaceChild(y.cloneNode(true),x);continue}
+  if(x.nodeType!==1){if(x.nodeValue!==y.nodeValue)x.nodeValue=y.nodeValue;continue}
+  const foc=x===document.activeElement,det=x.nodeName==='DETAILS';
+  for(let k=x.attributes.length-1;k>=0;k--){const n=x.attributes[k].name;if(det&&n==='open')continue;if(!y.hasAttribute(n))x.removeAttribute(n)}
+  for(let k=0;k<y.attributes.length;k++){const n=y.attributes[k].name,v=y.attributes[k].value;if(det&&n==='open')continue;if(foc&&n==='value')continue;if(x.getAttribute(n)!==v)x.setAttribute(n,v)}
+  if((x.nodeName==='INPUT'||x.nodeName==='SELECT')&&!foc&&x.value!==y.value)x.value=y.value;
+  sync(x,y)}
+ while(an.length>bn.length)a.removeChild(a.lastChild)}
+function morph(el,html){const t=document.createElement('div');t.innerHTML=html;sync(el,t)}
+window.qMorph=morph;
+renderSheet=function(){if(!SH)return;let fn=null;try{fn={menu:vMenu,army:vArmy,dev:vDev,chron:vChron,ach:vAch,set:vSet,help:vHelp,cat:vCat,battle:vBattle,sea:vSea,rank:vRank,war:vWar,report:vReport}[SH]}catch(e){}
+ fn=fn||(window.XSH&&XSH[SH]);if(!fn)return closeSheet();const v=fn();
+ const h=`<div class="mh" style="padding:10px"><b style="font-size:18px">${v[0]}</b><button onclick="closeSheet()" style="margin-left:auto;text-align:center" aria-label="Close">✕</button></div><div id="shl">${v[1]}</div>`;
+ if(h===shK)return;const el=$q('sh'),same=lastSH===SH&&!!$q('shl');shK=h;el.classList.toggle('noanim',same);
+ if(same)morph(el,h);else{el.innerHTML=h;const n=$q('shl');if(n)n.scrollTop=0}lastSH=SH};
+/* switching an Event Centre tab starts at the top */
+try{const _tb=X7.tab;X7.tab=function(t){lastSH=null;_tb(t)};const _oe=X7.openEC;X7.openEC=function(t){lastSH=null;_oe(t);qBadges(true)}}catch(e){}
+/* the old Great Works sheet now lives in Missions > Wonders */
+const _os=openSheet;openSheet=function(n){if(n==='gw')return openMis('won');return _os(n)};
+
+/* ---------- 2. Tasks: the simple missions, one line of steps per category ---------- */
+for(let i=MIS.length-1;i>=0;i--)if(MIS[i].cat==='Long-term')MIS.splice(i,1);   /* covered by Goals > Milestones */
+const TCAT=['Tutorial','Expansion','Development','Economy','Trade','Military','Defense'];
+function taskData(){const ready=[],act=[],seen={},done=[];
+ for(const m of MIS){const st=mstat(m);if(st==='claimed'){done.push(m);continue}if(st==='locked')continue;
+  if(m.req&&!(S.ms[m.req]&&S.ms[m.req].c))continue;          /* the step before must be claimed first */
+  if(st==='ready')ready.push(m);else if(!seen[m.cat]){seen[m.cat]=1;act.push(m)}}
+ act.sort((a,b)=>TCAT.indexOf(a.cat)-TCAT.indexOf(b.cat));return{ready,act,done}}
+const stepOf=m=>{const l=MIS.filter(q=>q.cat===m.cat);return`${l.filter(q=>(S.ms[q.id]||{}).c).length+1}/${l.length}`};
+window.qTask=function(id){const m=MID[id],r=S.ms[id];if(!m||!r||r.c||mstat(m)!=='ready')return;const txt=rwStr(m.rw);
+ r.c=1;S.st.missions=(S.st.missions||0)+1;give(m.rw);try{X7.pts(2,'ms')}catch(e){}
+ try{sfx('mission')}catch(e){}buzz();save();toast('🎁 '+m.name+': '+txt);snap();hud();qRender(false);qBadges(true)};
+
+/* ---------- 3. Quests: side challenges, three at a time, each with a chest ---------- */
+const rivalsAlive=()=>{for(let k=2;k<6;k++)if(S.tiles.some(t=>t.o===k))return true;return false};
+sideFill=function(){if(!S.side)S.side=[];let guard=0;
+ while(S.side.length<3&&S.time>=(S.sideAt||0)&&guard++<6){const used=S.side.map(q=>q.k),alive=S.on||rivalsAlive();
+  const pool=STPL.filter(t=>!used.includes(t[0])&&t[0]!==S.sideNo&&!((t[0]==='won'||t[0]==='repelled')&&!alive)&&!(S.on&&t[0]==='repelled'));if(!pool.length)break;
+  const t=pool[rnd(0,pool.length)|0],gi=rnd(0,t[2].length)|0,tier=(window.kdevTier?kdevTier():0),mult=[1,1.4,1.9,2.6,3.4,4.4][tier]*(t[0]==='won'||t[0]==='repelled'?.7:1);
+  const g=Math.max(t[2][gi],Math.round(t[2][gi]*mult));
+  S.side.push({k:t[0],g,b:S.st[t[0]]||0,n:t[1].replace('{g}',g),rw:[Math.round(t[3]*t[2][gi]*(1+gi*.3)),8+t[2][gi]*3+tier*6,{}]});S.sideN=(S.sideN||0)+1}};
+const qProg=q=>Math.max(0,(S.st[q.k]||0)-q.b);
+window.qQuest=function(i){const q=S.side[+i];if(!q||qProg(q)<q.g)return;misClaim(+i,1);S.sideAt=S.time+60;qRender(false);qBadges(true)};
+window.qSwap=function(i){const q=S.side[+i];if(!q)return;const w=(S.sideSw||-1e9)+300-S.time;if(w>0)return toast('You can swap a quest again in '+mmss(w));
+ S.side.splice(+i,1);S.sideNo=q.k;S.sideAt=S.time;sideFill();S.sideNo=null;S.sideSw=S.time;toast('🎲 New quest');qRender(false)};
+
+/* ---------- 4. Goals: strategic objectives + endless milestones, each with a rare chest ---------- */
+const V6=()=>window.V6G;
+function goalData(){const g=V6(),rd=[],act=[],done=[];if(!g)return{rd,act,done};
+ for(const o of g.SOB){const got=!!(S.sob&&S.sob[o.id]),v=o.v(),gg=o.g(),it={t:'sob',o,v,g:gg};if(got)done.push(it);else if(v>=gg)rd.push(it);else act.push(it)}
+ for(const m of g.MST){const l=g.mstLv(m.k),fin=g.mstDone(m),v=m.v(),gg=fin?v:m.g(l),it={t:'mst',m,l,v,g:gg};if(fin)done.push(it);else if(g.mstReady(m))rd.push(it);else act.push(it)}
+ act.sort((a,b)=>b.v/Math.max(1,b.g)-a.v/Math.max(1,a.g));return{rd,act,done}}
+const mstChest=l=>l<2?1:l<5?2:3;
+function chestGive(t){const g=GX();if(!g)return;g.chestAdd(t,1);setTimeout(()=>toast('📦 '+g.TR[t].n+' added — open it in the Treasury (Menu)'),900)}
+const chestName=t=>{const g=GX();return g?g.TR[t].n:'Chest'};
+{const _ms=window.mstClaim;window.mstClaim=function(k){const g=V6(),l0=g.mstLv(k);_ms(k);if(g.mstLv(k)>l0){chestGive(mstChest(l0));try{X7.pts(4,'ms')}catch(e){}}qRender(false);qBadges(true)};
+ const _so=window.sobClaim;window.sobClaim=function(id){const had=!!(S.sob&&S.sob[id]);_so(id);if(!had&&S.sob&&S.sob[id]){chestGive(3);try{X7.pts(6,'ms')}catch(e){}}qRender(false);qBadges(true)}}
+
+/* ---------- 5. Wonders: Great Works and Monuments as one list of long projects ---------- */
+const GWART={granary:['hal','#e8c070'],exchange:['arc','#ffd34a'],deepmines:['obe','#c08a5a'],citadel:['zig','#9aa4b4'],library:['col','#8d79ff'],warcollege:['pyr','#ff6b5a'],crown:['gar','#ffd34a']};
+const FXN={store:'storage',inc:'income',prod:'mine output',dfn:'fortification',rps:'research',atk:'attack'};
+function wonderData(){const g=V6();let mo=null;try{mo=X7.mons()}catch(e){}const out=[];
+ if(g)for(const w of g.GW){const st=g.gwSt(w.id),mx=g.gwMax(w),ok=(()=>{try{return w.req()}catch(e){return false}})();
+  const a=GWART[w.id]||['pyr','#ffd34a'];out.push({kind:'gw',id:w.id,ic:w.ic,n:w.n,d:w.d,st,mx,ok,rq:w.rq,need:st<mx?g.gwCost(w,st):null,paid:((S.gw||{})[w.id]||{}).paid||{},
+   now:st?Object.keys(w.fx).map(k=>k==='ucap'?'+'+w.fx[k]*st+' army limit':k==='spr'?'−'+(w.fx[k]*st*100).toFixed(1)+'% spread':'+'+Math.round(w.fx[k]*st*100)+'% '+(FXN[k]||k)).join(', '):'',
+   art:()=>mo?mo.monArt({col:a[1],sh:a[0],n:w.n},Math.min(4,Math.round(4*st/mx))):''})}
+ if(mo)for(const m of mo.MON){const st=mo.monSt(m.id),ok=(()=>{try{return m.req()}catch(e){return false}})();
+  out.push({kind:'mon',id:m.id,ic:m.ic,n:m.n,d:m.fxt,st,mx:4,ok,rq:m.rq,need:st<4?mo.monCost(m,st):null,paid:((mo.mon[m.id]||{}).paid)||{},stage:mo.MSTN[Math.min(st,3)],
+   now:st?(st>=4?'Ascended':st>=3?'Standing in your capital':'Under construction'):'',art:()=>mo.monArt(m,st)})}
+ for(const w of out){w.done=w.st>=w.mx;const ks=w.need?Object.keys(w.need):[];
+  w.pc=ks.length?ks.reduce((a,k)=>a+Math.min(1,(w.paid[k]||0)/w.need[k]),0)/ks.length:1;
+  w.can=!w.done&&w.ok&&ks.every(k=>(k==='coins'?S.coins:(S.res[k]||0))>=w.need[k]-(w.paid[k]||0));
+  w.some=!w.done&&w.ok&&ks.some(k=>(w.paid[k]||0)<w.need[k]&&(k==='coins'?S.coins:(S.res[k]||0))>=1)}
+ return out}
+window.qWonder=function(kind,id){if(kind==='gw')gwContribute(id);else X7.mon(id);qRender(false);qBadges(true)};
+
+/* ---------- 6. Daily: a gift streak, three quick tasks and a bonus chest ---------- */
+const dstr=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today=()=>dstr(new Date()),yesterday=()=>{const d=new Date();d.setDate(d.getDate()-1);return dstr(d)};
+const toMidnight=()=>{const d=new Date(),m=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);return m-d};
+const hms=ms=>{const s=Math.max(0,Math.round(ms/1000)),h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?`${h}h ${m}m`:`${m}m ${s%60}s`};
+const DCTR={gained:()=>S.st.gained||0,built:()=>S.st.built||0,upgrades:()=>S.st.upgrades||0,trades:()=>S.st.trades||0,trained:()=>S.st.trained||0,won:()=>S.st.won||0,
+ techs:()=>Object.keys(S.tech||{}).length,earn:()=>(S.x7&&S.x7.c&&S.x7.c.earn)||0,missions:()=>S.st.missions||0};
+const DQP=[
+ {k:'gained',ic:'🗺️',n:'Claim {g} new tiles',g:[3,4,6,8,10,12],go:'claim'},
+ {k:'built',ic:'🏗️',n:'Construct {g} buildings',g:[2,3,4,5,6,8],go:'city'},
+ {k:'upgrades',ic:'⬆️',n:'Upgrade buildings {g} times',g:[3,4,6,8,10,12],go:'cityUp'},
+ {k:'trades',ic:'⚖️',n:'Make {g} trades at the Market',g:[3,4,5,6,8,10],go:'market'},
+ {k:'trained',ic:'🗡️',n:'Recruit {g} units',g:[5,10,15,25,40,60],go:'army'},
+ {k:'won',ic:'⚔️',n:'Win {g} battles',g:[1,2,2,3,4,5],go:'enemy',ok:()=>S.on||rivalsAlive()},
+ {k:'techs',ic:'🎓',n:'Complete {g} research',g:[1,1,1,2,2,2],go:'dev',ok:()=>Object.keys(S.tech||{}).length<TECH.length-1},
+ {k:'earn',ic:'🪙',n:'Earn {g} coins',earn:1,go:''},
+ {k:'missions',ic:'🎯',n:'Claim {g} mission rewards',g:[2,2,3,3,3,4],go:'task'}];
+const DQID={};DQP.forEach(q=>DQID[q.k]=q);
+function dq(){const d=S.dq&&typeof S.dq==='object'?S.dq:(S.dq={day:'',t:[],bon:0,gift:'',streak:0,best:0});const td=today();
+ if(d.day!==td){d.day=td;d.bon=0;const tier=window.kdevTier?kdevTier():0,h=s=>CORE7.h32(s);
+  const pool=DQP.filter(q=>{try{return!q.ok||q.ok()}catch(e){return false}}).sort((a,b)=>h(td+a.k)-h(td+b.k)).slice(0,3);
+  d.t=pool.map(q=>({k:q.k,g:q.earn?Math.max(400,Math.round(incQ()*600)):q.g[Math.min(tier,q.g.length-1)],b:DCTR[q.k](),c:0}))}
+ if(!Array.isArray(d.t))d.t=[];return d}
+const dqProg=t=>Math.max(0,DCTR[t.k]()-t.b);
+const dqTaskRw=()=>({c:secs(150),res:{wood:frac(.05),stone:frac(.05)}});
+const streakNext=d=>d.gift===today()?d.streak:(d.gift===yesterday()?d.streak+1:1);
+const dqBonusRw=d=>{const s=streakNext(d);return{c:secs(300),res:{silver:frac(.03)},ch:s>=7?2:s>=3?1:0}};
+const GIFT=[{c:90,ic:'🪙'},{c:150,r:.05,ic:'🪵'},{c:120,ch:0,ic:'📦'},{c:240,r:.07,m:1,ic:'🥈'},{c:180,ch:1,gm:2,ic:'📦'},{c:360,r:.09,m:1,ic:'🥇'},{c:480,r:.1,m:1,ch:2,gm:5,ic:'👑'}];
+function giftRw(day){const i=(day-1)%7,wk=Math.floor((day-1)/7),k=1+.25*Math.min(wk,4),G=GIFT[i],o={c:Math.round(secs(G.c)*k),res:{},ch:G.ch,gm:G.gm?G.gm+wk:0};
+ if(G.r){o.res.wood=Math.round(frac(G.r)*k);o.res.stone=Math.round(frac(G.r)*k)}if(G.m){o.res.silver=Math.round(frac(G.r*.4)*k);if(i>=5)o.res.gold=Math.round(frac(G.r*.2)*k)}
+ if(i===6&&wk>=1)o.ch=3;return o}
+const rwTxt=o=>[o.c?`🪙${fm(o.c)}`:'',...Object.keys(o.res||{}).filter(k=>o.res[k]>0).map(k=>`${ICON[k]}${fm(o.res[k])}`),o.ch!=null?`📦 ${chestName(o.ch)}`:'',o.gm?`${GI}${o.gm}`:''].filter(Boolean);
+const rwChips=o=>`<div class="q-rw">${rwTxt(o).map(t=>`<span class="${t.startsWith('📦')?'ch':''}">${t}</span>`).join('')}</div>`;
+function grantQ(o){S.coins+=o.c||0;for(const k of RES)if(o.res&&o.res[k])S.res[k]=Math.max(S.res[k],Math.min(cap(),S.res[k]+o.res[k]));
+ if(o.ch!=null)chestGive(o.ch);if(o.gm){const g=GX();if(g)g.addGems(o.gm,true)}}
+window.qGift=function(){const d=dq(),td=today();if(d.gift===td)return;d.streak=streakNext(d);d.gift=td;d.best=Math.max(d.best||0,d.streak);const o=giftRw(d.streak);grantQ(o);
+ try{sfx('win')}catch(e){}buzz();try{chron('🎁','Daily gift — day '+d.streak+' of the streak')}catch(e){}save();hud();toast(`🔥 Day ${d.streak} gift: `+rwTxt(o).join(' ').replace(/<[^>]+>/g,'💠'));qRender(false);qBadges(true)};
+window.qDaily=function(i){const d=dq(),t=d.t[+i];if(!t||t.c||dqProg(t)<t.g)return;t.c=1;const o=dqTaskRw();grantQ(o);S.st.missions=(S.st.missions||0)+1;try{X7.pts(2,'ms')}catch(e){}
+ try{sfx('mission')}catch(e){}buzz();save();hud();toast('✅ Daily task: '+rwTxt(o).join(' '));qRender(false);qBadges(true)};
+window.qBonus=function(){const d=dq();if(d.bon||!d.t.length||!d.t.every(t=>t.c))return;d.bon=1;const o=dqBonusRw(d);grantQ(o);try{sfx('win')}catch(e){}buzz();save();hud();toast('🏆 Daily bonus: '+rwTxt(o).join(' ').replace(/<[^>]+>/g,''));qRender(false);qBadges(true)};
+const rankReady=()=>{try{return typeof chestReady==='function'&&chestReady()}catch(e){return false}};
+window.qRank=function(){try{claimChest()}catch(e){}qRender(false);qBadges(true)};
+
+/* ---------- 7. go to the place on the map (or the screen) where a goal is done ---------- */
+window.qGo=function(k){if(!k)return;if(k==='task')return setTab('task');if(k==='market'){closeMis();return openM()}if(k==='army'){closeMis();return openSheet('army')}if(k==='dev'){closeMis();return openDev()}
+ const p=hlTile(k);if(!p)return toast('Nothing to point at yet for this goal');closeMis();S.sel=p;center(p[0],p[1]);HL={x:p[0],y:p[1],t:performance.now()+7000};last='';render()};
+
+/* ---------- 8. counts: what can be claimed (or completed) right now ---------- */
+let CNT={daily:0,task:0,quest:0,goal:0,won:0,ev:0,menu:0,chests:0,tot:0},CNT_AT=0;
+function counts(force){const n=performance.now();if(!force&&n-CNT_AT<800)return CNT;CNT_AT=n;if(!S||!S.tiles)return CNT;
+ const c={daily:0,task:0,quest:0,goal:0,won:0,ev:0,menu:0,chests:0};
+ try{const d=dq();c.daily=(d.gift!==today()?1:0)+d.t.filter(t=>!t.c&&dqProg(t)>=t.g).length+(!d.bon&&d.t.length&&d.t.every(t=>t.c)?1:0)+(rankReady()?1:0)}catch(e){}
+ try{c.task=taskData().ready.length}catch(e){}
+ try{c.quest=(S.side||[]).filter(q=>qProg(q)>=q.g).length}catch(e){}
+ try{c.goal=goalData().rd.length}catch(e){}
+ try{c.won=wonderData().filter(w=>w.can).length}catch(e){}
+ try{c.ev=X7.needs().tot}catch(e){}
+ try{const g=GX();c.chests=g?Object.values(g.M.chests||{}).reduce((a,b)=>a+(b|0),0):0}catch(e){}
+ c.menu=(c.chests?1:0)+(S.evp?1:0);
+ c.tot=c.daily+c.task+c.quest+c.goal+c.won;CNT=c;return c}
+function badge(el,n){if(!el)return;el.classList.toggle('dot',n>0);el.classList.toggle('q-glow',n>0);if(n>0)el.dataset.n=n>9?'9+':String(n);else delete el.dataset.n}
+function qBadges(force){if(!S||!S.tiles)return;const c=counts(force);badge($q('mib'),c.tot);badge($q('evb'),c.ev);badge($q('mnb'),c.menu)}
+window.qBadges=qBadges;
+const _mt=misTick;misTick=function(){_mt();try{qBadges()}catch(e){}};
+const _hq=hud;hud=function(){_hq();try{qBadges()}catch(e){}};
+setInterval(()=>{try{qBadges(true)}catch(e){}},1500);
+
+/* ---------- 9. the mission screen ---------- */
+const TABS=[['daily','📅','Daily'],['task','🎯','Tasks'],['quest','🎲','Quests'],['goal','🌟','Goals'],['won','🏛️','Wonders']];
+const TMAP={act:'task',lock:'task',done:'task',side:'quest',mile:'goal',gw:'won',wonders:'won'};
+const TIER={daily:[0,'Every day: a gift for logging in, three quick tasks and a bonus chest. Keep your streak!'],
+ task:[1,'<b>Small steps</b> · reward: coins and materials, instantly'],
+ quest:[2,'<b>Side quests</b> · reward: materials and a 📦 chest'],
+ goal:[3,'<b>Major goals</b> · reward: a big haul and a rare 📦 chest'],
+ won:[4,'<b>Wonders</b> · huge projects with permanent bonuses']};
+let qTab='task';
+const card=(o)=>`<div class="mi q-card ${o.ready?'ready':''} ${o.lock?'locked':''}"><div class="mh"><span>${o.ic}</span><b>${o.t}${o.step?`<span class="q-step">${o.step}</span>`:''}</b><em>${o.em||''}</em></div>${o.d?`<div class="mu">${o.d}</div>`:''}${o.g!=null?`<div class="bar"><i style="width:${Math.min(100,(o.v||0)/Math.max(1,o.g)*100).toFixed(0)}%"></i></div><div class="mf"><span>${o.lab||'Progress'}: ${fm(Math.min(o.v||0,o.g))}/${fm(o.g)}</span></div>`:''}${o.rw||''}${o.btn?`<div class="q-btns">${o.btn}</div>`:''}</div>`;
+const claimB=f=>`<button onclick="${f}">🎁 Claim reward</button>`;
+const goB=k=>k?`<button class="q-sm" onclick="qGo('${k}')">📍 Show me</button>`:'';
+const rwOf=(rw,raw)=>{const [c,p,res,t]=raw?rw:(window.scaleRw?scaleRw(rw):rw);const a=[c?`🪙${fm(c)}`:'',p?`⭐${p}`:'',...Object.keys(res||{}).filter(k=>res[k]>0).map(k=>`${ICON[k]}${fm(res[k])}`),t?`🏷️ ${t}`:''].filter(Boolean);return`<div class="q-rw">${a.map(x=>`<span>${x}</span>`).join('')}</div>`};
+const doneBox=(k,n,items)=>n?`<details class="q-done" data-k="${k}"><summary>✔ Completed (${n})</summary>${items}</details>`:'';
+function vDaily(){const d=dq();let h='';const td=today(),gotToday=d.gift===td,risk=!gotToday&&d.gift===yesterday()&&d.streak>0,broke=!gotToday&&d.gift&&d.gift!==yesterday()&&d.streak>1;
+ const shown=gotToday?d.streak:(risk?d.streak:0),wk=Math.floor(Math.max(0,(gotToday?d.streak:streakNext(d))-1)/7),base=wk*7;
+ let boxes='';for(let i=1;i<=7;i++){const day=base+i,o=giftRw(day),got=day<=shown,now=!gotToday&&day===streakNext(d);boxes+=`<div class="q-day ${got?'got':''} ${now?'now':''}">Day ${day}<b>${got?'✔':GIFT[i-1].ic}</b>${o.ch!=null?'📦':o.gm?GI:'🪙'}</div>`}
+ h+=`<div class="mi q-card ${gotToday?'':'ready'}"><div class="mh"><span>🔥</span><b>Daily gift</b><em class="q-fire">${shown?shown+'-day streak':'No streak yet'}</em></div>
+  <div class="mu">${gotToday?`Claimed today. Come back tomorrow for <b>day ${d.streak+1}</b> — the gifts grow every day, and day 7 holds a chest and gems.`:risk?`Claim today to keep your <b>${d.streak}-day streak</b>!`:broke?`Your streak was broken — start again today. Play every day to reach the big day-7 gift.`:'Log in every day: each day of the streak gives a bigger gift.'}</div>
+  <div class="q-streak">${boxes}</div>${gotToday?`<div class="mf"><span>Next gift in ${hms(toMidnight())}: ${rwTxt(giftRw(d.streak+1)).join(' ')}</span></div>`:rwChips(giftRw(streakNext(d)))+`<div class="q-btns"><button onclick="qGift()">🎁 Claim day ${streakNext(d)} gift</button></div>`}</div>`;
+ const ready=[],rest=[];d.t.forEach((t,i)=>{const q=DQID[t.k];if(!q)return;const v=dqProg(t),rd=!t.c&&v>=t.g;const c=card({ic:q.ic,t:q.n.replace('{g}',fm(t.g)),em:t.c?'✔ Done':rd?'Ready!':'Today',v,g:t.g,ready:rd,rw:t.c?'':rwChips(dqTaskRw()),btn:rd?claimB(`qDaily(${i})`):(!t.c?goB(q.go):'')});(rd?ready:rest).push(c)});
+ const all=d.t.length&&d.t.every(t=>t.c),bo=dqBonusRw(d),nd=d.t.filter(t=>t.c).length;
+ if(all&&!d.bon)ready.unshift(card({ic:'🏆',t:'Daily bonus chest',em:'Ready!',d:'All three daily tasks are done.',ready:1,rw:rwChips(bo),btn:claimB('qBonus()')}));
+ if(rankReady())ready.push(card({ic:'🏆',t:'Rank chest',em:'Ready!',d:'A reward for your place in the rankings, every 20 hours.',ready:1,btn:claimB('qRank()')}));
+ if(ready.length)h+=`<div class="q-sec hot">Ready to claim</div>`+ready.join('');
+ h+=`<div class="q-sec">Today's tasks · ${nd}/${d.t.length} · new in ${hms(toMidnight())}</div>`+rest.join('');
+ if(!all)h+=card({ic:'🏆',t:'Daily bonus chest',em:`${nd}/${d.t.length}`,d:'Finish all three daily tasks to unlock it. A longer streak gives a better chest.',v:nd,g:d.t.length||3,lab:'Tasks',rw:rwChips(bo)});
+ else if(d.bon)h+=`<p class="mu" style="padding:4px 12px">✔ Daily bonus claimed. New tasks in ${hms(toMidnight())}.</p>`;
+ return h}
+function vTasks(){const T=taskData();let h='';
+ if(T.ready.length)h+=`<div class="q-sec hot">Ready to claim</div>`+T.ready.map(m=>card({ic:CI[m.cat],t:m.name,step:stepOf(m),em:'Ready!',d:m.desc,v:V[m.key]||0,g:m.goal,lab:m.lab,ready:1,rw:rwOf(m.rw),btn:claimB(`qTask('${m.id}')`)})).join('');
+ h+=`<div class="q-sec">In progress</div>`;
+ h+=T.act.length?T.act.map(m=>card({ic:CI[m.cat],t:m.name,step:stepOf(m),em:m.cat,d:m.desc,v:V[m.key]||0,g:m.goal,lab:m.lab,rw:rwOf(m.rw),btn:goB(m.hl==='home'?'':m.hl)})).join(''):`<p class="mu" style="padding:6px 12px">${T.ready.length?'Claim the rewards above to unlock the next steps.':'Every task is finished — Quests, Goals and Wonders carry on from here.'}</p>`;
+ return h+doneBox('task',T.done.length,T.done.map(m=>`<div class="q-li">${CI[m.cat]} ${m.name}<small>${m.cat}</small></div>`).join(''))}
+function vQuests(){let h='';const ready=[],rest=[];
+ (S.side||[]).forEach((q,i)=>{const v=qProg(q),rd=v>=q.g;const c=card({ic:'🎲',t:q.n,em:rd?'Ready!':'Quest',v,g:q.g,ready:rd,d:'Progress counts from when the quest appeared.',rw:rwOf(q.rw).replace('</div>','<span class="ch">📦 a chest</span></div>'),btn:rd?claimB(`qQuest(${i})`):(goB(SIDEHL[q.k])+`<button class="q-sm" onclick="qSwap(${i})">🔄 Swap</button>`)});(rd?ready:rest).push(c)});
+ if(ready.length)h+=`<div class="q-sec hot">Ready to claim</div>`+ready.join('');
+ h+=`<div class="q-sec">Active quests · ${(S.side||[]).length}/3</div>`+rest.join('');
+ if((S.side||[]).length<3){const w=Math.max(0,(S.sideAt||0)-S.time);h+=`<p class="mu" style="padding:6px 12px">${w>0?`A new quest arrives in ${mmss(w)}.`:'A new quest arrives in a moment.'}</p>`}
+ return h+`<p class="mu" style="padding:2px 12px 8px">Quests never run out and grow with your kingdom. You can swap one every 5 minutes.</p>`}
+function vGoals(){const G=goalData(),g=V6();if(!g)return'<p class="mu" style="padding:12px">Loading…</p>';let h='';
+ const one=(it,rd)=>{if(it.t==='sob'){const o=it.o;return card({ic:o.ic,t:o.n,em:rd?'Ready!':'Objective',d:o.d,v:it.v,g:it.g,ready:rd,rw:rwOf(g.sobRw(o),1).replace('</div>',`<span class="ch">📦 ${chestName(3)}</span></div>`),btn:rd?claimB(`sobClaim('${o.id}')`):''})}
+  const m=it.m,rom=['I','II','III','IV','V','VI','VII','VIII','IX','X'][it.l]||String(it.l+1);return card({ic:m.ic,t:m.n+' '+rom,em:rd?'Ready!':'Milestone',v:it.v,g:it.g,lab:m.lab,ready:rd,rw:rwOf(g.mstRw(m),1).replace('</div>',`<span class="ch">📦 ${chestName(mstChest(it.l))}</span></div>`),btn:rd?claimB(`mstClaim('${m.k}')`):''})};
+ if(G.rd.length)h+=`<div class="q-sec hot">Ready to claim</div>`+G.rd.map(it=>one(it,1)).join('');
+ const sob=G.act.filter(i=>i.t==='sob'),mst=G.act.filter(i=>i.t==='mst');
+ if(mst.length)h+=`<div class="q-sec">Milestones · endless, rewards grow with your realm</div>`+mst.map(it=>one(it,0)).join('');
+ if(sob.length)h+=`<div class="q-sec">Strategic objectives · once per kingdom</div>`+sob.map(it=>one(it,0)).join('');
+ const lv=g.MST.reduce((a,m)=>a+g.mstLv(m.k),0);
+ return h+doneBox('goal',G.done.length+(lv?1:0),(lv?`<div class="q-li">🏅 Milestone levels earned<small>${lv}</small></div>`:'')+G.done.map(it=>it.t==='sob'?`<div class="q-li">${it.o.ic} ${it.o.n}<small>Objective</small></div>`:`<div class="q-li">${it.m.ic} ${it.m.n}<small>Mastered</small></div>`).join(''))}
+function vWonders(){const W=wonderData();let h='';
+ const one=w=>{const ks=w.need?['coins',...RES].filter(k=>w.need[k]):[];const cost=ks.map(k=>{const p=w.paid[k]||0,have=(k==='coins'?S.coins:(S.res[k]||0)),ok=p>=w.need[k]||have>=w.need[k]-p;return`<span class="${ok?'ok':''}">${ICON[k]} ${fm(p)}/${fm(w.need[k])}</span>`}).join('');
+  return`<div class="mi q-card ${w.can?'ready':''}"><div class="q-wonder">${w.art()}<div><div class="mh"><span>${w.ic}</span><b>${w.n}</b><em>${w.can?'Can finish!':'Stage '+Math.min(w.st,w.mx)+'/'+w.mx}</em></div><div class="mu">${w.d}${w.now?` · now: ${w.now}`:''}</div></div></div>${w.need?`<div class="bar"><i style="width:${Math.round(w.pc*100)}%"></i></div><div class="mu" style="font-size:12px">${w.kind==='mon'&&w.stage?w.stage+' · ':''}Stage ${w.st+1} funded ${Math.round(w.pc*100)}%</div><div class="q-cost">${cost}</div>`:''}<div class="q-btns"><button ${w.some?'':'disabled'} onclick="qWonder('${w.kind}','${w.id}')">${w.can?'⭐ Complete stage '+(w.st+1):'🏗️ Contribute what I can'}</button></div></div>`};
+ const can=W.filter(w=>w.can),act=W.filter(w=>!w.can&&!w.done&&w.ok).sort((a,b)=>b.pc-a.pc),lock=W.filter(w=>!w.done&&!w.ok),done=W.filter(w=>w.done);
+ if(can.length)h+=`<div class="q-sec hot">Ready to complete</div>`+can.map(one).join('');
+ h+=`<div class="q-sec">Building</div>`+(act.length?act.map(one).join(''):`<p class="mu" style="padding:6px 12px">${lock.length?'No wonder is unlocked yet — see the list below for what each one needs.':'Every wonder is finished.'}</p>`);
+ if(lock.length)h+=`<details class="q-done" data-k="lock"><summary>🔒 Locked (${lock.length})</summary>${lock.map(w=>`<div class="q-li">${w.ic} ${w.n}<small>Needs ${w.rq}</small></div>`).join('')}</details>`;
+ let ru='';try{const mo=X7.mons();ru=mo.RU.map(r=>{const idx=Object.keys(mo.up).find(i=>mo.up[i]==r.id),on=idx!=null&&mo.ruOn(+idx);return`<div class="q-li">${r.ic} ${r.n} — ${r.fxt}<small>${on?'✔ Active':idx!=null?'Inactive':'Needs '+r.rq}</small></div>`}).join('')}catch(e){}
+ if(ru)h+=`<details class="q-done" data-k="ru"><summary>👑 Rare building upgrades</summary><div class="q-li" style="display:block;opacity:.85">Select an eligible building on the map: its panel offers the upgrade. One of each per kingdom.</div>${ru}</details>`;
+ return h+doneBox('won',done.length,done.map(w=>`<div class="q-li">${w.ic} ${w.n}<small>Complete</small></div>`).join(''))}
+function qRender(reset){const el=$q('mis');if(!el||!misOpen||!S)return;const c=counts(true);
+ const tabs=TABS.map(([k,i,n])=>{const b=c[k]||0;return`<button class="${qTab===k?'on':''}${b?' q-hot':''}" onclick="setTab('${k}')"><span class="qi">${i}</span>${n}${b?`<i>${b}</i>`:''}</button>`}).join('');
+ const t=TIER[qTab],pips=t[0]?`<span class="q-pips">${[1,2,3,4].map(i=>`<i class="${i<=t[0]?'on':''}"></i>`).join('')}</span>`:'<span>📅</span>';
+ const body={daily:vDaily,task:vTasks,quest:vQuests,goal:vGoals,won:vWonders}[qTab]();
+ const h=`<div class="mh q-head"><b>🎯 Missions</b><span class="mu">⭐${fm(S.score)}${S.title?' · 🏷️'+S.title:''}</span><button onclick="closeMis()" style="margin-left:auto;text-align:center" aria-label="Close">✕</button></div><div class="tabs q-tabs">${tabs}</div><div class="q-tier">${pips}<span>${t[1]}</span></div><div id="mlist">${body}</div>`;
+ if(reset||!$q('mlist')){el.innerHTML=h;lastMis=h;const n=$q('mlist');if(n)n.scrollTop=0}else if(h!==lastMis){lastMis=h;morph(el,h)}}
+renderMis=function(){qRender(false)};
+setTab=function(t){qTab=TMAP[t]||t;if(!TIER[qTab])qTab='task';qRender(true)};
+openMis=function(t){try{if(SH)closeSheet()}catch(e){}try{closeM()}catch(e){}misOpen=true;S.sel=null;render();misTick();
+ const c=counts(true);if(t&&typeof t==='string')qTab=TMAP[t]||t;else{const f=TABS.find(x=>(c[x[0]]||0)>0);if(f)qTab=f[0]}
+ if(!TIER[qTab])qTab='task';$q('mis').style.display='flex';qRender(true)};
+
+/* ---------- 10. menu: mark what needs the player, and keep the Realm screen's titles and honours ---------- */
+const _vmQ=vMenu;vMenu=function(){const r=_vmQ();try{const d=document.createElement('div');d.innerHTML=r[1];const btns=[...d.querySelectorAll('.mbtn')],c=counts();
+ const mark=(re,n)=>{const b=btns.find(x=>re.test(x.textContent));if(b&&n){b.classList.add('q-hot');b.insertAdjacentHTML('beforeend',`<i class="q-bd">${n>9?'9+':n}</i>`)}};
+ mark(/^Treasury/,c.chests);mark(/Chronicle/,S.evp?1:0);
+ let hn={ti:0,hon:0,pr:0};try{hn=X7.honN()}catch(e){}
+ const hb=mb('🏅','Titles & honours',`${hn.ti} title${hn.ti==1?'':'s'} · ${hn.hon} honour${hn.hon==1?'':'s'} · prestige ${hn.pr}`,"openSheet('hon')"),ac=btns.find(x=>/Achievement tree/.test(x.textContent));
+ if(ac)ac.insertAdjacentHTML('afterend',hb);else d.insertAdjacentHTML('beforeend',hb);r[1]=d.innerHTML}catch(e){console.error(e)}return r};
+
+setTimeout(()=>{try{if(S&&S.tiles){dq();sideFill();qBadges(true)}}catch(e){console.error(e)}},800);
 })();
 </script>
 </body></html>

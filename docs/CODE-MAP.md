@@ -34,6 +34,7 @@ Find each block with `Grep "<script" www/index.html`. Later blocks change earlie
 | `v6 launch layer` | Launch features. |
 | `CORE7` | Seasons + world events, **verbatim copy** of `server.js` `/*@@CORE7@@*/…/*@@END CORE7@@*/`; edit both. Then `window.X7` (Event Centre). |
 | `minor changes` | Upgrade max (`gxUpMax`, `plan`), demolish dialog (`demo`, `#gxdm`), map FX (`fxUp`, `fxDemo`). |
+| `missions redesign` (`<style id="q-css">` + last `<script>`) | The live mission screen: tabs Daily (`S.dq` gift streak, 3 tasks, bonus chest) · Tasks (`MIS`, no chests) · Quests (`S.side`, 3 at a time, chest) · Goals (`V6G` milestones/objectives, rare chest) · Wonders (Great Works + Monuments). Live `openMis`/`renderMis`/`setTab`/`sideFill`; dock/menu badges (`qBadges`); `renderSheet` patches the DOM (`qMorph`) so scrolling survives refreshes. |
 
 ### Most-wrapped functions
 
