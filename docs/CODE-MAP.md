@@ -13,7 +13,6 @@ Navigate with Grep, not full reads. `www/index.html` is ~635 KB, 4,600 lines, wi
 | `cloud-start.js` | `npm start`: restore from Upstash, then `require('./server.js')`. |
 | `Dockerfile`, `render.yaml` | Render deploy (Docker, health check `/healthz`). |
 | `.github/workflows/build-apk.yml`, `capacitor.config.json` | Android APK built in CI from `www/`. |
-| `.github/workflows/package.json` | Stale duplicate of `package.json`. |
 
 ## `www/index.html`: script blocks in load order
 
