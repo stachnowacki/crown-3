@@ -1539,6 +1539,7 @@ function onMsg(e){let m;try{m=JSON.parse(e.data)}catch(x){return}
   if(m.t=='auth'){if(m.ok){MP.name=m.name;MP.key=m.key;MP.st=m.st||null;MP.caps=m.caps||{};localStorage.setItem('cl-key',m.key);MP.err='';if(MP.v=='auth')MP.v='home';if(MP.want&&!MP.room){wsend({t:'join',code:MP.want});MP.want=''}}
     else{MP.err=m.err||'Login failed';MP.key='';MP.v='auth';localStorage.removeItem('cl-key')}ui()}
   else if(m.t=='err'){MP.err=m.m;if(S&&S.on)toast(m.m);ui()}
+  else if(m.t=='world'||m.t=='wecok'||m.t=='weclok'||m.t=='sclok'){try{window.X7&&X7.msg(m)}catch(x){console.error(x)}}
   else if(m.t=='ack'){try{window.obxAck&&obxAck(m.mid)}catch(x){}}
   else if(m.t=='kicked'){MP.room=null;toast('🔒 '+(m.m||'Your realm was opened on another device.')+' Reload to play here again.')}
   else if(m.t=='room'){MP.room=m;
@@ -2733,7 +2734,7 @@ function islandRank(){if(!(S.on&&window.ONL&&ONL.sc))return null;const arr=Objec
 function rkRecalc(){const ir=islandRank();let b=0,t=5;if(ir&&ir.n>=2){b+=ISL_B[ir.rank-1]||0;t=Math.min(t,ISL_T[ir.rank-1]??5)}
   if(RK.me&&RK.me.rank){b+=worldBonus(RK.me.rank);t=Math.min(t,worldTier(RK.me.rank))}RK.bonus=Math.min(.1,b);RK.tier=t;window.RKB=RK.bonus;RK.ir=ir}
 window.srvRoom=function(m){if(!window.ONL)return;ONL.sc=ONL.sc||{};m.pl.forEach(p=>{ONL.sc[p.s]={s:p.sc||0,p:p.sp||null,n:p.n,on:p.on}});rkRecalc();chatBtn()};
-function sendScore(){const sc=scoreOf();RK.mine=sc;if(S.on&&window.ONL)MPX.send({t:'score',s:{s:sc.s,p:sc.p,d:sc.d}});else lbSubmit(sc)}
+function sendScore(){const sc=scoreOf();RK.mine=sc;if(S.on&&window.ONL)MPX.send({t:'score',s:{s:sc.s,p:sc.p,d:sc.d,ti:sc.ti}});else lbSubmit(sc)}
 /* the world ranking uses a short-lived second connection when you play offline */
 const LB={ws:null,busy:0};
 function lbConn(cb){const c=MPX.srv();if(!c.key||!/^wss?:\/\/.{3,}/.test(c.url)){RK.lbErr=c.key?'Set the server address in the Online menu first.':'Log in through the Online menu to join the world ranking.';cb&&cb(false);return}
@@ -2771,7 +2772,7 @@ function vRank(){const sc=RK.mine=scoreOf();rkRecalc();const on=S.on&&window.ONL
     if(!ir)h+=`<div class="mu">Scores appear a few seconds after everyone is online.</div>`;else{h+=ir.arr.map((q,i)=>{const p=ONL.sc[q.s],mine=q.s==ONL.slot,nm=escH(p.n||('Player '+q.s)),b=ir.n>=2?(ISL_B[i]||0):0;return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${nm}${p.on?'':' <small class="mu">(away)</small>'}${b?` <small class="ok">+${Math.round(b*100)}% income</small>`:''}</span><b>${q.v}</b></div>`}).join('');if(ir.n<2)h+=`<div class="mu">Island rewards start when at least two players are on the island.</div>`}h+=`</div>`}
   else{h+=`<div class="mi"><b>🌍 World ranking</b> <small class="mu">best island of every logged-in account — solo or online</small>`;
     if(RK.lbErr)h+=`<div class="bad">${RK.lbErr}</div>`;
-    if(RK.world){h+=RK.world.slice(0,30).map((q,i)=>{const mine=RK.me&&q.s==RK.me.s&&q.m==RK.me.m&&(RK.me.rank==i+1);return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${escH(q.n)} <small class="mu">${q.m=='solo'?'🏝️ solo':'⚔️ online'}</small></span><b>${q.s}</b></div>`}).join('');
+    if(RK.world){h+=RK.world.slice(0,30).map((q,i)=>{const mine=RK.me&&q.s==RK.me.s&&q.m==RK.me.m&&(RK.me.rank==i+1);return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${escH(q.n)}${q.ti?' <small class="mu">· '+escH(q.ti)+'</small>':''} <small class="mu">${q.m=='solo'?'🏝️ solo':'⚔️ online'}</small></span><b>${q.s}</b></div>`}).join('');
       if(RK.me&&RK.me.rank>30)h+=`<div class="mf" style="color:#ffd23f"><span>#${RK.me.rank} You</span><b>${RK.me.s}</b></div>`;h+=`<div class="mu">${RK.total} players ranked</div>`}
     else if(!RK.lbErr)h+=`<div class="mu">Loading…</div>`;h+=`<button style="width:100%;margin-top:6px" onclick="lbRefresh()">↻ Refresh</button></div>`}
   const b=Math.round(RK.bonus*100),l=chestLoot();
@@ -3629,5 +3630,789 @@ const _ov6=window.openKingdomOverview;window.openKingdomOverview=function(){_ov6
   const n=goalsReady();const g=`<div class="ovcard wide"><h4>🏛️ Long-term goals</h4><div class="ovr"><span>Great Work stages</span><b>${gwTotal()}</b></div><div class="ovr"><span>Milestones & objectives ready</span><b>${n}</b></div><div class="ovfoot" style="padding:6px 0 0;border:0;background:none"><button onclick="closeKingdomOverview();openSheet('gw')">🏛️ Great Works</button><button onclick="closeKingdomOverview();openMis();setTab('mile')">🏅 Goals</button></div></div>`;
   if(th){const cards=[...box.querySelectorAll('.ovcard.wide')];if(cards[0])cards[0].insertAdjacentHTML('beforeend',th)}box.insertAdjacentHTML('beforeend',g)}catch(e){console.error(e)}};
 })();
+</script>
+<script>
+/* ===== CORE7: shared by the server and the game. Pure functions, no DOM, no Node APIs.
+   The server runs this to decide the world; the offline game runs the same code locally. ===== */
+const CORE7=(()=>{
+const DAY=864e5,T0=Date.UTC(2026,0,1),EP=14*DAY;
+const h32=s=>{s=String(s);let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0};
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ---------- seasons: calendar months (UTC). Add a theme to THEMES, or an entry to OVERRIDE keyed by season index, to change what a season is. ---------- */
+const THEMES=[
+ {k:'conquest',n:'The Age of Conquest',ic:'⚔️',col:'#ff6b5a',w:{eco:.7,mil:1.6,exp:1,dev:.7,spec:1},intro:'Banners rise along every border. This season rewards those who march, besiege and hold what they win.',desc:'Military and conquest',em:'Laurel of Conquest',ti:'Season Victor'},
+ {k:'trade',n:'The Golden Trade Era',ic:'💰',col:'#ffd34a',w:{eco:1.7,mil:.6,exp:.9,dev:.9,spec:1},intro:'Caravans fill the roads and prices sing. This season rewards merchants, builders of markets and the well-stocked.',desc:'Trade and prosperity',em:'Golden Scale',ti:'Merchant of the Era'},
+ {k:'winter',n:'Winter of the North',ic:'❄️',col:'#8fe0ff',w:{eco:1,mil:.9,exp:.6,dev:1.5,spec:1},intro:'The north wind closes the passes. This season rewards kingdoms that prepare, research and build solid foundations.',desc:'Endurance and development',em:'Frost Crest',ti:'Warden of Winter'},
+ {k:'expansion',n:'The Great Expansion',ic:'🗺️',col:'#7bd88f',w:{eco:.8,mil:.9,exp:1.8,dev:.8,spec:1},intro:'New horizons open for every ruler. This season rewards those who claim, settle and discover.',desc:'Territory and settlement',em:'Pathfinder Wreath',ti:'Pathfinder'},
+ {k:'discovery',n:'The Age of Discovery',ic:'🧭',col:'#61d1d9',w:{eco:.9,mil:.7,exp:1.3,dev:1.2,spec:1.4},intro:'Ruins, relics and rumours draw explorers out. This season rewards curiosity, research and the world events that shape the realm.',desc:'Exploration and events',em:'Compass Rose',ti:'Discoverer'},
+ {k:'dragon',n:"The Dragon's Awakening",ic:'🐉',col:'#b58cff',w:{eco:.8,mil:1.4,exp:.8,dev:1.1,spec:1.3},intro:'Something ancient stirs in the mountains. This season rewards strong armies, strong walls and steady nerves.',desc:'Defence and strength',em:'Dragon Scale',ti:'Dragonwatch'},
+ {k:'renaissance',n:'The Imperial Renaissance',ic:'🏛️',col:'#f2bd54',w:{eco:1.1,mil:.7,exp:.9,dev:1.7,spec:1},intro:'Scholars, masons and artists flourish. This season rewards research, great works and well-built cities.',desc:'Learning and great works',em:'Imperial Seal',ti:'Renaissance Patron'}];
+const OVERRIDE={};   // e.g. OVERRIDE[11]={n:'A special winter',...} replaces the theme of season index 11
+function seasonFor(now){const d=new Date(Math.max(now,T0));let idx=(d.getUTCFullYear()-2026)*12+d.getUTCMonth();if(idx<0)idx=0;
+ const th=OVERRIDE[idx]||THEMES[idx%THEMES.length],start=Date.UTC(2026,idx,1),end=Date.UTC(2026,idx+1,1);
+ return Object.assign({idx,id:'s'+idx,start,end,len:end-start,left:Math.max(0,end-now)},th)}
+function seasonAt(idx){const th=OVERRIDE[idx]||THEMES[idx%THEMES.length];return Object.assign({idx,id:'s'+idx,start:Date.UTC(2026,idx,1),end:Date.UTC(2026,idx+1,1)},th)}
+/* the season track: points needed -> reward id. Server and game both use the ids. */
+const TRACK=[{id:'m1',p:20,k:'small'},{id:'m2',p:50,k:'small',g:3},{id:'m3',p:90,k:'cos'},{id:'m4',p:130,k:'med',g:5},{id:'m5',p:170,k:'rare'},{id:'m6',p:210,k:'med',g:6},{id:'fin',p:250,k:'final',g:15},{id:'b1',p:300,k:'bonus',g:10},{id:'b2',p:340,k:'bonus',g:10}];
+
+/* ---------- major world events: one every 14 days, known in advance from the calendar ---------- */
+const WE={
+ invasion:{n:'The Great Invasion',ic:'⚔️',col:'#ff5a5a',days:6,
+  intro:'A vast host has crossed the edge of the known world and is marching on the border kingdoms. No single realm can turn it back. Hold the line together.',
+  st:[{n:'Muster the defences',ic:'🛡️',kind:'supply',gp:50,t:'Send supplies to the border forts.'},{n:'Meet the host',ic:'⚔️',kind:'act',key:'won',per:4,gp:48,t:'Win battles against any enemy.'},{n:'Hold the passes',ic:'🧱',kind:'supply',gp:56,t:'Reinforce the mountain passes.'}],
+  out:{win:'The host broke against the combined defences and fled the world. Every kingdom that stood is honoured.',partial:'The host retreated after heavy losses, leaving scars on the borderlands.',fail:'The invaders overran several frontier regions before winter halted them.'},
+  mod:{win:{n:'Victory feast',ic:'🎉',inc:1.08,days:2},partial:{n:'Scarred borders',ic:'🩹',def:1.05,days:2},fail:{n:'Occupied frontier',ic:'🏴',prod:.95,days:2}},
+  rw:[{s:25,r:.04,sp:10},{s:70,r:.08,g:4,sp:20},{s:140,r:.14,g:10,sp:35,ti:'defender'}]},
+ trade:{n:'The Golden Trade Era',ic:'💰',col:'#ffd34a',days:7,
+  intro:'A grand charter opens the trade roads across the world. Merchants will pay well for those who produce, trade and invest. The most successful will be remembered.',
+  st:[{n:'Open the roads',ic:'🐪',kind:'act',key:'trades',per:.6,gp:54,t:'Make trades at the market.'},{n:'Fill the caravans',ic:'📦',kind:'supply',gp:52,t:'Send goods to the caravans.'},{n:'Build the trade houses',ic:'🏦',kind:'supply',gp:58,t:'Invest coins in trade infrastructure.'}],
+  out:{win:'The roads are open. A lasting trade route now serves every kingdom.',partial:'The charter was signed, but only some of the roads opened.',fail:'The merchants moved on before the roads were ready.'},
+  mod:{win:{n:'Golden trade route',ic:'🐪',inc:1.06,spr:.99,days:3},partial:{n:'Trade charter',ic:'📜',inc:1.03,days:2},fail:null},
+  rw:[{s:30,r:.04,sp:10},{s:80,r:.09,g:4,sp:20},{s:160,r:.15,g:10,sp:35,ti:'merchant'}]},
+ drought:{n:'The Great Drought',ic:'☀️',col:'#f0a040',days:7,
+  intro:'Rivers fall and fields crack across many regions. Prepare, trade for supplies and help your neighbours. Those who share their stores will not be forgotten.',
+  st:[{n:'Dig the wells',ic:'⛏️',kind:'supply',gp:50,t:'Contribute materials for wells and cisterns.'},{n:'Buy and move grain',ic:'🌾',kind:'act',key:'trades',per:.6,gp:50,t:'Trade to bring food and goods to the dry regions.'},{n:'Share the stores',ic:'🤝',kind:'supply',gp:56,t:'Donate to the neighbouring kingdoms in need.'}],
+  out:{win:'Rain returned to a world that had shared its stores. A bumper harvest follows.',partial:'The worst was averted, though the recovery will be slow.',fail:'The drought ran its course. The recovery will take time.'},
+  mod:{win:{n:'Bumper harvest',ic:'🌾',prod:1.08,days:2},partial:{n:'Slow recovery',ic:'🌦️',prod:1.02,days:2},fail:{n:'Lingering dry spell',ic:'☀️',prod:.95,days:2}},
+  rw:[{s:25,r:.05,sp:10},{s:70,r:.1,g:4,sp:20},{s:140,r:.16,g:10,sp:35,ti:'steward'}]},
+ empire:{n:'The Lost Empire',ic:'🏺',col:'#d7a6ff',days:7,
+  intro:'Surveyors report the ruins of an ancient empire beneath the sands. Fund the expeditions and uncover what it left behind. Each expedition may bring home something different.',
+  st:[{n:'Fund the expeditions',ic:'🧭',kind:'supply',gp:52,t:'Contribute supplies to the expeditions.'},{n:'Decipher the archive',ic:'📜',kind:'act',key:'techs',per:8,gp:44,t:'Complete research in the development tree.'},{n:'Open the vault',ic:'🗝️',kind:'supply',gp:58,t:'Pay for the final excavation.'}],
+  out:{win:'The vault was opened. The empire\'s lost works now enrich every kingdom that helped.',partial:'Part of the archive was recovered before the sands shifted.',fail:'The sands buried the dig. Only a few relics were saved.'},
+  mod:{win:{n:'Ancient knowledge',ic:'📚',inc:1.04,days:3},partial:{n:'Recovered scrolls',ic:'📜',inc:1.02,days:2},fail:null},
+  rw:[{s:25,r:.05,sp:10},{s:75,r:.1,g:5,sp:20},{s:150,r:.16,g:12,sp:35,ti:'discoverer'}],relics:true},
+ succession:{n:'The Succession War',ic:'👑',col:'#9d6cff',days:6,fac:['House Valmar','House Orrin'],
+  intro:'The neighbouring throne is empty and two claimants raise banners. Back a side, trade with the factions, or keep to your own counsel. The world will live with the result.',
+  st:[{n:'Raise the banners',ic:'🚩',kind:'supply',gp:50,t:'Send supplies to your chosen claimant.'},{n:'March to the claimant',ic:'⚔️',kind:'act',key:'won',per:4,gp:46,t:'Win battles in support of the war.'},{n:'Crown the victor',ic:'👑',kind:'supply',gp:56,t:'Fund the coronation and the peace.'}],
+  out:{win:'The war ended with a single crown and a settled peace across the border.',partial:'A fragile truce holds, with the crown still contested.',fail:'The realm splintered. The border remains unsettled.'},
+  mod:{win:{n:'Settled borders',ic:'🕊️',def:1.05,inc:1.03,days:3},partial:{n:'Fragile truce',ic:'🕯️',def:1.03,days:2},fail:{n:'Unsettled border',ic:'🔥',def:.97,days:2}},
+  rw:[{s:25,r:.05,sp:10},{s:75,r:.1,g:4,sp:20},{s:150,r:.16,g:10,sp:35,ti:'kingmaker'}],fw:{0:{n:'House Valmar crowned',inc:1.03},1:{n:'House Orrin crowned',def:1.04}}}};
+const KINDS=Object.keys(WE);
+const NPC=.4,PCAP=1.6,MINU=8,RUNIT=12;
+const pcOf=s=>Math.round(s.gp*PCAP);
+const RELICS=['Bronze Astrolabe','Sun Disc','Jade Mask','Sealed Codex','Iron Crown Shard','Moonstone Idol','Cartographer\'s Slate','Emerald Signet'];
+const relicsOf=(acc,w)=>{const u=sumU(w.pl[acc]),out=[];for(let i=1;i<=Math.floor(u/RUNIT);i++){const r=h32(acc+'|'+w.id+'|'+w.start+'|'+i)%RELICS.length;if(!out.includes(r))out.push(r)}return out};
+
+function kindOf(e){let prev=-1,k=0;for(let i=0;i<=e;i++){k=h32('we'+i)%KINDS.length;if(k===prev)k=(k+1+h32('x'+i)%(KINDS.length-1))%KINDS.length;prev=k}return KINDS[k]}
+function schedule(now){const e=Math.max(0,Math.floor((now-T0)/EP)),mk=ep=>{const id=kindOf(ep),d=WE[id],start=T0+ep*EP+DAY+(h32('o'+ep)%2)*DAY*.5;return{ep,id,start,end:start+d.days*DAY,announce:T0+ep*EP}};
+ const a=mk(e),b=mk(e+1);let cur=null,next=null;
+ if(now<a.start)next=a;else if(now<a.end)cur=a;else next=b;
+ return{cur,next,ep:e}}
+const sumU=p=>p&&p.s?p.s.reduce((a,b)=>a+(b|0),0):0;
+const stageWin=(w,k)=>{const D=(w.end-w.start)/3;return[w.start+k*D,w.start+(k+1)*D]};
+const stageAt=(w,now)=>cl(Math.floor((now-w.start)/((w.end-w.start)/3)),0,2);
+function newEvent(sch){return{v:1,id:sch.id,ep:sch.ep,start:sch.start,end:sch.end,pl:{},ok:[0,0,0],res:null}}
+function totals(w,k,now){const s=WE[w.id].st[k],pc=pcOf(s),acc=Object.keys(w.pl),n=Math.max(1,acc.length),G=Math.round(s.gp*Math.pow(n,.85));let mine=0;for(const a of acc)mine+=Math.min(pc,(w.pl[a].s||[])[k]|0);
+ const[a,b]=stageWin(w,k),f=cl((now-a)/(b-a),0,1),npc=Math.round(G*NPC*f);return{G,mine,npc,tot:mine+npc,n,pc}}
+/* idempotent: safe to call at any time, any number of times, after any gap */
+function evaluate(w,now){if(!w||w.res)return w;for(let k=0;k<3;k++){if(w.ok[k])continue;const t=totals(w,k,now);if(t.tot>=t.G)w.ok[k]=1;else if(now>=stageWin(w,k)[1])w.ok[k]=2}
+ if(now>=w.end){for(let k=0;k<3;k++)if(!w.ok[k])w.ok[k]=2;finalize(w)}return w}
+function finalize(w){if(w.res)return;const def=WE[w.id],n=w.ok.filter(x=>x==1).length,o=n>=3?'win':n==2?'partial':'fail';
+ const rows=Object.keys(w.pl).map(a=>[a,Math.min(3e3,sumU(w.pl[a]))]).sort((x,y)=>y[1]-x[1]||(x[0]<y[0]?-1:1));
+ let fac=null;if(def.fac){const f=[0,0];for(const a in w.pl){const q=w.pl[a];if(q.f===0||q.f===1)f[q.f]+=sumU(q)}fac=f[0]>f[1]?0:f[1]>f[0]?1:2}
+ let mod=def.mod[o]?Object.assign({},def.mod[o]):null;if(mod&&def.fw&&fac!=null&&fac<2&&o!='fail')mod=Object.assign(mod,def.fw[fac],{ic:mod.ic});
+ if(mod)mod.until=w.end+(mod.days||2)*DAY;
+ w.res={o,ok:w.ok.slice(),fac,top:rows.slice(0,3).map(r=>r[0]),n:rows.length,units:rows.reduce((a,r)=>a+r[1],0),mod,at:w.end}}
+/* what a participant earns: tier 0 none, 1 participant, 2 contributor, 3 champion */
+function rewardFor(w,acc){if(!w||!w.res)return null;const p=w.pl[acc];if(!p)return{tier:0};const def=WE[w.id];let u=0,m=0;for(let k=0;k<3;k++){const c=pcOf(def.st[k]);u+=Math.min(c,(p.s||[])[k]|0);m+=c}
+ const f=u/m,tier=u<MINU?0:f>=.7?3:f>=.35?2:1,o=w.res.o,mult=o=='win'?1:o=='partial'?.7:.45,top=w.res.top.indexOf(acc);
+ const wonSide=def.fac&&w.res.fac!=null&&w.res.fac<2&&p.f===w.res.fac;
+ return{tier,mult:mult*(wonSide?1.2:1),o,top:top>=0&&u>=MINU?top+1:0,units:u,rel:def.relics?relicsOf(acc,w):null,side:wonSide?1:0,fac:p.f}}
+/* a player's contribution message, validated: returns units actually accepted */
+function contribute(w,acc,k,n,f,now){evaluate(w,now);if(w.res||now<w.start||now>=w.end)return 0;if(k!==stageAt(w,now))return 0;n=n|0;if(n<1||n>10)return 0;
+ const def=WE[w.id],s=def.st[k],pc=pcOf(s);let p=w.pl[acc];if(!p){if(Object.keys(w.pl).length>=500)return 0;p=w.pl[acc]={s:[0,0,0],f:2}}
+ if(def.fac&&(f===0||f===1)&&p.f===2)p.f=f;
+ const room=pc-(p.s[k]|0),a=Math.min(room,n);if(a<=0)return 0;p.s[k]+=a;p.t=now;evaluate(w,now);return a}
+return{DAY,T0,EP,THEMES,TRACK,WE,KINDS,RELICS,NPC,PCAP,MINU,RUNIT,pcOf,seasonFor,seasonAt,schedule,kindOf,newEvent,evaluate,totals,stageAt,stageWin,contribute,rewardFor,relicsOf,sumU,h32,cl}})();
+
+/* ===== Crownlands v7 content layer: seasons, living world events, world events, monuments, titles, prestige.
+   Loaded last. Everything is data-driven (SEASON themes and TRACK live in CORE7, events/monuments/titles below)
+   and builds on the existing economy, missions, Great Works, events and multiplayer. All state is S.x7 (versioned). ===== */
+(()=>{
+const SV7=1,C0=CORE7,DAYMS=864e5;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),fm=n=>compactAmount(Math.round(n)),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const CATN={eco:'Economic',mil:'Military',exp:'Expansion',dev:'Development',spec:'Special'},CATI={eco:'💰',mil:'⚔️',exp:'🗺️',dev:'🎓',spec:'⭐'};
+const TIERN=['Beginner','Intermediate','Advanced','Elite'];
+const incE=()=>Math.max(1,S&&S.incE||0),CP=()=>cap();
+const secs=n=>Math.max(40,Math.round(incE()*n)),fr=f=>Math.max(6,Math.round(CP()*f));
+const dt1=(ms)=>{const s=Math.max(0,Math.round(ms/1000));const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:m?`${m}m ${s%60}s`:`${s}s`};
+const dstr=ms=>new Date(ms).toLocaleDateString(undefined,{day:'numeric',month:'short'});
+const rstr=(c,res,g)=>[c?`🪙${fm(c)}`:'',...Object.keys(res||{}).filter(k=>res[k]>0).map(k=>`${ICON[k]}${fm(res[k])}`),g?`💎${g}`:''].filter(Boolean).join(' ');
+
+/* ---------- state ---------- */
+function X(){if(!S)return null;let x=S.x7;if(!x||typeof x!=='object')x=S.x7={};
+ if(x.v!==SV7){x.v=SV7}
+ x.c=x.c&&typeof x.c==='object'?x.c:{};for(const k of['prod','earn','tp','sg','cap','nb','econb','advb','trn','wu','ws','inv','ev7','champ'])if(typeof x.c[k]!=='number')x.c[k]=0;
+ if(!Array.isArray(x.sh))x.sh=[];if(!x.ev||typeof x.ev!=='object')x.ev={act:[],hist:[],cd:{},cc:{},next:null,sched:[]};
+ const e=x.ev;if(!Array.isArray(e.act))e.act=[];if(!Array.isArray(e.hist))e.hist=[];if(!e.cd)e.cd={};if(!e.cc)e.cc={};if(!Array.isArray(e.sched))e.sched=[];
+ if(!x.we||typeof x.we!=='object')x.we={cur:null,hist:[],got:{},act:{},seen:{}};const w=x.we;if(!Array.isArray(w.hist))w.hist=[];if(!w.got)w.got={};if(!w.act)w.act={};if(!w.seen)w.seen={};
+ for(const k of['mon','up','ti','ach','emb','dec'])if(!x[k]||typeof x[k]!=='object'||Array.isArray(x[k]))x[k]={};
+ if(!x.pr||typeof x.pr!=='object')x.pr={pts:0,src:{}};if(!x.pr.src)x.pr.src={};
+ if(!Array.isArray(x.notif))x.notif=[];if(!Array.isArray(x.wm))x.wm=[];if(typeof x.shown!=='string')x.shown='';
+ return x}
+function META7(){META.x7=META.x7&&typeof META.x7==='object'?META.x7:{hw:0,emb:{}};if(!META.x7.emb)META.x7.emb={};return META.x7}
+let SRV={w:null,at:0,skew:0};
+const onl=()=>!!(S&&S.on&&window.MPX&&MPX.open());
+/* time: online = this server's clock. offline = device clock that can never move backwards. */
+function nowMs(){const d=Date.now();if(S&&S.on&&SRV.w)return d+SRV.skew;const m=META7();if(d>m.hw)m.hw=d;return m.hw}
+
+/* ---------- kingdom development: several indicators, not one number ---------- */
+const armyPow=()=>{let v=0;try{const t=tally();for(const u of['inf','arc','cav','sie'])v+=(t[u]||0)*(UN[u].atk*.6+UN[u].def*.6)}catch(e){}return v};
+let LVC=0,LVT=0;const sumLevels=()=>{if(LVT!==S.time||!LVC){let n=0;for(const t of S.tiles)if(t.o==1&&t.b)n+=t.l||1;LVC=n;LVT=S.time}return LVC};
+function dev7(){const x=X(),V0=V||{},r=Object.keys(S.tech||{}).length;let wealth=S.coins||0;for(const k of RES)wealth+=(S.res[k]||0)*(BASE[k]||1);
+ const ind={terr:clamp((V0.tiles||0)/180,0,1),bld:clamp(sumLevels()/150,0,1),prod:clamp(Math.log10(incE())/Math.log10(400),0,1),econ:clamp(Math.log10(1+wealth)/7,0,1),mil:clamp(Math.log10(1+armyPow())/4,0,1),res:clamp(r/60,0,1),prog:clamp(((S.st.missions||0)+(window.gwTotal?0:0))/60,0,1)};
+ const W={terr:.18,bld:.18,prod:.2,econ:.1,mil:.14,res:.12,prog:.08};let sc=0;for(const k in W)sc+=ind[k]*W[k];sc*=100;
+ return{sc,ind,tier:sc<14?0:sc<38?1:sc<64?2:3}}
+const tierNow=()=>dev7().tier;
+
+/* ---------- counters (measured while you play; nothing is credited retroactively) ---------- */
+let lastT=0,saveHw=0;
+function sampler(){if(!S||!V||!S.tiles)return;const x=X();if(!lastT)lastT=S.time;const dt=clamp(S.time-lastT,0,5);lastT=S.time;if(dt<=0)return;
+ let pr=0;for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o==1&&t.b==2&&!(t.off>S.time)){const r=MR[t.t];if(r)pr+=mineOut(t,r,i)}}
+ x.c.prod+=pr*dt;x.c.earn+=Math.max(0,S.inc||0)*dt;
+ const m=META7();if(Date.now()-saveHw>60000){saveHw=Date.now();try{saveMeta()}catch(e){}}}
+function bitset(){const n=S.tiles.length,u=new Uint8Array(Math.ceil(n/8));for(let i=0;i<n;i++)if(S.tiles[i].o==1)u[i>>3]|=1<<(i&7);let s='';for(const b of u)s+=String.fromCharCode(b);return btoa(s)}
+const inSet=(b64,i)=>{try{const s=atob(b64);return!!((s.charCodeAt(i>>3)||0)&(1<<(i&7)))}catch(e){return true}};
+/* ---------- notifications: a ring buffer kept in the save, a toast only for what matters ---------- */
+let lastToast=0;
+function note(ic,tx,o){o=o||{};const x=X();x.notif.unshift({t:nowMs(),ic,tx,k:o.k||'',r:0});if(x.notif.length>40)x.notif.length=40;
+ const n=performance.now();if(!o.quiet&&n-lastToast>2200){lastToast=n;try{toast(ic+' '+tx)}catch(e){}}if(o.big)try{sfx('win')}catch(e){}}
+const unread=()=>{const x=S&&S.x7;return x?x.notif.filter(n=>!n.r).length:0};
+
+/* ---------- rewards: scaled to the kingdom, capped at a share of storage ---------- */
+function mkRw(sc,rf,o){o=o||{};const cp=CP(),r={};const f=Math.min(.3,rf||0);
+ if(f>0){r.wood=Math.round(cp*f);r.stone=Math.round(cp*f);if(o.m){r.silver=Math.round(cp*f*.5);r.gold=Math.round(cp*f*.28)}if(o.d)r.diamond=Math.max(1,Math.round(cp*f*.06))}
+ return{c:sc?secs(sc):0,res:r,g:o.g||0,sp:o.sp||0}}
+function grant(rw){if(!rw)return;S.coins+=rw.c||0;for(const k of RES)if(rw.res&&rw.res[k])S.res[k]=Math.max(S.res[k],Math.min(CP(),S.res[k]+rw.res[k]));
+ if(rw.g){META.gems=(META.gems|0)+rw.g;try{saveMeta()}catch(e){}const b=document.getElementById('gemn');if(b)b.textContent=fm(META.gems)}
+ if(rw.score)S.score=(S.score||0)+rw.score}
+const afford=c=>{if(!c)return true;if((c.coins||0)>S.coins)return false;for(const k of RES)if((c[k]||0)>S.res[k])return false;return true};
+const spend=c=>{if(!c)return;S.coins-=c.coins||0;for(const k of RES)S.res[k]-=c[k]||0};
+const costStr=c=>c?[c.coins?`🪙${fm(c.coins)}`:'',...RES.filter(k=>c[k]).map(k=>`${ICON[k]}${fm(c[k])}`)].filter(Boolean).join(' '):'';
+const missing=c=>{const o=[];if((c.coins||0)>S.coins)o.push('🪙');for(const k of RES)if((c[k]||0)>S.res[k])o.push(ICON[k]);return o.join(' ')};
+
+/* ===================== 1. SEASONS ===================== */
+const CTR={prod:()=>X().c.prod,earn:()=>X().c.earn,tp:()=>X().c.tp,trades:()=>S.st.trades||0,built:()=>S.st.built||0,upgrades:()=>S.st.upgrades||0,won:()=>S.st.won||0,repelled:()=>S.st.repelled||0,missions:()=>S.st.missions||0,
+ techs:()=>Object.keys(S.tech||{}).length,events:()=>(S.st.events||0),trn:()=>X().c.trn,gained:()=>S.st.gained||0,sg:()=>X().c.sg,cap:()=>X().c.cap,nb:()=>X().c.nb,econb:()=>X().c.econb,advb:()=>X().c.advb,wu:()=>X().c.wu,
+ gwt:()=>Object.values(S.gw||{}).reduce((a,g)=>a+(g.s||0),0),veins:()=>{let n=0;for(const t of S.tiles)if(t.o==1&&'SGD'.includes(t.t))n++;return n},
+ tiles:()=>(V&&V.tiles)||0,inc:()=>incE(),apow:()=>Math.round(armyPow()),city:()=>(V&&V.maxCity)||0};
+const ctr=k=>{try{return CTR[k]()}catch(e){return 0}};
+/* a challenge: k = counter, st = a level to reach (not a running total), goals = explicit targets per difficulty (not one multiplier) */
+const CH=[
+ {id:'e_prod',c:'eco',ic:'⛏️',n:'Produce {g} resources from your mines',k:'prod',goals:[7000,38000,200000,1000000],rate:'prod'},
+ {id:'e_earn',c:'eco',ic:'🪙',n:'Earn {g} coins',k:'earn',goals:[3500,20000,110000,650000],rate:'earn'},
+ {id:'e_tp',c:'eco',ic:'⚖️',n:'Complete {g} profitable trades',k:'tp',goals:[3,6,10,16],h:'Sell a resource for clearly more than its base price.'},
+ {id:'e_bld',c:'eco',ic:'🏗️',n:'Build or upgrade {g} economic buildings',k:'econb',goals:[2,4,7,10],h:'Mines, ports, markets, academies and workshops.'},
+ {id:'e_eff',c:'eco',ic:'📈',n:'Reach an income of {g} coins per second',k:'inc',st:1,goals:[4,14,60,260],grow:1.14},
+ {id:'m_rec',c:'mil',ic:'🗡️',n:'Recruit {g} units',k:'trn',goals:[12,40,110,280]},
+ {id:'m_win',c:'mil',ic:'🏆',n:'Win {g} battles',k:'won',goals:[2,5,9,15]},
+ {id:'m_rep',c:'mil',ic:'🛡️',n:'Repel {g} attacks',k:'repelled',goals:[1,3,5,8]},
+ {id:'m_cap',c:'mil',ic:'🚩',n:'Capture {g} enemy tiles',k:'cap',goals:[1,3,6,10]},
+ {id:'m_sg',c:'mil',ic:'🏰',n:'Complete {g} sieges',k:'sg',goals:[1,2,4,6]},
+ {id:'m_pow',c:'mil',ic:'⚔️',n:'Raise your army power to {g}',k:'apow',st:1,goals:[60,300,1500,7000],grow:1.12},
+ {id:'x_gain',c:'exp',ic:'🗺️',n:'Expand your territory by {g} tiles',k:'gained',goals:[4,9,18,32]},
+ {id:'x_nb',c:'exp',ic:'🏘️',n:'Construct {g} buildings on land you gained this season',k:'nb',goals:[1,3,5,8]},
+ {id:'x_til',c:'exp',ic:'📍',n:'Hold {g} tiles of territory',k:'tiles',st:1,goals:[24,60,130,260],grow:1.1},
+ {id:'x_vein',c:'exp',ic:'💎',n:'Claim {g} valuable veins (silver, gold or diamond)',k:'veins',goals:[1,2,3,5],rel:1},
+ {id:'d_tech',c:'dev',ic:'🎓',n:'Complete {g} researches',k:'techs',goals:[1,2,4,6],rel:1},
+ {id:'d_up',c:'dev',ic:'⬆️',n:'Upgrade buildings {g} times',k:'upgrades',goals:[3,7,14,24]},
+ {id:'d_mis',c:'dev',ic:'🎯',n:'Complete {g} missions',k:'missions',goals:[2,4,7,10]},
+ {id:'d_city',c:'dev',ic:'🏙️',n:'Raise a city to level {g}',k:'city',st:1,goals:[4,8,13,18],grow:1,add:1},
+ {id:'d_adv',c:'dev',ic:'🏛️',n:'Construct {g} advanced structures (Academy, Workshop, Palace or Monument)',k:'advb',goals:[1,1,2,3]},
+ {id:'s_we',c:'spec',ic:'🌍',n:'Contribute {g} units to a world event',k:'wu',goals:[12,20,32,45],need:'we'},
+ {id:'s_dec',c:'spec',ic:'📜',n:'Resolve {g} kingdom events',k:'events',goals:[2,3,5,7]},
+ {id:'s_gw',c:'spec',ic:'🏛️',n:'Advance the Great Works by {g} stages',k:'gwt',goals:[1,1,2,3],need:'gw'}];
+const CHID={};CH.forEach(c=>CHID[c.id]=c);
+const CHPTS=[12,16,20,25];
+function chGoal(c,tier,cur){let g=c.goals[tier];
+ if(c.rate){const per=c.rate=='prod'?prodRate():Math.max(0,S.inc||0);g=Math.max(g,Math.round(per*1500))}
+ if(c.st){g=Math.max(g,c.add?Math.ceil(cur)+c.add:Math.ceil(cur*(c.grow||1.1)+1))}
+ if(c.rel)g=g;return g}
+const prodRate=()=>{let pr=0;for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o==1&&t.b==2&&!(t.off>S.time)){const r=MR[t.t];if(r)pr+=mineOut(t,r,i)}}return pr};
+function chAvail(c,sn){if(c.need=='we'){const e=sn.end,n=nowMs();for(let t=n;t<e;t+=DAYMS){const s=C0.schedule(t);if(s.cur&&s.cur.end>n)return true;if(s.next&&s.next.start<e)return true}return false}
+ if(c.need=='gw'){return window.GW?GW.some(g=>{try{return g.req()}catch(e){return false}}):false}
+ if(c.id=='m_sg'||c.id=='m_cap'){return rivalsLeft()}return true}
+const rivalsLeft=()=>{if(S.on)return true;for(let k=2;k<6;k++)if(S.tiles.some(t=>t.o===k))return true;return false};
+function pickChallenges(sn,th,tier){const w=th.w,cats=['eco','mil','exp','dev','spec'],sum=cats.reduce((a,c)=>a+w[c],0),q={};let tot=0;
+ for(const c of cats){q[c]=Math.max(1,Math.round(10*w[c]/sum));tot+=q[c]}
+ while(tot>10){const c=cats.filter(z=>q[z]>1).sort((a,b)=>q[b]-q[a])[0];if(!c)break;q[c]--;tot--}while(tot<10){const c=cats.sort((a,b)=>w[b]/q[b]-w[a]/q[a])[0];q[c]++;tot++}
+ const out=[],used=new Set();
+ for(const c of cats){const pool=CH.filter(z=>z.c==c&&chAvail(z,sn)).sort((a,b)=>C0.h32(sn.id+a.id)-C0.h32(sn.id+b.id));
+  for(const z of pool){if(out.filter(o=>CHID[o.id].c==c).length>=q[c])break;if(used.has(z.k))continue;used.add(z.k);out.push(z)}}
+ return out}
+function startSeason(cur){const x=X(),tier=tierNow();const sn={id:cur.id,idx:cur.idx,tier,pts:0,src:{},cl:{},ch:[],t0:bitset(),at:nowMs()};
+ for(const z of pickChallenges(cur,cur,tier)){const c0=ctr(z.k);sn.ch.push({id:z.id,g:chGoal(z,tier,c0),b:z.st?0:c0,d:0,p:CHPTS[tier]})}
+ x.sn=sn;note(cur.ic,`${cur.n} begins. ${TIERN[tier]} challenges are ready.`,{k:'season',big:1});announce('season:'+cur.id,cur.ic,cur.n,cur.intro,'season')}
+function archive(sn){const x=X(),th=C0.seasonAt(sn.idx),got=C0.TRACK.filter(t=>sn.pts>=t.p).map(t=>t.id);
+ x.sh.unshift({id:sn.id,idx:sn.idx,n:th.n,ic:th.ic,col:th.col,pts:sn.pts,done:sn.ch.filter(c=>c.d).map(c=>c.id),total:sn.ch.length,tier:sn.tier,earned:got,cl:Object.keys(sn.cl),fin:sn.pts>=250,em:th.em});
+ if(x.sh.length>48)x.sh.length=48}
+function chProg(c){const z=CHID[c.id];if(!z)return 0;const v=z.st?ctr(z.k):ctr(z.k)-c.b;return clamp(v,0,c.g*4)}
+function seasonTick(){const x=X(),cur=C0.seasonFor(nowMs());
+ if(!x.sn||x.sn.id!==cur.id){if(x.sn)archive(x.sn);startSeason(cur);return}
+ const sn=x.sn;let ch=false;
+ for(const c of sn.ch){if(c.d)continue;if(chProg(c)>=c.g){c.d=1;ch=true;addPts(c.p,'ch',true);note('✅',`Season challenge complete: ${CHID[c.id].n.replace('{g}',fm(c.g))} (+${c.p})`,{k:'ch'});S.score=(S.score||0)+3}}
+ /* challenges that are still untouched follow a kingdom that has grown a tier */
+ if(!sn._ad||nowMs()-sn._ad>6e4){sn._ad=nowMs();const t=tierNow();if(t>sn.tier){let n=0;for(const c of sn.ch){const z=CHID[c.id];if(c.d||chProg(c)>c.g*.2)continue;const g=chGoal(z,t,ctr(z.k));if(g>c.g){c.g=g;c.p=CHPTS[t];n++}}sn.tier=t;if(n)note('📈',`${n} unfinished season challenge${n>1?'s':''} adjusted to your kingdom's growth`,{quiet:1})}}
+ for(const t of C0.TRACK)if(sn.pts>=t.p&&!sn['n_'+t.id]){sn['n_'+t.id]=1;note('🎁',`Season reward ready: ${trackName(t)}`,{k:'track'})}}
+const SRC_CAP={ch:999,ms:30,ev:30,we:60,gw:30};
+function addPts(n,src,force){const sn=X().sn;if(!sn)return 0;const cap=SRC_CAP[src]||30;sn.src[src]=sn.src[src]||0;let a=force?n:Math.min(n,cap-sn.src[src]);if(a<=0)return 0;sn.src[src]+=a;sn.pts+=a;return a}
+const trackName=t=>({small:'Supply cache',cos:'Season banner',med:'Treasury chest',rare:'Season emblem',final:'Season title & monument pennant',bonus:'Bonus cache'}[t.k]);
+function trackReward(t,th){const tier=X().sn?X().sn.tier:0;
+ if(t.k=='small')return mkRw(110,.04,{g:t.g});
+ if(t.k=='cos')return Object.assign(mkRw(60,.03),{cos:'banner'});
+ if(t.k=='med')return mkRw(420,.08,{m:tier>0,g:t.g,sp:0});
+ if(t.k=='rare')return Object.assign(mkRw(700,.1,{m:1}),{cos:'emblem'});
+ if(t.k=='final')return Object.assign(mkRw(1500,.16,{m:1,d:tier>1,g:t.g}),{cos:'final',ti:th.ti});
+ return Object.assign(mkRw(500,.07,{m:1,g:t.g}),{pr:1})}
+const rwText=(t,th)=>{const r=trackReward(t,th);return rstr(r.c,r.res,r.g)+(r.cos=='banner'?' · 🚩 Season banner':r.cos=='emblem'?` · 🏅 ${th.em}`:r.cos=='final'?` · 🏷️ ${th.ti} · 🎖️ Season pennant`:'')+(r.pr?' · ⭐ Prestige point':'')};
+let PEND={};
+function claimMs(sid,mid){const x=X(),cur=C0.seasonFor(nowMs());let sn=x.sn&&x.sn.id==sid?x.sn:null,arch=null;if(!sn)arch=x.sh.find(h=>h.id==sid);
+ const t=C0.TRACK.find(q=>q.id==mid);if(!t)return;const th=C0.seasonAt(sn?sn.idx:arch?arch.idx:cur.idx);
+ const pts=sn?sn.pts:arch?arch.pts:0,done=sn?!!sn.cl[mid]:arch?arch.cl.includes(mid):true;if(done||pts<t.p)return;
+ if(arch&&sid!=='s'+(cur.idx-1)&&onl())return toast('Online, only last season’s rewards can still be claimed');
+ if(S.on){if(!onl())return toast('Reconnect to claim season rewards online');PEND[sid+mid]=1;MPX.send({t:'scl',sid,m:mid});return}
+ finishMs(sid,mid,false)}
+function finishMs(sid,mid,dup){const x=X(),sn=x.sn&&x.sn.id==sid?x.sn:null,arch=x.sh.find(h=>h.id==sid),t=C0.TRACK.find(q=>q.id==mid);if(!t)return;
+ const th=C0.seasonAt(sn?sn.idx:arch?arch.idx:0);if(sn){if(sn.cl[mid])return;sn.cl[mid]=1}else if(arch){if(arch.cl.includes(mid))return;arch.cl.push(mid)}else return;
+ if(dup){note('ℹ️','That season reward was already claimed on this account.',{quiet:1});return}
+ const r=trackReward(t,th);grant(r);
+ if(r.cos=='banner'){x.dec[sid+'b']=1}
+ if(r.cos=='emblem'){x.emb[sid]=1;META7().emb[sid]=1}
+ if(r.cos=='final'){x.emb[sid]=1;META7().emb[sid]=1;x.dec[sid+'p']=1;giveTitle('s_'+th.k,th.ti,true);grantPr(2,'season')}
+ if(r.pr)grantPr(1,'bonus');
+ note('🎁',`Claimed: ${trackName(t)} — ${rstr(r.c,r.res,r.g)}`,{k:'claim',big:1});try{save()}catch(e){}}
+
+/* ===================== 4. TITLES, PRESTIGE, HONOURS ===================== */
+const TIT={builder:['The Builder','Construct 60 buildings',()=>(S.st.built||0)>=60],
+ merchant:['The Merchant Prince','Make 150 trades, 25 of them profitable',()=>(S.st.trades||0)>=150&&X().c.tp>=25],
+ conq:['The Great Conqueror','Win 40 battles and capture 12 enemy tiles',()=>(S.st.won||0)>=40&&X().c.cap>=12],
+ guard:['Guardian of the Realm','Repel 40 attacks',()=>(S.st.repelled||0)>=40],
+ sage:['Master of Research','Complete 45 researches',()=>ctr('techs')>=45],
+ frontier:['Lord of the Frontier','Hold 200 tiles',()=>ctr('tiles')>=200],
+ arch:['Architect of Prosperity','Reach 150 income and 8 Great Work stages',()=>incE()>=150&&ctr('gwt')>=8]};
+function giveTitle(id,name,quiet){const x=X();if(x.ti[id])return false;x.ti[id]={n:name,t:nowMs()};if(!quiet)note('🏷️',`Title earned: ${name}`,{k:'title',big:1});if(!x.shown){x.shown=id;S.title=name}grantPr(1,'title');return true}
+function setShown(id){const x=X();if(id&&!x.ti[id])return;x.shown=id||'';if(id)S.title=x.ti[id].n;else S.title='';try{save()}catch(e){}}
+function titleTick(){const x=X();for(const id in TIT)if(!x.ti[id]&&TIT[id][2]())giveTitle(id,TIT[id][0])}
+const PRL=[6,16,32,56,88,130,185,250],PRN=['Established','Renowned','Illustrious','Exalted','Legendary','Mythic','Eternal','Sovereign'];
+const prLevel=(p)=>{p=p==null?X().pr.pts:p;let l=0;for(const t of PRL)if(p>=t)l++;return l};
+function grantPr(n,src){const x=X(),was=prLevel();x.pr.pts+=n;x.pr.src[src]=(x.pr.src[src]||0)+n;const now=prLevel();
+ if(now>was){note('✨',`Prestige level ${now}: ${PRN[now-1]}`,{k:'prestige',big:1});if(now==1||now==4||now==8)giveTitle('pr'+now,['','The Established','','','Pillar of the Realm','','','','Eternal Sovereign'][now==1?1:now==4?4:8],true);grantRw(mkRw(900*now,.08+.01*now,{m:1,g:5+now}),'Prestige reward')}}
+const PRFX=()=>{const l=prLevel();return{store:(l>=3?.01:0)+(l>=7?.01:0),inc:(l>=5?.01:0)+(l>=8?.01:0)}};
+function grantRw(r,label){grant(r);note('🎁',`${label}: ${rstr(r.c,r.res,r.g)}`,{k:'rw'})}
+/* honours: rare, with clear requirements; each is awarded once and kept in the kingdom's history */
+const techPathDone=()=>{try{return PATHS.some(p=>p.nodes.every(n=>S.tech&&S.tech[n.id]))}catch(e){return false}};
+const HON=[
+ {id:'legend',ic:'👑',n:'Empire of Legend',d:'Hold 250 tiles with 200 income and 30 researches.',t:()=>ctr('tiles')>=250&&incE()>=200&&ctr('techs')>=30,sc:1800,g:25},
+ {id:'savior',ic:'🌍',n:'Saviour of the World',d:'Earn a Contributor reward or better in The Great Invasion.',t:()=>(X().we.hist||[]).some(h=>h.id=='invasion'&&h.tier>=2&&h.o!='fail'),sc:1500,g:20},
+ {id:'allmon',ic:'🗿',n:'Master of Monuments',d:'Complete all seven monuments.',t:()=>MON.every(m=>monSt(m.id)>=3),sc:4000,g:40},
+ {id:'titan',ic:'💎',n:'Economic Titan',d:'Reach an income of 400 coins per second.',t:()=>incE()>=400,sc:1500,g:20},
+ {id:'wall',ic:'🛡️',n:'The Unbroken Line',d:'Crush a major invasion decisively.',t:()=>X().c.inv>=1,sc:900,g:15},
+ {id:'path',ic:'📜',n:'Path Complete',d:'Finish every node of one development path.',t:techPathDone,sc:1400,g:18},
+ {id:'throne',ic:'⚔️',n:'Throne of the Isles',d:'Defeat all rivals on Hard difficulty or above.',t:()=>!S.on&&(S.diff|0)>=3&&(S.st.def||[]).length>=4,sc:2400,g:30},
+ {id:'veteran',ic:'📅',n:'Season Veteran',d:'Reach the final reward in three seasons.',t:()=>X().sh.filter(h=>h.fin).length+(X().sn&&X().sn.pts>=250?1:0)>=3,sc:1800,g:25},
+ {id:'patron',ic:'🏛️',n:'Patron of Great Works',d:'Complete 20 Great Work stages.',t:()=>ctr('gwt')>=20,sc:1600,g:20},
+ {id:'collector',ic:'🏷️',n:'Collector of Honours',d:'Earn eight titles.',t:()=>Object.keys(X().ti).length>=8,sc:1200,g:15},
+ {id:'heroic',ic:'🏆',n:'Hero of Many Events',d:'Reach Champion rank in three world events.',t:()=>X().c.champ>=3,sc:2000,g:25},
+ {id:'pr3',ic:'✨',n:'Illustrious',d:'Reach prestige level 3.',t:()=>prLevel()>=3,sc:1000,g:12}];
+const HID={};HON.forEach(h=>HID[h.id]=h);
+function honTick(){const x=X();let n=0,last=null;for(const h of HON){if(x.ach[h.id])continue;let ok=false;try{ok=h.t()}catch(e){}if(!ok)continue;x.ach[h.id]=nowMs();n++;last=h;grant(mkRw(h.sc/10,.05,{m:1,g:h.g}));S.score=(S.score||0)+h.sc/10;grantPr(2,'hon')}
+ if(n==1)note(last.ic,`Honour earned: ${last.n}`,{k:'hon',big:1});else if(n>1)note('🎖️',`${n} honours recognised`,{k:'hon',big:1})}
+
+/* ===================== 5. MONUMENTS AND RARE UPGRADES ===================== */
+const MON=[
+ {id:'empire',ic:'🏛️',n:'Monument of the First Empire',d:'A founding monument for a lasting realm.',col:'#ffd34a',sh:'pyr',m:1,fx:{inc:.01},fxt:'+1% coin income per stage',rq:'100 tiles and a level 8 city',req:()=>ctr('tiles')>=100&&ctr('city')>=8},
+ {id:'academy',ic:'📚',n:'Great Royal Academy',d:'A seat of learning for the whole realm.',col:'#8d79ff',sh:'col',m:1.1,fx:{rps:.06},fxt:'+6% research speed per stage',rq:'20 researches and an Academy',req:()=>ctr('techs')>=20&&bl(7)>0},
+ {id:'trade',ic:'⚖️',n:'Grand Trade Monument',d:'The scales of a thousand caravans.',col:'#ff9c43',sh:'arc',m:1.1,fx:{inc:.008,spr:.004},fxt:'+0.8% income and a tighter market spread per stage',rq:'100 trades and a Market',req:()=>(S.st.trades||0)>=100&&bl(5)>0},
+ {id:'conquest',ic:'⚔️',n:'Monument of Conquest',d:'Raised from the stones of fallen fortresses.',col:'#ff5268',sh:'obe',m:1.2,fx:{atk:.02},fxt:'+2% army attack per stage',rq:'25 won battles',req:()=>(S.st.won||0)>=25},
+ {id:'heroes',ic:'🛡️',n:'Hall of Heroes',d:'A hall for those who held the line.',col:'#45c9e6',sh:'hal',m:1.2,fx:{ucap:4,dfn:.015},fxt:'+4 army limit and +1.5% fortification per stage',rq:'a season final reward, or 20 repelled attacks',req:()=>X().sh.some(h=>h.fin)||!!(X().sn&&X().sn.cl.fin)||(S.st.repelled||0)>=20},
+ {id:'wonder',ic:'🌍',n:'World Wonder',d:'A wonder visible from every border.',col:'#d7a6ff',sh:'zig',m:1.6,fx:{inc:.012,store:.03},fxt:'+1.2% income and +3% storage per stage',rq:'three other monuments begun and prestige level 2',req:()=>monStarted('wonder')>=3&&prLevel()>=2},
+ {id:'prosper',ic:'🌾',n:'Monument of Prosperity',d:'A garden city carved in stone.',col:'#7bd88f',sh:'gar',m:1.4,fx:{store:.03,prod:.02},fxt:'+3% storage and +2% mine output per stage',rq:'80 income and 8 Great Work stages',req:()=>incE()>=80&&ctr('gwt')>=8}];
+const MID7={};MON.forEach(m=>MID7[m.id]=m);
+const MSTN=['Foundation','Construction','Completion','Ascension'];
+const monSt=id=>(X().mon[id]||{}).s||0,monStarted=ex=>MON.filter(m=>m.id!=ex&&monSt(m.id)>=1).length;
+function monCost(m,st){const T=[2400,9000,26000,60000][st],c={coins:secs(T*m.m)};c.wood=fr(.5*(1+st*.3));c.stone=fr(.6*(1+st*.3));if(st>=1)c.silver=fr(.22+st*.05);if(st>=2)c.gold=fr(.12+st*.03);if(st>=3)c.diamond=Math.max(2,fr(.04));return c}
+function monPay(id){const m=MID7[id],x=X(),o=x.mon[id]=x.mon[id]||{s:0,paid:{}},st=o.s;if(st>=4||!m.req())return;const need=monCost(m,st);o.paid=o.paid||{};let any=0;
+ for(const k of['coins',...RES]){if(!need[k])continue;const have=k=='coins'?S.coins:S.res[k],miss=Math.max(0,need[k]-(o.paid[k]||0)),p=Math.min(miss,Math.floor(have));if(p>0){if(k=='coins')S.coins-=p;else S.res[k]-=p;o.paid[k]=(o.paid[k]||0)+p;any=1}}
+ if(!any)return toast('Nothing to contribute yet');
+ if(Object.keys(need).every(k=>(o.paid[k]||0)>=need[k])){o.s=st+1;o.paid={};const r=mkRw(0,0,{g:st==3?20:st==2?12:5});grant(r);grantPr(st==3?4:st==2?3:1,'mon');addPts(10,'gw');note(m.ic,`${m.n}: ${MSTN[st]} complete${st==2?' — the monument stands!':''}`,{k:'mon',big:1});sfx('win');announce('mon:'+id+st,m.ic,m.n,`${MSTN[st]} is complete. `+(st>=2?'The monument now stands in your capital.':'The next stage is open.'),'monument')}
+ else toast('Contributed what you could');try{save()}catch(e){}calcBon();renderSheetSoon()}
+const RU=[
+ {id:'rmarket',ic:'🏪',n:'Royal Marketplace',b:5,lvl:3,d:'A grand market hall: steadier trading and a coin bonus.',fx:{inc:.015,spr:.01},fxt:'+1.5% income and a tighter spread',rq:'Level 3 Market and 6 researches',req:()=>ctr('techs')>=6,sc:2400,r:.12},
+ {id:'gfort',ic:'🏰',n:'Grand Fortress',b:3,lvl:8,d:'A fortress that stiffens every wall in the realm.',fx:{dfn:.03},fxt:'+3% fortification strength',rq:'Level 8 stronghold and 5 won battles',req:()=>(S.st.won||0)>=5,sc:3000,r:.14},
+ {id:'iacad',ic:'🎓',n:'Imperial Academy',b:7,lvl:3,d:'The realm’s finest scholars.',fx:{rps:.2},fxt:'+20% research speed',rq:'Level 3 Academy and 12 researches',req:()=>ctr('techs')>=12,sc:3200,r:.14},
+ {id:'ggran',ic:'🌾',n:'Great Granary',b:1,lvl:8,d:'Vast stores beneath the capital.',fx:{store:.06},fxt:'+6% storage',rq:'Level 8 city',req:()=>true,sc:2600,r:.12},
+ {id:'rbar',ic:'⚔️',n:'Royal Barracks',b:6,lvl:3,d:'A drill ground for the royal guard.',fx:{ucap:8,atk:.01},fxt:'+8 army limit and +1% attack',rq:'Level 3 Barracks and 10 won battles',req:()=>(S.st.won||0)>=10,sc:2800,r:.12},
+ {id:'aworks',ic:'🔧',n:'Advanced Workshop',b:10,lvl:3,d:'Master tooling for every mine.',fx:{prod:.04},fxt:'+4% mine output',rq:'Level 3 Workshop and 4 mines',req:()=>(V.mines||0)>=4,sc:2600,r:.12}];
+const RUID={};RU.forEach(r=>RUID[r.id]=r);
+const ruCost=r=>{const c={coins:secs(r.sc),wood:fr(r.r),stone:fr(r.r)};c.silver=fr(r.r*.6);if(r.sc>=2800)c.gold=fr(r.r*.3);return c};
+function ruOn(idx){const x=X(),id=x.up[idx],r=id&&RUID[id],t=S.tiles[idx];return r&&t&&t.o==1&&t.b==r.b&&(t.l||1)>=r.lvl?r:null}
+function ruBuy(idx){const x=X(),t=S.tiles[idx];if(!t||t.o!=1)return;const r=RU.find(q=>q.b==t.b&&!Object.values(x.up).includes(q.id));if(!r)return;
+ if((t.l||1)<r.lvl||!r.req())return toast('Requirement not met');const c=ruCost(r);if(!afford(c))return toast('Missing: '+missing(c));spend(c);x.up[idx]=r.id;grantPr(1,'ru');note(r.ic,`${r.n} completed`,{k:'ru',big:1});sfx('win');try{save()}catch(e){}calcBon();HL={x:idx%N,y:(idx/N)|0,t:performance.now()+4000};last='';xk='';render()}
+let BON={},BONK='';
+function calcBon(){const x=X(),o={};const add=(f,m)=>{for(const k in f)o[k]=(o[k]||0)+f[k]*m};
+ for(const m of MON){const s=monSt(m.id);if(s>=1)add(m.fx,s>=4?3.5:s)}
+ for(const i in x.up){const r=ruOn(+i);if(r)add(r.fx,1)}
+ const p=PRFX();add(p,1);BON=o}
+const bonus=k=>BON[k]||0;
+
+/* ===================== 2. LIVING EVENTS (personal, decision-driven) =====================
+   Each event: category, conditions, weight, options with real costs / benefits / consequences, effects that last
+   (often followed by an aftermath), and a record in the history. Costs and rewards are built from the kingdom's own
+   income and storage, so a small kingdom and a large one face the same decision at their own size. */
+const fxPush=(f,len)=>{if(!S.efx.some(q=>q.n==f.n)){const o=Object.assign({cat:'Event'},f,{until:S.time+len});delete o.len;S.efx.push(o)}};
+const cc=(E,n)=>Math.max(40,Math.round(E.sc.ie*n)),rr=(E,f)=>Math.max(6,Math.round(E.sc.cp*f));
+const gainRes=(k,n)=>{S.res[k]=Math.max(S.res[k],Math.min(CP(),S.res[k]+n))};
+const roll=()=>rng();
+const freeLand=()=>{try{return typeof freeTile=='function'?freeTile():null}catch(e){return null}};
+const claimFree=()=>{const p=freeLand();if(!p)return false;const t=T(p[0],p[1]);t.o=1;S.st.gained=(S.st.gained||0)+1;last='';return p};
+const room=()=>Math.max(0,unitCap()-Object.values(tally()).reduce((a,b)=>a+b,0));
+const addUnits=(u,n)=>{n=Math.min(n,room());if(n>0)S.army[u]=(S.army[u]||0)+n;return n};
+const loseCoins=(E,f,maxSecs)=>{const l=Math.min(Math.round(S.coins*f),secs(maxSecs));S.coins-=l;return l};
+const aiOn=()=>!S.on&&rivalsLeft();
+const EV7=[
+ /* ---- economic ---- */
+ {id:'caravan',cat:'eco',ic:'🐪',n:'Merchant expedition',w:2,len:'medium',cd:5400,ok:()=>V.cities>0,
+  txt:'A large merchant expedition has camped outside your walls, offering rare goods and a share in its next voyage.',
+  opts:E=>[{t:'Buy rare goods',d:`Pay ${costStr({coins:cc(E,260)})}: receive silver and gold`,cost:{coins:cc(E,260)},run:()=>{gainRes('silver',rr(E,.12));gainRes('gold',rr(E,.06));return'You bought silver and gold at a fair price.'}},
+   {t:'Invest in the expedition',d:`Pay ${costStr({coins:cc(E,360)})}: 65% it returns a large profit, 35% it is lost`,cost:{coins:cc(E,360)},run:()=>{if(roll()<.65){S.coins+=cc(E,900);return'The expedition returned with a large profit.'}return'The expedition never returned. The investment is lost.'}},
+   {t:'Trade ordinary goods',d:`Give ${costStr({wood:rr(E,.12),stone:rr(E,.12)})}: receive silver and gold`,cost:{wood:rr(E,.12),stone:rr(E,.12)},run:()=>{gainRes('silver',rr(E,.1));gainRes('gold',rr(E,.05));return'The caravan swapped bulk goods for rare ones.'}},
+   {t:'Decline',d:'Nothing happens',run:()=>'You sent the caravan on its way.'}]},
+ {id:'boom',cat:'eco',ic:'📈',n:'Trade boom',w:2,len:'short',cd:4800,ok:()=>V.cities>0&&bl(5)+V.ports>0,
+  txt:'Merchants are flocking to your market towns. Prices are high and spirits higher.',
+  opts:E=>[{t:'Let it run',d:'Coin income +15% for 5 min',fx:{n:'Trade boom',ic:'📈',inc:1.15,len:300}},
+   {t:'Build market stalls',d:`Pay ${costStr({coins:cc(E,200),wood:rr(E,.05)})}: income +30% for 7 min, then a lasting custom (+5% for 10 min)`,cost:{coins:cc(E,200),wood:rr(E,.05)},fx:{n:'Trade boom',ic:'📈',inc:1.3,len:420},after:{in:420,fx:{n:'Lasting custom',ic:'🤝',inc:1.05,len:600},m:'New customers keep returning.'}}]},
+ {id:'shortage',cat:'eco',ic:'🪵',n:'Resource shortage',w:1.6,len:'medium',cd:7200,ok:()=>V.tiles>10,
+  txt:'Timber and stone are scarce across the region and builders are demanding more.',
+  opts:E=>[{t:'Import materials',d:`Pay ${costStr({coins:cc(E,300)})}: no penalty`,cost:{coins:cc(E,300)}},
+   {t:'Ration and wait',d:'Building and unit costs +20% for 8 min',fx:{n:'Material shortage',ic:'🪵',cost:1.2,len:480}},
+   {t:'Stockpile now',d:`Pay ${costStr({coins:cc(E,360)})}: receive wood and stone, costs +10% for 5 min`,cost:{coins:cc(E,360)},fx:{n:'Material shortage',ic:'🪵',cost:1.1,len:300},run:()=>{gainRes('wood',rr(E,.12));gainRes('stone',rr(E,.12));return'Your storehouses are full.'}}]},
+ {id:'inflation',cat:'eco',ic:'💱',n:'Market disruption',w:1.5,len:'medium',cd:7200,ok:()=>V.cities>1,min:1,
+  txt:'A coin shortage elsewhere has thrown the markets into confusion.',
+  opts:E=>[{t:'Stabilise the market',d:`Pay ${costStr({coins:cc(E,280)})}: no penalty`,cost:{coins:cc(E,280)}},
+   {t:'Ride it out',d:'Coin income −10% for 5 min',fx:{n:'Market disruption',ic:'💱',inc:.9,len:300}},
+   {t:'Speculate',d:`Pay ${costStr({coins:cc(E,180)})}: 50% income +20% for 6 min, 50% income −15% for 4 min`,cost:{coins:cc(E,180)},run:()=>{if(roll()<.5){fxPush({n:'Lucky speculation',ic:'🍀',inc:1.2},360);return'The gamble paid off.'}fxPush({n:'Bad speculation',ic:'📉',inc:.85},240);return'The gamble failed.'}}]},
+ {id:'route',cat:'eco',ic:'🛤️',n:'New trade route',w:1.4,len:'long',cd:14400,ok:()=>V.cities>1&&bl(5)+V.ports>0,min:1,
+  txt:'Surveyors propose a new overland trade route through your lands.',
+  opts:E=>[{t:'Establish a caravan stop',d:`Pay ${costStr({coins:cc(E,480)})}: income +8% for 40 min`,cost:{coins:cc(E,480)},fx:{n:'Caravan stop',ic:'🛤️',inc:1.08,len:2400}},
+   {t:'Fund the grand route',d:`Pay ${costStr({coins:cc(E,1200),silver:rr(E,.06)})}: income +15% for 90 min, then busy roads (+5% for 30 min)`,min:2,cost:{coins:cc(E,1200),silver:rr(E,.06)},fx:{n:'Grand trade route',ic:'🛤️',inc:1.15,len:5400},after:{in:5400,fx:{n:'Busy roads',ic:'🛤️',inc:1.05,len:1800},m:'The route keeps paying.'}},
+   {t:'Decline',d:'Nothing happens'}]},
+ /* ---- political ---- */
+ {id:'succession',cat:'pol',ic:'👑',n:'Succession crisis',w:1.6,len:'medium',cd:10800,ok:()=>V.tiles>14,min:1,
+  txt:'The ruler of a neighbouring realm has died without a clear heir. Two claimants seek your support.',
+  opts:E=>[{t:'Back Aldric the Soldier',d:`Pay ${costStr({coins:cc(E,320),stone:rr(E,.08)})}: defence +12% for 30 min`,cost:{coins:cc(E,320),stone:rr(E,.08)},fx:{n:'Aldric’s oath',ic:'🛡️',def:1.12,len:1800}},
+   {t:'Back Maren the Merchant',d:`Pay ${costStr({coins:cc(E,320)})}: income +12% for 30 min`,cost:{coins:cc(E,320)},fx:{n:'Maren’s charter',ic:'💰',inc:1.12,len:1800}},
+   {t:'Stay neutral',d:'Rival aggression ×0.9 for 10 min',fx:{n:'Neutrality',ic:'🕊️',ai:.9,len:600}},
+   {t:'Exploit the chaos',d:'Claim one free neutral tile; rivals ×1.3 more aggressive for 15 min',need:()=>!!freeLand(),needT:'No free land nearby',run:()=>{const p=claimFree();fxPush({n:'Resentment',ic:'😡',ai:1.3},900);return p?'You seized unclaimed land while the neighbours argued.':''}}]},
+ {id:'rebellion',cat:'pol',ic:'✊',n:'Rebellion in the cities',w:1.6,len:'medium',cd:9000,ok:()=>V.cities>1,min:1,
+  txt:'Unrest has turned into open defiance in your cities.',
+  opts:E=>[{t:'Negotiate',d:`Pay ${costStr({coins:cc(E,320)})}: no penalty, then calm (+5% income for 8 min)`,cost:{coins:cc(E,320)},after:{in:1,fx:{n:'Calm',ic:'🕊️',inc:1.05,len:480},m:'Order returned to the cities.'}},
+   {t:'Send the army',d:'Needs infantry: lose 4% of it, income −5% for 6 min',need:()=>(S.army.inf||0)>=8,needT:'Needs at least 8 infantry',run:()=>{S.army.inf=Math.max(0,S.army.inf-Math.max(1,Math.round(S.army.inf*.04)));fxPush({n:'Martial law',ic:'⚔️',inc:.95},360)}},
+   {t:'Ignore it',d:'Coin income −20% for 8 min',fx:{n:'Rebellion',ic:'✊',inc:.8,len:480}}]},
+ {id:'ruler',cat:'pol',ic:'🤴',n:'A new ruler takes power',w:1.4,len:'medium',cd:9000,ok:aiOn,
+  txt:'A rival kingdom has a new ruler whose intentions are unknown.',
+  opts:E=>[{t:'Send gifts',d:`Pay ${costStr({coins:cc(E,260)})}: rivals ×0.75 as aggressive for 20 min`,cost:{coins:cc(E,260)},fx:{n:'Gifts to the court',ic:'🎁',ai:.75,len:1200}},
+   {t:'Send an envoy',d:'50%: rivals ×0.85 for 20 min; 50%: nothing',run:()=>{if(roll()<.5){fxPush({n:'Friendly envoy',ic:'🤝',ai:.85},1200);return'The envoy was well received.'}return'The envoy was turned away.'}},
+   {t:'Prepare defences',d:`Pay ${costStr({coins:cc(E,200)})}: defence +10% for 20 min`,cost:{coins:cc(E,200)},fx:{n:'Prepared borders',ic:'🛡️',def:1.1,len:1200}}]},
+ {id:'dispute',cat:'pol',ic:'📜',n:'Territorial dispute',w:1.4,len:'medium',cd:10800,ok:()=>V.tiles>12&&aiOn(),min:1,
+  txt:'A rival claims a stretch of your border land and demands it be ceded.',
+  opts:E=>[{t:'Concede the claim',d:'Rivals ×0.85 as aggressive for 15 min. No land is lost.',fx:{n:'Appeasement',ic:'🕊️',ai:.85,len:900}},
+   {t:'Press your claim',d:'Needs an army. Rivals ×1.2 for 12 min; claim one free tile if any',need:()=>armyPow()>=40,needT:'Needs a real army',run:()=>{claimFree();fxPush({n:'Hardline stance',ic:'⚔️',ai:1.2},720)}},
+   {t:'Call an arbitration',d:`Pay ${costStr({coins:cc(E,300)})}: +40 score and income +5% for 20 min`,cost:{coins:cc(E,300)},fx:{n:'Respected judge',ic:'⚖️',inc:1.05,len:1200},run:()=>{S.score=(S.score||0)+40}}]},
+ {id:'pact',cat:'pol',ic:'🤝',n:'Alliance of rival kingdoms',w:1.2,len:'medium',cd:14400,ok:()=>aiOn()&&V.tiles>20,min:1,
+  txt:'Two rival kingdoms have signed a pact. Their combined strength may turn toward you.',
+  opts:E=>[{t:'Counter-diplomacy',d:`Pay ${costStr({coins:cc(E,500)})}: rivals ×1.1 for 20 min only`,cost:{coins:cc(E,500)},fx:{n:'Rival pact',ic:'🤝',ai:1.1,len:1200}},
+   {t:'Fortify',d:`Pay ${costStr({coins:cc(E,360),stone:rr(E,.1)})}: defence +20% for 20 min, rivals ×1.35`,cost:{coins:cc(E,360),stone:rr(E,.1)},fx:{n:'Rival pact',ic:'🤝',ai:1.35,len:1200},run:()=>{fxPush({n:'Fortified',ic:'🧱',def:1.2},1200)}},
+   {t:'Ignore it',d:'Rivals ×1.35 more aggressive for 20 min',fx:{n:'Rival pact',ic:'🤝',ai:1.35,len:1200}}]},
+ /* ---- military ---- */
+ {id:'bandits',cat:'mil',ic:'🗡️',n:'Bandit activity',w:2,len:'short',cd:3600,ok:()=>V.tiles>8,
+  txt:'Bandits are raiding caravans and mines along your roads.',
+  opts:E=>[{t:'Hire guards',d:`Pay ${costStr({coins:cc(E,180)})}: no penalty, +20 score`,cost:{coins:cc(E,180)},run:()=>{S.score=(S.score||0)+20}},
+   {t:'Patrol the roads',d:'Free: lose a little coin (3% up to 2 min of income)',run:E2=>{loseCoins(E,.03,120)}},
+   {t:'Ignore them',d:'Mine output −10% for 5 min',fx:{n:'Bandit raids',ic:'🗡️',prod:.9,len:300}}]},
+ {id:'mercs',cat:'mil',ic:'🪖',n:'Mercenaries for hire',w:1.8,len:'medium',cd:5400,ok:()=>V.cities>0&&room()>=4,
+  txt:'A veteran mercenary company offers its swords for a price.',
+  opts:E=>[{t:'Hire infantry',d:`Pay ${costStr({coins:cc(E,500)})}: receive up to ${6+4*E.sc.tier*2} infantry`,cost:{coins:cc(E,500)},run:()=>{const n=addUnits('inf',6+8*E.sc.tier);return n?`${n} infantry joined your army.`:'No room in the army.'}},
+   {t:'Hire cavalry',d:`Pay ${costStr({coins:cc(E,900),silver:rr(E,.05)})}: receive up to ${3+3*E.sc.tier} cavalry`,min:1,cost:{coins:cc(E,900),silver:rr(E,.05)},run:()=>{const n=addUnits('cav',3+3*E.sc.tier);return n?`${n} cavalry joined your army.`:'No room in the army.'}},
+   {t:'Decline',d:'Nothing happens'}]},
+ {id:'border',cat:'mil',ic:'⚠️',n:'Border conflict',w:1.8,len:'short',cd:5400,ok:()=>V.tiles>12&&aiOn(),
+  txt:'Patrols from a rival kingdom have clashed with your border guards.',
+  opts:E=>[{t:'Reinforce the border',d:`Pay ${costStr({coins:cc(E,240)})}: defence +20% for 10 min`,cost:{coins:cc(E,240)},fx:{n:'Reinforced border',ic:'🛡️',def:1.2,len:600}},
+   {t:'Counter-raid',d:'Needs an army: 55% win coins, 45% lose a little',need:()=>armyPow()>=30,needT:'Needs an army',run:()=>{if(roll()<.55){S.coins+=cc(E,600);return'Your raiders returned with plunder.'}loseCoins(E,.04,200);return'The raid failed.'}},
+   {t:'Open talks',d:`Pay ${costStr({coins:cc(E,180)})}: rivals ×0.8 for 15 min`,cost:{coins:cc(E,180)},fx:{n:'Border talks',ic:'🕊️',ai:.8,len:900}}]},
+ {id:'invasion',cat:'mil',ic:'🏴',n:'A dangerous army approaches',w:2.2,len:'long',cd:9000,min:1,threat:360,ok:()=>V.tiles>=24&&(V.forts>0||armyPow()>=40),
+  txt:'Scouts report a large army marching on your border. Prepare as you can: it arrives soon and the outcome depends on what you have ready.',
+  opts:E=>[{t:'Recruit levies',d:`Pay ${costStr({coins:cc(E,500)})}: +25% readiness`,once:1,prep:.25,cost:{coins:cc(E,500)}},
+   {t:'Fortify the walls',d:`Pay ${costStr({coins:cc(E,360),stone:rr(E,.15)})}: +25% readiness`,once:1,prep:.25,cost:{coins:cc(E,360),stone:rr(E,.15)}},
+   {t:'Send word for aid',d:aiOn()?'Free: +10% readiness, a friendly rival may help (+10% more)':'Free: +10% readiness',once:1,prep:.1,run:()=>{if(aiOn()&&roll()<.4)return{prep:.1,m:'A neighbouring realm sent soldiers.'}}},
+   {t:'Plan an ambush',d:'Needs cavalry: +30% readiness',once:1,prep:.3,min:1,need:()=>(S.army.cav||0)>=6,needT:'Needs 6 cavalry'}]},
+ /* ---- environmental ---- */
+ {id:'drought',cat:'env',ic:'☀️',n:'Drought',w:2,len:'medium',cd:7200,ok:()=>V.mines>0,
+  txt:'A long dry season is cracking the fields and lowering the rivers.',
+  opts:E=>[{t:'Accept reduced output',d:'Mine output −30% for 10 min, then a recovery (+10% for 8 min)',fx:{n:'Drought',ic:'☀️',prod:.7,len:600},after:{in:600,fx:{n:'Recovery',ic:'🌱',prod:1.1,len:480},m:'The land recovers.'}},
+   {t:'Dig wells',d:`Pay ${costStr({wood:rr(E,.1),stone:rr(E,.1)})}: output only −10% for 10 min`,cost:{wood:rr(E,.1),stone:rr(E,.1)},fx:{n:'Drought',ic:'☀️',prod:.9,len:600}},
+   {t:'Import food',d:`Pay ${costStr({coins:cc(E,420)})}: output only −5% for 5 min`,cost:{coins:cc(E,420)},fx:{n:'Drought',ic:'☀️',prod:.95,len:300}},
+   {t:'Austerity',d:'Income −8% and output −15% for 10 min, then recovery (+10% for 8 min)',fx:{n:'Drought',ic:'☀️',inc:.92,prod:.85,len:600},after:{in:600,fx:{n:'Recovery',ic:'🌱',prod:1.1,len:480},m:'The land recovers.'}}]},
+ {id:'winter',cat:'env',ic:'❄️',n:'Severe winter',w:1.8,len:'medium',cd:7200,ok:()=>V.cities>0,
+  txt:'A bitter winter has closed the roads and emptied the markets.',
+  opts:E=>[{t:'Stock firewood',d:`Pay ${costStr({wood:rr(E,.08)})}: income −5% for 8 min`,cost:{wood:rr(E,.08)},fx:{n:'Severe winter',ic:'❄️',inc:.95,len:480}},
+   {t:'Open the granaries',d:`Pay ${costStr({coins:cc(E,240)})}: income −10% for 5 min`,cost:{coins:cc(E,240)},fx:{n:'Severe winter',ic:'❄️',inc:.9,len:300}},
+   {t:'Endure it',d:'Income −20% for 8 min, spring brings +8% for 8 min',fx:{n:'Severe winter',ic:'❄️',inc:.8,len:480},after:{in:480,fx:{n:'Spring thaw',ic:'🌷',inc:1.08,len:480},m:'Spring arrives.'}}]},
+ {id:'flood',cat:'env',ic:'🌊',n:'Flooding',w:1.4,len:'short',cd:7200,ok:()=>V.mines>1,
+  txt:'The rivers have burst their banks and are flooding low mines.',
+  opts:E=>[{t:'Build dykes',d:`Pay ${costStr({stone:rr(E,.1)})}: output −8% for 4 min`,cost:{stone:rr(E,.1)},fx:{n:'Flooding',ic:'🌊',prod:.92,len:240}},
+   {t:'Wait it out',d:'Output −25% for 5 min, then fertile silt (+12% for 10 min)',fx:{n:'Flooding',ic:'🌊',prod:.75,len:300},after:{in:300,fx:{n:'Fertile silt',ic:'🌾',prod:1.12,len:600},m:'The floods left rich silt.'}},
+   {t:'Divert the river',d:`Pay ${costStr({coins:cc(E,360),wood:rr(E,.08)})}: no penalty, then +5% output for 15 min`,cost:{coins:cc(E,360),wood:rr(E,.08)},after:{in:1,fx:{n:'New channel',ic:'🌾',prod:1.05,len:900},m:'The new channel waters the fields.'}}]},
+ {id:'bounty',cat:'env',ic:'🌾',n:'An unusually productive harvest',w:1.8,len:'short',cd:5400,ok:()=>V.mines>0,
+  txt:'The seasons have been kind, and your workers report bumper yields.',
+  opts:E=>[{t:'Make the most of it',d:'Mine output +30% for 6 min',fx:{n:'Bountiful season',ic:'🌾',prod:1.3,len:360}},
+   {t:'Hire extra hands',d:`Pay ${costStr({coins:cc(E,220)})}: output +50% for 8 min`,cost:{coins:cc(E,220)},fx:{n:'Bountiful season',ic:'🌾',prod:1.5,len:480}}]},
+ {id:'natres',cat:'env',ic:'⛰️',n:'New natural resources',w:1.4,len:'medium',cd:10800,ok:()=>{try{return V.tiles>10&&!!depTile()}catch(e){return false}},
+  txt:'Prospectors report promising ground beneath one of your mountains.',
+  opts:E=>[{t:'Take samples',d:'Free: receive stone and silver',run:()=>{gainRes('stone',rr(E,.1));gainRes('silver',rr(E,.05));return'The samples were rich.'}},
+   {t:'Open a claim',d:`Pay ${costStr({coins:cc(E,500)})}: an unbuilt mountain becomes a silver or gold vein`,cost:{coins:cc(E,500)},run:()=>{try{EID.deposit.o[0].run()}catch(e){}return'A new vein is ready to be mined.'}}]},
+ /* ---- exploration ---- */
+ {id:'ruins',cat:'exp',ic:'🏺',n:'Ancient ruins discovered',w:1.8,len:'medium',cd:9000,ok:()=>V.tiles>14,
+  txt:'Workers have uncovered the foundations of a long-lost settlement.',
+  opts:E=>[{t:'Send scholars',d:`Pay ${costStr({coins:cc(E,300)})}: receive research points`,cost:{coins:cc(E,300)},run:()=>{const n=Math.round(30+rpRate()*900+E.sc.ie*2);S.rp+=n;return`The scholars returned with ${n} research points.`}},
+   {t:'Excavate with soldiers',d:`Pay ${costStr({coins:cc(E,240)})}: 60% treasure, 40% a cave-in`,need:()=>armyPow()>=10,needT:'Needs a few soldiers',cost:{coins:cc(E,240)},run:()=>{if(roll()<.6){S.coins+=cc(E,800);gainRes('silver',rr(E,.06));return'The dig found a buried treasury.'}return'A cave-in ended the dig.'}},
+   {t:'Leave it alone',d:'Nothing happens'}]},
+ {id:'treasure',cat:'exp',ic:'🗺️',n:'Lost treasure',w:1.6,len:'short',cd:7200,ok:()=>V.tiles>8,
+  txt:'An old map found in a merchant’s chest marks a hidden hoard.',
+  opts:E=>[{t:'Dig it up',d:`Pay ${costStr({coins:cc(E,150)})}: 70% treasure (rarely a gem), 30% nothing`,cost:{coins:cc(E,150)},run:()=>{if(roll()<.7){S.coins+=cc(E,700);if(roll()<.1){META.gems=(META.gems|0)+2;return'Treasure, and two gems among it.'}return'You found the hoard.'}return'The spot was empty.'}},
+   {t:'Sell the map',d:'Free: receive a modest sum',run:()=>{S.coins+=cc(E,150)}}]},
+ {id:'caravan2',cat:'exp',ic:'🎪',n:'A mysterious caravan',w:1.4,len:'short',cd:7200,ok:()=>V.cities>0,
+  txt:'A veiled caravan from far away offers sealed crates and strange knowledge.',
+  opts:E=>[{t:'Buy a sealed crate',d:`Pay ${costStr({coins:cc(E,300)})}: unknown contents`,cost:{coins:cc(E,300)},run:()=>{const r=roll();if(r<.5){gainRes('silver',rr(E,.12));return'The crate held silver.'}if(r<.85){gainRes('gold',rr(E,.07));return'The crate held gold.'}if(E.sc.tier>=1){gainRes('diamond',Math.max(2,rr(E,.025)));return'The crate held diamonds.'}gainRes('gold',rr(E,.08));return'The crate held gold.'}},
+   {t:'Trade stories',d:'Free: receive research points',run:()=>{const n=Math.round(15+rpRate()*300);S.rp+=n}},
+   {t:'Refuse',d:'Nothing happens'}]},
+ {id:'return',cat:'exp',ic:'🧭',n:'An expedition returns',w:1.4,len:'short',cd:7200,ok:()=>V.tiles>12,
+  txt:'A long-overdue expedition has returned with unexpected findings.',
+  opts:E=>[{t:'Take the resources',d:'Free: receive wood, stone and silver',run:()=>{gainRes('wood',rr(E,.1));gainRes('stone',rr(E,.1));gainRes('silver',rr(E,.06))}},
+   {t:'Take the maps and notes',d:'Free: receive research points',run:()=>{S.rp+=Math.round(40+rpRate()*600)}},
+   {t:'Accept the envoys’ gifts',d:'Free: rivals ×0.8 as aggressive for 15 min',need:aiOn,needT:'No rivals left',fx:{n:'Foreign friendship',ic:'🎁',ai:.8,len:900}}]},
+ {id:'rare',cat:'exp',ic:'💎',n:'Rare resource discovery',w:1.1,len:'short',cd:9000,ok:()=>V.mines>1,min:1,
+  txt:'Your miners have broken into an unusually rich seam.',
+  opts:E=>[{t:'Mine it quickly',d:'Free: receive gold',run:()=>{gainRes('gold',rr(E,.08))}},
+   {t:'Survey carefully',d:`Pay ${costStr({coins:cc(E,260)})}: more gold, and a gem`,cost:{coins:cc(E,260)},run:()=>{gainRes('gold',rr(E,.14));META.gems=(META.gems|0)+1}}]}];
+const EVID={};EV7.forEach(e=>EVID[e.id]=e);
+const CATE={eco:'Economic',pol:'Political',mil:'Military',env:'Environmental',exp:'Exploration'};
+const LENN={short:'Short',medium:'Medium',long:'Large'};
+const DECIDE={short:240,medium:420,long:600};
+let UID=0;
+const optList=E=>{const d=EVID[E.id];return d?d.opts(E).filter(o=>!o.min||E.sc.tier>=o.min):[]};
+function evCandidates(){const x=X(),e=x.ev,tier=tierNow(),act=e.act.map(q=>q.id),out=[];
+ for(const d of EV7){if((d.min||0)>tier)continue;if(act.includes(d.id))continue;if(S.time-(e.cd[d.id]||-1e9)<d.cd)continue;if(S.time-(e.cc[d.cat]||-1e9)<2400)continue;if(e.hist.slice(0,6).some(h=>h.id==d.id))continue;
+  let ok=false;try{ok=d.ok()}catch(er){}if(!ok)continue;
+  const E={id:d.id,sc:{ie:incE(),cp:CP(),tier}},os=optList(E);if(!os.some(o=>(!o.cost||afford(o.cost))&&(!o.need||o.need())))continue;out.push(d)}
+ return out}
+function evTick7(){const x=X(),e=x.ev;
+ for(const a of e.act.slice()){if(a.arrive){if(S.time>=a.arrive)resolveThreat(a)}else if(S.time>a.until)autoDecide(a)}
+ for(const s of e.sched.slice())if(S.time>=s.at){e.sched.splice(e.sched.indexOf(s),1);fxPush(s.fx,s.fx.len);if(s.m)note(s.fx.ic||'✨',`${s.fx.n}: ${s.m}`,{quiet:1})}
+ if(!e.next)e.next=S.time+600+roll()*600;
+ if(S.time<e.next||S.evp||e.act.length>=2||!V||!V.tiles)return;
+ const pool=evCandidates();if(!pool.length){e.next=S.time+180;return}
+ let r=roll()*pool.reduce((a,d)=>a+d.w,0),d=pool[0];for(const q of pool){r-=q.w;if(r<=0){d=q;break}}
+ offer(d);e.next=S.time+1500+roll()*1500}
+function offer(d){const x=X(),e=x.ev,tier=tierNow(),E={uid:++UID+Math.floor(S.time),id:d.id,at:S.time,sc:{ie:incE(),cp:CP(),tier},until:S.time+DECIDE[d.len],prep:0,used:[]};
+ if(d.threat){E.arrive=S.time+d.threat;E.until=E.arrive}
+ e.act.push(E);e.cd[d.id]=S.time;e.cc[d.cat]=S.time;e.hist.unshift({id:d.id,n:d.n,ic:d.ic,cat:d.cat,t:nowMs(),g:S.time,pending:1});if(e.hist.length>30)e.hist.length=30;
+ note(d.ic,`${CATE[d.cat]}: ${d.n}`+(d.threat?' — it arrives in a few minutes':' — a decision is waiting'),{k:'event'});try{sfx('warn')}catch(er){}}
+function histDone(E,ch,tx){const h=X().ev.hist.find(q=>q.id==E.id&&q.pending);if(h){h.pending=0;h.ch=ch;h.tx=tx;h.t2=nowMs()}}
+function endEvent(E,ch,tx){const x=X(),e=x.ev,d=EVID[E.id];e.act=e.act.filter(q=>q!==E);histDone(E,ch,tx);S.st.events=(S.st.events||0)+1;x.c.ev7++;addPts(3,'ev');chron(d.ic,`${d.n}: ${ch}`);try{save()}catch(er){}renderSheetSoon()}
+function choose7(uid,j){const x=X(),E=x.ev.act.find(q=>q.uid==uid);if(!E)return;const d=EVID[E.id],o=optList(E)[j];if(!o)return;
+ if(o.once&&E.used.includes(j))return;if(o.need&&!o.need())return toast(o.needT||'Requirement not met');if(o.cost&&!afford(o.cost))return toast('Missing: '+missing(o.cost));
+ spend(o.cost);if(o.fx)fxPush(o.fx,o.fx.len);let tx='';const rr_=o.run?o.run(E):null;if(typeof rr_=='string')tx=rr_;else if(rr_&&rr_.m){tx=rr_.m;E.prep+=rr_.prep||0}
+ if(o.after)x.ev.sched.push({at:S.time+o.after.in,fx:o.after.fx,m:o.after.m});
+ if(d.threat){E.used.push(j);E.prep+=o.prep||0;toast(`${d.ic} Readiness ${Math.round(E.prep*100)}%`);try{sfx('mission')}catch(er){}try{save()}catch(er){}renderSheetSoon();return}
+ try{sfx(o.fx&&(o.fx.prod>1||o.fx.inc>1)?'win':'mission');buzz()}catch(er){}note(d.ic,`${d.n}: ${o.t}`+(tx?` — ${tx}`:''),{quiet:1});endEvent(E,o.t,tx)}
+function autoDecide(E){const d=EVID[E.id],os=optList(E);let j=os.findIndex(o=>!o.cost&&(!o.need||o.need()));if(j<0)j=0;const o=os[j];if(!o){X().ev.act=X().ev.act.filter(q=>q!==E);return}
+ if(o.cost&&afford(o.cost))spend(o.cost);if(o.fx)fxPush(o.fx,o.fx.len);let tx='';const r=o.run?o.run(E):null;if(typeof r=='string')tx=r;if(o.after)X().ev.sched.push({at:S.time+o.after.in,fx:o.after.fx,m:o.after.m});
+ note(d.ic,`${d.n}: no decision was made, so "${o.t}" was applied`,{quiet:1});endEvent(E,o.t+' (no decision)',tx)}
+function defPow(E){return(armyPow()+30*(V.forts||0)+12*(V.cities||0)+25*bl(11))*(1+rt('dfn'))*fxm('def')*(1+(E.prep||0))}
+function threatPow(E){return(60+9*(V.tiles||0)+14*Math.sqrt(incE()))*(.8+.12*E.sc.tier)}
+function resolveThreat(E){const x=X(),d=EVID[E.id],ratio=defPow(E)/threatPow(E);let ch,tx;
+ if(ratio>=1.25){ch='Crushed the invaders';S.coins+=cc(E,700);S.score=(S.score||0)+60;x.c.inv++;S.st.repelled=(S.st.repelled||0)+1;tx='Your defences broke the army and its baggage was taken.'}
+ else if(ratio>=.85){ch='Held the line';S.coins+=cc(E,250);S.score=(S.score||0)+25;S.st.repelled=(S.st.repelled||0)+1;tx='The attack was repelled.'}
+ else if(ratio>=.5){ch='Raided';const l=loseCoins(E,.06,300);fxPush({n:'Raided lands',ic:'🔥',prod:.9},360);tx=`The raiders looted ${fm(l)} coins before withdrawing. No land was lost.`}
+ else{ch='Ravaged';const l=loseCoins(E,.1,600);for(const k of['wood','stone'])S.res[k]=Math.max(0,S.res[k]-Math.round(S.res[k]*.06));fxPush({n:'Ravaged lands',ic:'🔥',prod:.85},480);tx=`The invaders ravaged the borderlands and took ${fm(l)} coins. No land or units were lost.`}
+ note(d.ic,`${d.n}: ${ch}. ${tx}`,{k:'event',big:ratio>=.85});endEvent(E,ch,tx)}
+
+/* ===================== 3. MAJOR WORLD EVENTS =====================
+   Online: this is a view of the server's state; all timing, totals, caps, results and reward claims live on the server.
+   Offline: the same CORE7 code runs locally against the device clock (which can never move backwards), with simulated
+   rival realms taking part, so the offline game plays the same event and keeps its own history. */
+const WEF=C0.WE,WTI={defender:'Defender of the World',merchant:'Merchant of the Golden Era',steward:'Steward of the Drought',discoverer:'Discoverer of the Lost Empire',kingmaker:'The Kingmaker'};
+const UNITC={invasion:[{c:8,r:{wood:.01,stone:.01}},null,{c:8,r:{stone:.014}}],trade:[null,{c:3,r:{silver:.012}},{c:14}],drought:[{r:{wood:.012,stone:.012}},null,{c:6,r:{wood:.012}}],empire:[{c:8,r:{wood:.01}},null,{c:6,r:{silver:.01,gold:.006}}],succession:[{c:8,r:{stone:.01}},null,{c:10,r:{silver:.008}}]};
+function unitCost(id,k,n){const u=(UNITC[id]||[])[k];if(!u)return null;const c={};if(u.c)c.coins=secs(u.c)*n;for(const r in u.r||{})c[r]=Math.max(1,Math.round(CP()*u.r[r]))*n;return c}
+const evKey=w=>w.id+'@'+w.start;
+let PENDW={},PENDC={};
+function rivalSim(w,now){if(S.on)return;let r=0;for(let k=2;k<6;k++)if(S.tiles.some(t=>t.o===k))r++;const def=WEF[w.id];
+ for(let i=0;i<Math.min(r,4);i++){const a='r'+i,p=w.pl[a]=w.pl[a]||{s:[0,0,0],f:C0.h32(a+w.start)%2};
+  for(let k=0;k<3;k++){const[s0,s1]=C0.stageWin(w,k),f=clamp((now-s0)/(s1-s0),0,1),pc=C0.pcOf(def.st[k]);p.s[k]=Math.round(pc*(.26+.3*(C0.h32(a+w.id+w.start+k)%100)/100)*f)}}}
+function localWorld(){const x=X(),we=x.we,now=nowMs(),sch=C0.schedule(now);
+ if(we.cur&&!we.cur.res){rivalSim(we.cur,now);C0.evaluate(we.cur,now);if(we.cur.res)closeLocal(we.cur)}
+ if(sch.cur&&(!we.cur||we.cur.start!==sch.cur.start)){we.cur=C0.newEvent(sch.cur);const d=WEF[sch.cur.id];we.cur.pl.me={s:[0,0,0],f:2};delete we.cur.pl.me;rivalSim(we.cur,now);
+  note(d.ic,`${d.n} has begun`,{k:'world',big:1});announce('we:'+evKey(we.cur),d.ic,d.n,d.intro,'world')}
+ if(!we.cur&&!sch.cur&&sch.next&&!we.seen['pre:'+sch.next.start]&&sch.next.announce<=now){we.seen['pre:'+sch.next.start]=1;const d=WEF[sch.next.id];note(d.ic,`${d.n} is scheduled to begin ${dstr(sch.next.start)}`,{k:'world',quiet:1})}}
+function closeLocal(w){const x=X(),we=x.we;if(w.logged)return;w.logged=1;const d=WEF[w.id],rw=C0.rewardFor(w,'me');
+ we.hist.unshift({key:evKey(w),id:w.id,o:w.res.o,at:w.end,tier:rw?rw.tier:0,units:rw?rw.units:0,n:w.res.n});if(we.hist.length>24)we.hist.length=24;
+ if(w.res.mod)x.wm.push(Object.assign({key:evKey(w)},w.res.mod));x.wm=x.wm.filter(m=>m.until>nowMs());
+ note(d.ic,`${d.n} has ended: ${d.out[w.res.o]}`,{k:'world',big:1});announce('weres:'+evKey(w),d.ic,d.n+' — '+({win:'Victory',partial:'Partial success',fail:'Failed'}[w.res.o]),d.out[w.res.o]+(w.res.mod?` The world gains "${w.res.mod.n}" for ${w.res.mod.days} days.`:''),'world')}
+/* a normalised view for the interface, online or offline */
+function WV(){const now=nowMs();
+ if(S.on&&SRV.w){const m=SRV.w;return{online:true,live:onl(),cur:m.cur,recent:m.recent||[],next:m.next,hist:m.hist||[],mods:m.mods||[],now}}
+ const we=X().we,w=we.cur;let cur=null,recent=[];
+ const vw=(w)=>{const acc='me',my=w.pl.me,v={key:evKey(w),id:w.id,start:w.start,end:w.end,ok:w.ok,stage:C0.stageAt(w,Math.min(now,w.end)),tot:[0,1,2].map(k=>C0.totals(w,k,Math.min(now,w.end))),n:Object.keys(w.pl).length,my:my?{s:my.s,f:my.f}:null};return v};
+ if(w){const v=vw(w);if(!w.res)cur=v;else{v.res=w.res;const rw=w.pl.me?C0.rewardFor(w,'me'):null;v.my=Object.assign(v.my||{s:[0,0,0],f:2},{rw,claimed:!!we.got[v.key]&&we.got[v.key]!=='pending'});if(now-w.end<12*DAYMS||(rw&&rw.tier&&!v.my.claimed))recent.push(v)}}
+ const sch=C0.schedule(now);return{online:false,live:true,cur,recent,next:sch.cur?C0.schedule(sch.cur.end+1).next:sch.next,hist:we.hist,mods:X().wm.filter(m=>m.until>now),now}}
+const myUnits=(v,k)=>v.cur&&v.cur.my?(v.cur.my.s[k]|0):0;
+const facOf=()=>{const x=X(),v=WV();return v.cur&&v.cur.my&&v.cur.my.f!=null?v.cur.my.f:(x.we.fac&&x.we.fac[v.cur&&v.cur.key])!=null?x.we.fac[v.cur.key]:2};
+function setFac(f){const x=X(),v=WV();if(!v.cur)return;x.we.fac=x.we.fac||{};x.we.fac[v.cur.key]=f;renderSheetSoon()}
+function weGive(k,n){const v=WV();if(!v.cur)return;if(k!==v.cur.stage)return toast('That stage is not active');const def=WEF[v.cur.id],s=def.st[k];if(s.kind!='supply')return;
+ const left=C0.pcOf(s)-myUnits(v,k);n=Math.min(n,left,10);if(n<=0)return toast('You have given all you can in this stage');
+ let a=n;while(a>0&&!afford(unitCost(v.cur.id,k,a)))a--;if(a<1)return toast('Missing: '+missing(unitCost(v.cur.id,k,1)));
+ sendUnits(v.cur,k,a,true)}
+function sendUnits(cur,k,a,pay){const x=X(),f=facOf();
+ if(S.on){if(!onl())return toast('Reconnect to take part');const mid='w'+Math.random().toString(36).slice(2,9)+Date.now().toString(36);PENDW[mid]={k,n:a,pay,key:cur.key,id:cur.id};MPX.send({t:'wec',mid,k,n:a,f:f<2?f:undefined});return}
+ const w=x.we.cur;if(!w||w.res)return;const got=C0.contribute(w,'me',k,a,f<2?f:undefined,nowMs());if(got){if(pay)spend(unitCost(w.id,k,got));gave(got,k,pay)}}
+function gave(a,k,pay){const x=X();x.c.wu+=a;const sn=x.sn;if(sn){sn.wacc=(sn.wacc||0)+a;while(sn.wacc>=2){sn.wacc-=2;addPts(1,'we')}}
+ x.c.ws=x.c.ws;try{sfx('mission')}catch(e){}renderSheetSoon()}
+/* action stages: units come from what you actually do (battles, trades, research) while the stage is open */
+function actSync(){const v=WV();if(!v.cur||(S.on&&!onl()))return;const x=X(),def=WEF[v.cur.id],k=v.cur.stage,s=def.st[k];if(s.kind!='act')return;
+ const A=x.we.act[v.cur.key]=x.we.act[v.cur.key]||{};const a=A[k]=A[k]||{b:ctr(s.key==='won'?'won':s.key),sent:0};
+ const cur=ctr(s.key==='won'?'won':s.key),units=Math.floor((cur-a.b)*s.per)-a.sent,room=C0.pcOf(s)-myUnits(v,k);if(units<=0||room<=0)return;
+ const n=Math.min(units,room,10);a.sent+=n;sendUnits(v.cur,k,n,false)}
+const TIERW=['','Participant','Contributor','Champion'];
+function weClaim(key){const x=X(),v=WV(),all=[v.cur,...(v.recent||[])].filter(Boolean),e=all.find(q=>q.key==key);if(!e||!e.res)return;
+ if(S.on){if(!onl())return toast('Reconnect to claim');if(x.we.got[key]===1)return;x.we.got[key]='pending';try{save()}catch(er){}MPX.send({t:'wecl',key});return}
+ const w=x.we.cur;if(!w||evKey(w)!==key||!w.res||x.we.got[key]===1)return;const rw=C0.rewardFor(w,'me');if(!rw||!rw.tier)return toast('You did not contribute enough to earn a reward');
+ x.we.got[key]=1;payWE(w.id,rw,key)}
+function payWE(id,rw,key){const x=X(),d=WEF[id],base=d.rw[rw.tier-1];if(!base)return;const mult=rw.mult;
+ const r=mkRw(base.s*mult,base.r*mult,{m:rw.tier>=2,d:rw.tier>=3,g:Math.round((base.g||0)*mult)+(rw.top==1?8:rw.top?4:0)});grant(r);
+ const sp=base.sp||0;addPts(sp,'we');grantPr(rw.tier==3?2:1,'we');if(rw.tier==3)x.c.champ++;
+ if(base.ti&&rw.tier==3)giveTitle('we_'+base.ti,WTI[base.ti]||base.ti,false);
+ if(rw.rel&&rw.rel.length){x.we.rel=x.we.rel||{};const have=x.we.rel[id]=x.we.rel[id]||[];for(const q of rw.rel)if(!have.includes(q))have.push(q);if(rw.rel.length>=4){grant({c:0,res:{},g:5});note('🏺','Four different relics recovered: +5 gems',{quiet:1})}}
+ if(!x.we.hist.some(h=>h.key==key))x.we.hist.unshift({key,id,o:rw.o,at:Date.now(),tier:rw.tier,units:rw.units,n:0});else{const h=x.we.hist.find(q=>q.key==key);h.tier=rw.tier}
+ note(d.ic,`${d.n}: ${TIERW[rw.tier]} reward — ${rstr(r.c,r.res,r.g)}`+(rw.top?` · rank ${rw.top} of the world`:''),{k:'claim',big:1});try{save()}catch(e){}renderSheetSoon()}
+let MODC={};
+function modTick(){const x=X(),n=nowMs(),list=S.on&&SRV.w?(SRV.w.mods||[]):x.wm,o={};for(const m of list){if(m.until<=n)continue;for(const k of['inc','prod','def','ai','cost'])if(m[k])o[k]=(o[k]||1)*m[k];if(m.spr)o.spr=(o.spr||0)+(1-m.spr)}MODC=o;
+ if(x.wm.length)x.wm=x.wm.filter(m=>m.until>n)}
+/* online messages from the server */
+function onMsg7(m){
+ if(m.t=='world'){SRV.w=m;SRV.at=Date.now();SRV.skew=m.now-Date.now();const x=X();if(x){
+   for(const e of[m.cur,...(m.recent||[])]){if(!e)continue;const d=WEF[e.id];if(!d)continue;if(!x.we.seen['on:'+e.key]){x.we.seen['on:'+e.key]=1;if(!e.res){note(d.ic,`${d.n} has begun`,{k:'world',big:1});announce('we:'+e.key,d.ic,d.n,d.intro,'world')}}
+    if(e.res&&!x.we.seen['res:'+e.key]){x.we.seen['res:'+e.key]=1;if(e.my&&e.my.rw&&e.my.rw.tier){note(d.ic,`${d.n} has ended — your reward is ready`,{k:'world',big:1});announce('weres:'+e.key,d.ic,d.n+' — '+({win:'Victory',partial:'Partial success',fail:'Failed'}[e.res.o]),d.out[e.res.o]+' You earned a reward.','world')}}}
+   modTick();renderSheetSoon()}}
+ else if(m.t=='wecok'){const p=PENDW[m.mid];if(!p)return;delete PENDW[m.mid];const a=m.a|0;if(a>0){if(p.pay)spend(unitCost(p.id,p.k,a));gave(a,p.k,p.pay);if(SRV.w&&SRV.w.cur&&SRV.w.cur.key==p.key&&m.my){SRV.w.cur.my=m.my}}else if(!p.pay){const A=X().we.act[p.key];if(A&&A[p.k])A[p.k].sent=Math.max(0,A[p.k].sent-p.n)}}
+ else if(m.t=='weclok'){const x=X();if(m.no)return;const had=x.we.got[m.key];
+  if(!m.rw||!m.rw.tier){x.we.got[m.key]=1;return}
+  if(!m.dup||had==='pending'){x.we.got[m.key]=1;payWE(m.id,m.rw,m.key)}else{x.we.got[m.key]=1;note('ℹ️','That event reward was already claimed on this account.',{quiet:1})}}
+ else if(m.t=='sclok'){const k=m.sid+m.m;if(!PEND[k])return;delete PEND[k];if(m.no)return toast('That reward cannot be claimed right now');finishMs(m.sid,m.m,!!m.dup)}}
+/* ---------- announcements: one calm card, no animation loop ---------- */
+let ANN=[];
+function announce(key,ic,title,text,kind){const x=X();if(x.we.seen['a:'+key])return;x.we.seen['a:'+key]=1;ANN.push({ic,title,text,kind});showAnn()}
+function showAnn(){if(document.getElementById('x7ann')||!ANN.length)return;if(window.TUTON)return;const a=ANN.shift(),d=document.createElement('div');d.id='x7ann';
+ d.innerHTML=`<div class="x7a"><div class="x7ai">${a.ic}</div><b>${esc(a.title)}</b><p>${esc(a.text)}</p><div class="x7ab"><button onclick="X7.openEC();X7.closeAnn()">Open Event Centre</button><button class="x7g" onclick="X7.closeAnn()">Later</button></div></div>`;document.body.appendChild(d)}
+window.X7={closeAnn(){const d=document.getElementById('x7ann');if(d)d.remove();setTimeout(showAnn,400)}};
+
+/* ===================== 6. EVENT CENTRE ===================== */
+const css=document.createElement('style');css.id='v7-css';css.textContent=`
+#x7ann{position:fixed;inset:0;z-index:60;background:#000a;display:flex;align-items:center;justify-content:center;padding:18px;animation:x7f .2s ease-out}
+@keyframes x7f{from{opacity:0}to{opacity:1}}
+#x7ann .x7a{max-width:420px;width:100%;background:linear-gradient(#18304a,#0e1c2e);border:2px solid #ffcf4a;border-radius:16px;padding:18px;text-align:center;box-shadow:0 10px 40px #000a}
+#x7ann .x7ai{font-size:44px;line-height:1.1}#x7ann b{font-size:19px;display:block;margin:6px 0}#x7ann p{margin:6px 0 12px;line-height:1.45;font-size:14px;max-height:34vh;overflow:auto}
+#x7ann .x7ab{display:grid;gap:8px}#x7ann button{min-height:44px;text-align:center}#x7ann .x7g{background:#1d2f45;border-color:#3a5a80}
+.x7t{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:2px 0 8px}.x7t button{min-height:42px;padding:3px 2px;font-size:12px;text-align:center;position:relative}.x7t button.on{border-color:#ffcf4a;background:#1d3d5c;box-shadow:0 0 0 2px #ffcf4a44 inset}
+.x7t button i{position:absolute;top:2px;right:4px;font-style:normal;background:#ff4d5a;color:#fff;border-radius:8px;font-size:10px;padding:0 5px;font-weight:800}
+.x7c{background:#10223a;border:1px solid #2c4a6e;border-radius:12px;padding:10px;margin:7px 0}.x7c.act{border-color:#ffcf4a}.x7c.done{border-color:#3ddc97}.x7c.lock{opacity:.62}
+.x7h{display:flex;align-items:center;gap:8px}.x7h b{flex:1}.x7h em{font-style:normal;font-size:12px;opacity:.9}
+.x7b{height:9px;border-radius:6px;background:#0b1626;border:1px solid #2c4a6e;overflow:hidden;margin:6px 0}.x7b>div{height:100%;background:linear-gradient(90deg,#ffcf4a,#ff9c43)}.x7b.g>div{background:linear-gradient(90deg,#3ddc97,#7bd88f)}.x7b.r>div{background:linear-gradient(90deg,#ff7b7b,#ff5268)}
+.x7s{font-size:12.5px;opacity:.88;line-height:1.4}.x7p{display:inline-block;border-radius:9px;padding:1px 8px;font-size:11.5px;font-weight:800;background:#16324c;border:1px solid #3a638a;margin-right:4px}.x7p.a{background:#123d2a;border-color:#3ddc97;color:#a8f0cd}.x7p.u{background:#3d3416;border-color:#ffcf4a;color:#ffe9a0}.x7p.e{background:#2a2a33;border-color:#6a6a7a;color:#c7c7d4}
+.x7o{display:grid;gap:6px;margin-top:8px}.x7o button{min-height:48px;text-align:left}.x7o button small{display:block;opacity:.85;font-size:11.5px;margin-top:2px;white-space:normal}.x7r{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px}.x7r button{min-height:44px;text-align:center;padding:4px}
+.x7m{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center}.x7m svg{width:96px;height:auto;border-radius:8px;background:linear-gradient(#27456b,#0f2036)}
+.x7a1{width:100%;margin-top:6px;min-height:44px;text-align:center}.x7x{max-height:none}
+`;document.head.appendChild(css);
+let ecTab='ov',renderTimer=0;
+const renderSheetSoon=()=>{if(SH!=='ev7')return;clearTimeout(renderTimer);renderTimer=setTimeout(()=>{try{shK='';renderSheet()}catch(e){}},60)};
+const bar=(p,c)=>`<div class="x7b ${c||''}"><div style="width:${Math.round(clamp(p,0,1)*100)}%"></div></div>`;
+function monArt(m,st){const c=m.col,g='#ffd34a',stn='#bdb6a4',dk='#6b6458',h=st>=3?1:st==2?.55:.0;let s=`<svg viewBox="0 0 120 84" role="img" aria-label="${esc(m.n)}, ${st} of 4 stages"><rect x="0" y="66" width="120" height="18" fill="#2d4a2f"/>`;
+ s+=st>=1?`<rect x="12" y="60" width="96" height="8" fill="${dk}"/><rect x="18" y="55" width="84" height="6" fill="${stn}"/>`:`<rect x="12" y="60" width="96" height="8" fill="none" stroke="${stn}" stroke-dasharray="4 3"/>`;
+ const top=55,sc=st>=2;
+ if(sc){if(m.sh=='pyr')s+=`<polygon points="22,${top} 98,${top} 60,${top-48*h}" fill="${c}" stroke="${dk}"/><polygon points="60,${top-48*h} 98,${top} 60,${top}" fill="#0003"/>`;
+  else if(m.sh=='col'){for(let i=0;i<5;i++)s+=`<rect x="${26+i*16}" y="${top-30*h}" width="8" height="${30*h}" fill="${stn}" stroke="${dk}"/>`;if(h>.9)s+=`<polygon points="20,${top-30} 100,${top-30} 60,${top-48}" fill="${c}" stroke="${dk}"/>`}
+  else if(m.sh=='arc'){s+=`<rect x="26" y="${top-42*h}" width="12" height="${42*h}" fill="${stn}" stroke="${dk}"/><rect x="82" y="${top-42*h}" width="12" height="${42*h}" fill="${stn}" stroke="${dk}"/>`;if(h>.9)s+=`<path d="M26 ${top-42} Q60 ${top-72} 94 ${top-42}" fill="none" stroke="${c}" stroke-width="7"/><line x1="60" y1="${top-56}" x2="60" y2="${top-34}" stroke="${g}" stroke-width="2"/><polygon points="48,${top-34} 72,${top-34} 60,${top-26}" fill="${g}"/>`}
+  else if(m.sh=='obe'){s+=`<polygon points="48,${top} 72,${top} 66,${top-62*h} 54,${top-62*h}" fill="${stn}" stroke="${dk}"/>`;if(h>.9)s+=`<polygon points="54,${top-62} 66,${top-62} 60,${top-72}" fill="${c}"/><line x1="40" y1="${top-24}" x2="80" y2="${top-24}" stroke="${c}" stroke-width="4"/>`}
+  else if(m.sh=='hal'){s+=`<rect x="20" y="${top-30*h}" width="80" height="${30*h}" fill="${stn}" stroke="${dk}"/>`;if(h>.9)s+=`<polygon points="16,${top-30} 104,${top-30} 60,${top-46}" fill="${c}" stroke="${dk}"/><path d="M52 ${top-22} h16 v10 q-8 8 -16 0z" fill="${g}"/>`}
+  else if(m.sh=='zig'){for(let i=0;i<4;i++){const k=Math.min(1,h*4-i);if(k>0)s+=`<rect x="${22+i*9}" y="${top-(i+1)*11*Math.min(1,k)}" width="${76-i*18}" height="${11*Math.min(1,k)}" fill="${i%2?c:stn}" stroke="${dk}"/>`}}
+  else{s+=`<rect x="26" y="${top-22*h}" width="68" height="${22*h}" fill="${stn}" stroke="${dk}"/>`;if(h>.9)s+=`<path d="M30 ${top-22} a30 24 0 0 1 60 0z" fill="${c}" stroke="${dk}"/><circle cx="18" cy="${top-6}" r="7" fill="#3a8a4a"/><circle cx="102" cy="${top-6}" r="7" fill="#3a8a4a"/>`}
+  if(st==2)s+=`<g stroke="#a67c3d" stroke-width="1.3"><line x1="14" y1="${top}" x2="14" y2="${top-52}"/><line x1="106" y1="${top}" x2="106" y2="${top-52}"/><line x1="14" y1="${top-18}" x2="106" y2="${top-18}"/><line x1="14" y1="${top-36}" x2="106" y2="${top-36}"/></g>`}
+ if(st>=3)s+=`<polygon points="60,6 62.5,12 69,12.5 64,16.5 65.5,23 60,19.5 54.5,23 56,16.5 51,12.5 57.5,12" fill="${g}" opacity=".9"/>`;
+ if(st>=4)s+=`<circle cx="60" cy="40" r="44" fill="none" stroke="${g}" stroke-width="2" opacity=".55"/><circle cx="60" cy="40" r="52" fill="none" stroke="${g}" stroke-width="1" opacity=".35"/>`;
+ return s+`</svg>`}
+const left7=(sn)=>Math.max(0,sn.end-nowMs());
+function chip(t,c){return`<span class="x7p ${c||''}">${t}</span>`}
+function secEC(){const x=X(),cur=C0.seasonFor(nowMs()),sn=x.sn;let h='';if(!sn)return`<div class="x7c">Season is starting…</div>`;
+ const nxt=C0.TRACK.find(t=>sn.pts<t.p),prev=[...C0.TRACK].reverse().find(t=>sn.pts>=t.p);
+ h+=`<div class="x7c act" style="border-color:${cur.col}"><div class="x7h"><span style="font-size:26px">${cur.ic}</span><b>${esc(cur.n)}</b>${chip('ACTIVE','a')}</div><div class="x7s">${esc(cur.intro)}</div><div class="x7s" style="margin-top:4px">Focus: ${esc(cur.desc)} · ${dstr(cur.start)} – ${dstr(cur.end-1)} · <b>${dt1(cur.left)}</b> left · ${TIERN[sn.tier]} challenges</div>
+ ${bar(nxt?(sn.pts-(prev?prev.p:0))/(nxt.p-(prev?prev.p:0)):1)}<div class="x7s"><b>${sn.pts}</b> season points${nxt?` · next reward at ${nxt.p}`:' · track complete'}</div></div>`;
+ h+=`<div class="x7h" style="margin-top:8px"><b>Season track</b></div>`;
+ for(const t of C0.TRACK){const ok=sn.pts>=t.p,cl=!!sn.cl[t.id];h+=`<div class="x7c ${cl?'done':ok?'act':'lock'}"><div class="x7h"><span>${t.id=='fin'?'🏆':t.k=='bonus'?'⭐':'🎁'}</span><b>${t.p} pts · ${trackName(t)}</b>${cl?chip('CLAIMED','a'):ok?chip('READY','u'):''}</div><div class="x7s">${rwText(t,cur)}</div>${ok&&!cl?`<button class="x7a1" onclick="X7.claimMs('${sn.id}','${t.id}')">Claim reward</button>`:''}</div>`}
+ h+=`<div class="x7h" style="margin-top:10px"><b>Challenges</b><em>${sn.ch.filter(c=>c.d).length}/${sn.ch.length}</em></div><div class="x7s">Challenges are chosen for a ${TIERN[sn.tier].toLowerCase()} kingdom. Goals measure what you do from now on; unfinished ones grow with your kingdom if it jumps a tier.</div>`;
+ for(const c of sn.ch){const z=CHID[c.id],p=chProg(c),f=Math.min(1,p/c.g);h+=`<div class="x7c ${c.d?'done':''}"><div class="x7h"><span>${z.ic}</span><b>${esc(z.n.replace('{g}',fm(c.g)))}</b>${chip(CATN[z.c])}</div>${bar(f,c.d?'g':'')}<div class="x7s">${c.d?'Complete':fm(Math.min(p,c.g))+' / '+fm(c.g)} · ${c.p} pts${z.h?' · '+esc(z.h):''}</div></div>`}
+ return h}
+function archEC(){const x=X(),cur=C0.seasonFor(nowMs());let h=`<div class="x7h" style="margin-top:12px"><b>Past seasons</b></div>`;
+ if(!x.sh.length)return h+`<div class="x7s">No completed seasons yet. Rewards you earn are yours for good; they never expire.</div>`;
+ for(const s of x.sh){const th=C0.seasonAt(s.idx),pend=C0.TRACK.filter(t=>s.pts>=t.p&&!s.cl.includes(t.id)),can=!S.on||s.id==='s'+(cur.idx-1);
+  h+=`<div class="x7c"><div class="x7h"><span>${s.ic}</span><b>${esc(s.n)}</b>${chip('ENDED','e')}</div><div class="x7s">${dstr(th.start)} – ${dstr(th.end-1)} · ${s.pts} points · ${s.done.length}/${s.total} challenges · ${s.cl.length}/${C0.TRACK.length} rewards claimed${s.fin?' · 🏆 final reward reached':''}${x.emb[s.id]?` · 🏅 ${esc(th.em)}`:''}</div>
+  ${pend.length?(can?`<div class="x7s" style="margin-top:4px">Unclaimed rewards are still yours:</div>`+pend.map(t=>`<button class="x7a1" onclick="X7.claimMs('${s.id}','${t.id}')">Claim ${trackName(t)} (${t.p})</button>`).join(''):`<div class="x7s">Unclaimed rewards from this season can no longer be claimed online.</div>`):''}</div>`}
+ return h}
+function evPersonal(){const x=X();let h='';
+ if(!x.ev.act.length)h+=`<div class="x7c"><div class="x7s">No decisions are waiting. Events arrive every so often while you play, shaped by what your kingdom has and can afford. Nothing is lost while you are away.</div></div>`;
+ for(const E of x.ev.act){const d=EVID[E.id];if(!d)continue;const os=optList(E);
+  h+=`<div class="x7c act"><div class="x7h"><span style="font-size:24px">${d.ic}</span><b>${esc(d.n)}</b>${chip(CATE[d.cat])}${chip(LENN[d.len])}</div><div class="x7s">${esc(d.txt)}</div>`;
+  if(d.threat){const rdy=Math.round((E.prep||0)*100);h+=`<div class="x7s" style="margin-top:6px">⏳ The army arrives in <b>${mmss(E.arrive-S.time)}</b>. Readiness <b>${rdy}%</b></div>${bar((E.prep||0)/.9,rdy>=50?'g':'r')}`}
+  else h+=`<div class="x7s" style="margin-top:6px">⏳ Decide within ${mmss(E.until-S.time)} (otherwise the safest option is applied).</div>`;
+  h+=`<div class="x7o">`+os.map((o,j)=>{const used=o.once&&E.used.includes(j),can=!used&&(!o.need||o.need())&&(!o.cost||afford(o.cost));return`<button ${can?'':'disabled'} onclick="X7.choose(${E.uid},${j})"><b>${esc(o.t)}</b>${used?' ✓':''}<small>${esc(o.d)}${o.need&&!o.need()?` — 🔒 ${esc(o.needT||'')}`:o.cost&&!afford(o.cost)?` — missing ${missing(o.cost)}`:''}</small></button>`}).join('')+`</div></div>`}
+ h+=`<div class="x7h" style="margin-top:10px"><b>Recent events</b></div>`;
+ const hs=x.ev.hist.filter(q=>!q.pending).slice(0,12);if(!hs.length)h+=`<div class="x7s">Nothing has happened yet.</div>`;
+ for(const q of hs)h+=`<div class="x7c"><div class="x7h"><span>${q.ic}</span><b>${esc(q.n)}</b>${chip(CATE[q.cat]||'')}</div><div class="x7s">${esc(q.ch||'')}${q.tx?' — '+esc(q.tx):''}</div></div>`;
+ return h}
+function stageStatus(v,k){const t=v.tot[k],st=v.ok[k];return st==1?'done':st==2?'failed':k==v.stage?'active':k>v.stage?'lock':'active'}
+function worldEC(){const v=WV(),x=X();let h='';
+ if(S.on&&!v.live)h+=`<div class="x7c"><div class="x7s">⚠️ Not connected. Showing the last known world state; reconnect to take part.</div></div>`;
+ if(S.on&&!SRV.w)h+=`<div class="x7c"><div class="x7s">Waiting for the server…</div></div>`;
+ if(v.cur){const e=v.cur,d=WEF[e.id],now=v.now;
+  h+=`<div class="x7c act" style="border-color:${d.col}"><div class="x7h"><span style="font-size:28px">${d.ic}</span><b>${esc(d.n)}</b>${chip('ACTIVE','a')}${chip(S.on?'SERVER':'LOCAL')}</div><div class="x7s">${esc(d.intro)}</div><div class="x7s" style="margin-top:4px">Ends ${dstr(e.end)} · <b>${dt1(e.end-now)}</b> left · ${e.n} kingdom${e.n==1?'':'s'} taking part${S.on?'':' (including simulated rivals)'}</div></div>`;
+  if(d.fac){const f=facOf();h+=`<div class="x7c"><div class="x7h"><b>Choose a side</b></div><div class="x7r">${d.fac.map((n,i)=>`<button style="${f==i?'border-color:#ffcf4a':''}" onclick="X7.fac(${i})">${i?'🟣':'🔵'} ${esc(n)}</button>`).join('')}<button style="${f==2?'border-color:#ffcf4a':''}" onclick="X7.fac(2)">⚪ Neutral</button></div><div class="x7s">Your side is fixed by your first contribution. The side with more contributions wins the war and shapes the world afterwards.</div></div>`}
+  for(let k=0;k<3;k++){const s=d.st[k],t=e.tot[k],stt=stageStatus(e,k),my=myUnits(v,k),pc=C0.pcOf(s);
+   h+=`<div class="x7c ${stt=='done'?'done':stt=='active'?'act':'lock'}"><div class="x7h"><span>${s.ic}</span><b>Stage ${k+1}: ${esc(s.n)}</b>${chip(stt=='done'?'COMPLETE':stt=='failed'?'MISSED':stt=='active'?'OPEN':'LATER',stt=='done'?'a':stt=='active'?'u':'e')}</div><div class="x7s">${esc(s.t)}</div>${bar(Math.min(1,t.tot/t.G),stt=='done'?'g':'')}<div class="x7s">World ${fm(t.tot)} / ${fm(t.G)} (world helpers ${fm(t.npc)}) · yours ${my}/${pc}</div>`;
+   if(stt=='active'&&!e.res){if(s.kind=='supply'){const cs=n=>unitCost(e.id,k,n);h+=`<div class="x7s">1 unit costs ${costStr(cs(1))}</div><div class="x7r">${[1,5,10].map(n=>`<button ${my>=pc?'disabled':''} onclick="X7.give(${k},${n})">+${n}</button>`).join('')}</div>`}else h+=`<div class="x7s">⚔️ Counts automatically from what you do: ${s.per>=1?s.per+' units':'1 unit per '+Math.round(1/s.per)} each.</div>`}
+   h+='</div>'}
+  if(d.relics){const rel=(e.my&&e.my.s)?(()=>{const ac=S.on&&SRV.w&&SRV.w.acc||'me';return C0.relicsOf(ac,{id:e.id,start:e.start,pl:{[ac]:{s:e.my.s}}})})():[];h+=`<div class="x7c"><div class="x7h"><b>🏺 Relics found</b><em>${rel.length}/${C0.RELICS.length}</em></div><div class="x7s">${rel.length?rel.map(r=>C0.RELICS[r]).join(', '):'Every 12 units you contribute may uncover a relic. Different kingdoms find different relics.'}</div></div>`}}
+ else{const n=v.next;h+=`<div class="x7c"><div class="x7h"><span>🌍</span><b>No world event is active</b>${chip('QUIET','e')}</div><div class="x7s">${n?`Next scheduled: <b>${esc(WEF[n.id].n)}</b> ${WEF[n.id].ic} — begins ${dstr(n.start)}, lasts ${WEF[n.id].days} days.`:'The calendar is clear.'}</div></div>`}
+ for(const e of v.recent||[]){if(!e.res)continue;const d=WEF[e.id],rw=e.my&&e.my.rw,cl=e.my&&e.my.claimed;
+  h+=`<div class="x7c ${rw&&rw.tier&&!cl?'act':''}"><div class="x7h"><span>${d.ic}</span><b>${esc(d.n)}</b>${chip({win:'VICTORY',partial:'PARTIAL',fail:'FAILED'}[e.res.o],e.res.o=='win'?'a':e.res.o=='partial'?'u':'e')}</div><div class="x7s">${esc(d.out[e.res.o])}${e.res.mod?` World effect: ${e.res.mod.ic} ${esc(e.res.mod.n)} until ${dstr(e.res.mod.until)}.`:''}${d.fac&&e.res.fac!=null?` ${e.res.fac<2?esc(d.fac[e.res.fac])+' prevailed.':'The war ended in a draw.'}`:''}</div><div class="x7s">${e.res.n} kingdoms took part · ${e.res.units} units</div>
+  ${rw&&rw.tier?(cl?`<div class="x7s">✔ You earned: <b>${TIERW[rw.tier]}</b>${rw.top?` · rank ${rw.top}`:''}</div>`:`<button class="x7a1" onclick="X7.wclaim('${e.key}')">Claim ${TIERW[rw.tier]} reward${rw.top?` (rank ${rw.top})`:''}</button>`):`<div class="x7s">${rw?'Contribute at least 8 units to earn a reward next time.':'You did not take part.'}</div>`}</div>`}
+ const hh=(v.hist||[]).slice(0,8);h+=`<div class="x7h" style="margin-top:10px"><b>World history</b></div>`;if(!hh.length)h+=`<div class="x7s">No world event has ended yet.</div>`;
+ for(const q of hh){const d=WEF[q.id];if(!d)continue;h+=`<div class="x7c"><div class="x7h"><span>${d.ic}</span><b>${esc(d.n)}</b>${chip({win:'VICTORY',partial:'PARTIAL',fail:'FAILED'}[q.o]||'',q.o=='win'?'a':q.o=='partial'?'u':'e')}</div><div class="x7s">${dstr(q.at)}${q.tier?` · your rank: ${TIERW[q.tier]}`:''}</div></div>`}
+ const md=v.mods||[];if(md.length){h+=`<div class="x7h" style="margin-top:10px"><b>World effects</b></div>`;for(const m of md)h+=`<div class="x7c"><div class="x7h"><span>${m.ic}</span><b>${esc(m.n)}</b>${chip(dt1(m.until-v.now)+' left','u')}</div><div class="x7s">${[['inc','coin income'],['prod','mine output'],['def','defence']].filter(([k])=>m[k]).map(([k,n])=>`${n} ×${m[k]}`).join(' · ')}</div></div>`}
+ return h}
+function calEC(){const x=X(),now=nowMs(),cur=C0.seasonFor(now),nxt=C0.seasonAt(cur.idx+1),v=WV();let a=[],u=[],e=[];
+ a.push(`<div class="x7c act"><div class="x7h"><span>${cur.ic}</span><b>${esc(cur.n)}</b>${chip('ACTIVE','a')}</div><div class="x7s">Season · ends ${dstr(cur.end-1)} (${dt1(cur.left)}) · ${x.sn?x.sn.pts+' points · '+x.sn.ch.filter(c=>c.d).length+'/'+x.sn.ch.length+' challenges':''}</div></div>`);
+ if(v.cur){const d=WEF[v.cur.id];a.push(`<div class="x7c act"><div class="x7h"><span>${d.ic}</span><b>${esc(d.n)}</b>${chip('ACTIVE','a')}</div><div class="x7s">World event · ends ${dstr(v.cur.end)} (${dt1(v.cur.end-now)}) · stage ${v.cur.stage+1} of 3</div></div>`)}
+ for(const E of x.ev.act){const d=EVID[E.id];if(d)a.push(`<div class="x7c act"><div class="x7h"><span>${d.ic}</span><b>${esc(d.n)}</b>${chip('DECISION','u')}</div><div class="x7s">Personal event · ${mmss((E.arrive||E.until)-S.time)} left</div></div>`)}
+ for(const m of v.mods||[])a.push(`<div class="x7c"><div class="x7h"><span>${m.ic}</span><b>${esc(m.n)}</b>${chip('EFFECT','a')}</div><div class="x7s">World effect · ${dt1(m.until-now)} left</div></div>`);
+ u.push(`<div class="x7c"><div class="x7h"><span>${nxt.ic}</span><b>${esc(nxt.n)}</b>${chip('SCHEDULED','u')}</div><div class="x7s">Season · begins ${dstr(nxt.start)} (in ${dt1(nxt.start-now)}). ${esc(nxt.desc)}</div></div>`);
+ if(v.next){const d=WEF[v.next.id];u.push(`<div class="x7c"><div class="x7h"><span>${d.ic}</span><b>${esc(d.n)}</b>${chip('SCHEDULED','u')}</div><div class="x7s">World event · ${dstr(v.next.start)} – ${dstr(v.next.end)} (begins in ${dt1(v.next.start-now)})</div></div>`)}
+ const prev=C0.seasonAt(Math.max(0,cur.idx-1));if(cur.idx>0)e.push(`<div class="x7c"><div class="x7h"><span>${prev.ic}</span><b>${esc(prev.n)}</b>${chip('ENDED','e')}</div><div class="x7s">Season · ended ${dstr(prev.end-1)}${(x.sh.find(s=>s.id==prev.id)||{}).pts!=null?' · you scored '+x.sh.find(s=>s.id==prev.id).pts:''}</div></div>`);
+ for(const q of(v.hist||[]).slice(0,3)){const d=WEF[q.id];if(d)e.push(`<div class="x7c"><div class="x7h"><span>${d.ic}</span><b>${esc(d.n)}</b>${chip('ENDED','e')}</div><div class="x7s">World event · ended ${dstr(q.at)} · ${({win:'victory',partial:'partial',fail:'failed'})[q.o]||''}</div></div>`)}
+ return`<div class="x7h"><b>Active now</b></div>${a.join('')}<div class="x7h" style="margin-top:8px"><b>Scheduled</b></div>${u.join('')}<div class="x7h" style="margin-top:8px"><b>Ended</b></div>${e.join('')||'<div class="x7s">Nothing has ended yet.</div>'}<div class="x7s" style="margin-top:8px">The calendar shows only what is really scheduled. Personal events are decisions that arrive while you play, so their dates cannot be known in advance.</div>`}
+function ruGo(i){const p=[i%N,(i/N)|0];closeSheet();S.sel=p;center(p[0],p[1]);HL={x:p[0],y:p[1],t:performance.now()+6000};last='';render()}
+function realmEC(){const x=X();let h='';const pl=prLevel(),a=PRL[pl-1]||0,b=PRL[pl];
+ h+=`<div class="x7c act"><div class="x7h"><span>✨</span><b>Prestige ${pl?'level '+pl+' · '+PRN[pl-1]:'— not yet reached'}</b></div>${bar(b?(x.pr.pts-a)/(b-a):1)}<div class="x7s">${x.pr.pts} prestige points${b?` · next level at ${b}`:' · highest level'}. Earned from monuments, titles, honours, world events and season finals. Nothing is reset or taken away; levels add cosmetics and small permanent bonuses (up to +2% income and +2% storage).</div></div>`;
+ h+=`<div class="x7h" style="margin-top:8px"><b>Titles</b></div>`;const ids=Object.keys(x.ti);
+ h+=`<div class="x7c"><div class="x7s">Shown on your overview, the missions page and the rankings.</div><div class="x7r" style="grid-template-columns:1fr 1fr">${ids.length?ids.map(id=>`<button style="${x.shown==id?'border-color:#ffcf4a':''}" onclick="X7.title('${id}')">🏷️ ${esc(x.ti[id].n)}</button>`).join('')+`<button onclick="X7.title('')">No title</button>`:'<div class="x7s">No titles yet.</div>'}</div></div>`;
+ const open=Object.keys(TIT).filter(id=>!x.ti[id]);if(open.length)h+=`<div class="x7s">To earn: ${open.map(id=>`${esc(TIT[id][0])} (${esc(TIT[id][1])})`).join(' · ')}</div>`;
+ h+=`<div class="x7h" style="margin-top:10px"><b>Monuments</b><em>${MON.filter(m=>monSt(m.id)>=3).length}/${MON.length} complete</em></div>`;
+ for(const m of MON){const s=monSt(m.id),o=x.mon[m.id]||{paid:{}},ok=m.req(),need=s<4?monCost(m,s):null;
+  h+=`<div class="x7c ${s>=3?'done':ok?'':'lock'}"><div class="x7m">${monArt(m,s)}<div><div class="x7h"><b>${m.ic} ${esc(m.n)}</b></div><div class="x7s">${esc(m.d)}</div><div class="x7s">${esc(m.fxt)}</div><div class="x7s"><b>${s>=4?'Ascended':s>=3?'Complete':MSTN[s]+' next'}</b> · stage ${Math.min(s,4)}/4</div></div></div>`;
+  if(need&&ok){const pc=Object.keys(need).reduce((q,k)=>q+Math.min(1,(o.paid[k]||0)/need[k]),0)/Object.keys(need).length;h+=`<div class="x7s" style="margin-top:4px">${MSTN[s]}: ${['coins',...RES].filter(k=>need[k]).map(k=>`${ICON[k]}${fm(o.paid[k]||0)}/${fm(need[k])}`).join(' ')}</div>${bar(pc)}<button class="x7a1" onclick="X7.mon('${m.id}')">Contribute what I can</button>`}
+  else if(!ok)h+=`<div class="x7s" style="margin-top:4px">🔒 Needs ${esc(m.rq)}</div>`;h+='</div>'}
+ h+=`<div class="x7h" style="margin-top:10px"><b>Rare building upgrades</b></div><div class="x7s">Select a building on the map: eligible ones show an upgrade card. Each is a one-off, and only works while the building keeps its level.</div>`;
+ for(const r of RU){const idx=Object.keys(x.up).find(i=>x.up[i]==r.id),on=idx!=null&&ruOn(+idx);h+=`<div class="x7c ${on?'done':''}"><div class="x7h"><span>${r.ic}</span><b>${esc(r.n)}</b>${on?chip('ACTIVE','a'):idx!=null?chip('INACTIVE','u'):''}</div><div class="x7s">${esc(r.d)} ${esc(r.fxt)}. Needs ${esc(r.rq)}.</div>${idx!=null?`<button class="x7a1" onclick="X7.ruGo(${idx})">Show on map</button>`:''}</div>`}
+ h+=`<div class="x7h" style="margin-top:10px"><b>Honours</b><em>${Object.keys(x.ach).length}/${HON.length}</em></div>`;
+ for(const q of HON){const got=x.ach[q.id];h+=`<div class="x7c ${got?'done':''}"><div class="x7h"><span>${q.ic}</span><b>${esc(q.n)}</b>${got?chip('EARNED','a'):''}</div><div class="x7s">${esc(q.d)}${got?' · '+dstr(got):''}</div></div>`}
+ const emb=Object.keys(Object.assign({},META7().emb,x.emb));if(emb.length)h+=`<div class="x7h" style="margin-top:10px"><b>Season emblems</b></div><div class="x7c"><div class="x7s">${emb.map(s=>{const th=C0.seasonAt(+s.slice(1));return`${th.ic} ${esc(th.em)} (${esc(th.n)})`}).join('<br>')}</div></div>`;
+ return h}
+function alertEC(){const x=X();let h=`<div class="x7r" style="grid-template-columns:1fr 1fr"><button onclick="X7.readAll()">Mark all as read</button><button onclick="X7.clearAlerts()">Clear</button></div>`;
+ if(!x.notif.length)return h+`<div class="x7s" style="margin-top:8px">No notifications yet.</div>`;
+ return h+x.notif.map(n=>`<div class="x7c ${n.r?'':'act'}"><div class="x7h"><span>${n.ic}</span><b style="font-weight:600">${esc(n.tx)}</b></div><div class="x7s">${dstr(n.t)}</div></div>`).join('')}
+function ovEC(){const x=X(),cur=C0.seasonFor(nowMs()),sn=x.sn,v=WV();let h='';
+ h+=`<div class="x7c act" style="border-color:${cur.col}" onclick="X7.tab('se')"><div class="x7h"><span style="font-size:26px">${cur.ic}</span><b>${esc(cur.n)}</b>${chip(dt1(cur.left)+' left','u')}</div>${bar(sn?sn.pts/250:0)}<div class="x7s">${sn?sn.pts:0} / 250 points for the season reward · ${sn?sn.ch.filter(c=>c.d).length:0}/${sn?sn.ch.length:0} challenges</div></div>`;
+ if(v.cur){const d=WEF[v.cur.id],k=v.cur.stage,t=v.cur.tot[k];h+=`<div class="x7c act" style="border-color:${d.col}" onclick="X7.tab('wo')"><div class="x7h"><span style="font-size:26px">${d.ic}</span><b>${esc(d.n)}</b>${chip(dt1(v.cur.end-v.now)+' left','u')}</div>${bar(t.tot/t.G)}<div class="x7s">Stage ${k+1}: ${esc(d.st[k].n)} · you gave ${myUnits(v,k)} units</div></div>`}
+ else if(v.next){const d=WEF[v.next.id];h+=`<div class="x7c" onclick="X7.tab('ca')"><div class="x7h"><span>${d.ic}</span><b>Next: ${esc(d.n)}</b>${chip('SCHEDULED','u')}</div><div class="x7s">Begins ${dstr(v.next.start)} (in ${dt1(v.next.start-v.now)})</div></div>`}
+ const w=x.ev.act.length;h+=`<div class="x7c ${w?'act':''}" onclick="X7.tab('ev')"><div class="x7h"><span>📜</span><b>${w?w+' decision'+(w>1?'s':'')+' waiting':'No decisions waiting'}</b></div><div class="x7s">${w?'Open Events to decide.':'Events arrive while you play. Nothing is lost while you are away.'}</div></div>`;
+ const ready=sn?C0.TRACK.filter(t=>sn.pts>=t.p&&!sn.cl[t.id]).length:0;if(ready)h+=`<div class="x7c act" onclick="X7.tab('se')"><div class="x7h"><span>🎁</span><b>${ready} season reward${ready>1?'s':''} ready</b></div></div>`;
+ for(const e of v.recent||[]){const rw=e.my&&e.my.rw;if(rw&&rw.tier&&!e.my.claimed)h+=`<div class="x7c act" onclick="X7.tab('wo')"><div class="x7h"><span>🎁</span><b>${esc(WEF[e.id].n)} reward ready</b></div></div>`}
+ const m=(v.mods||[]);if(m.length)h+=`<div class="x7s" style="margin-top:6px">World effects: ${m.map(q=>`${q.ic} ${esc(q.n)} (${dt1(q.until-v.now)})`).join(' · ')}</div>`;
+ const d7=dev7();h+=`<div class="x7s" style="margin-top:8px">Kingdom development: <b>${TIERN[d7.tier]}</b> (${Math.round(d7.sc)}/100) — territory ${Math.round(d7.ind.terr*100)}% · buildings ${Math.round(d7.ind.bld*100)}% · production ${Math.round(d7.ind.prod*100)}% · wealth ${Math.round(d7.ind.econ*100)}% · army ${Math.round(d7.ind.mil*100)}% · research ${Math.round(d7.ind.res*100)}%</div>`;return h}
+function vEC(){const x=X(),un=unread(),w=x.ev.act.length,v=WV();
+ const tabs=[['ov','🏠','Overview'],['se','📅','Season'],['ev','📜','Events',w],['wo','🌍','World',(v.recent||[]).some(e=>e.my&&e.my.rw&&e.my.rw.tier&&!e.my.claimed)?'!':''],['ca','🗓️','Calendar'],['re','🏛️','Realm'],['al','🔔','Alerts',un||'']];
+ const th=`<div class="x7t">${tabs.map(([k,i,n,b])=>`<button class="${ecTab==k?'on':''}" onclick="X7.tab('${k}')">${i}<br>${n}${b?`<i>${b}</i>`:''}</button>`).join('')}<button onclick="closeSheet()">✕<br>Close</button></div>`;
+ const body={ov:ovEC,se:()=>secEC()+archEC(),ev:evPersonal,wo:worldEC,ca:calEC,re:realmEC,al:alertEC}[ecTab]();
+ return['🌍 Event Centre',th+body]}
+window.XSH=Object.assign(window.XSH||{},{ev7:vEC});
+Object.assign(window.X7,{
+ openEC(t){if(t)ecTab=t;openSheet('ev7')},tab(t){ecTab=t;if(t=='al'){const x=X();x.notif.forEach(n=>n.r=1)}shK='';renderSheet()},
+ claimMs,choose:choose7,give:weGive,fac:setFac,wclaim:weClaim,mon:monPay,ruGo,title:setShown,readAll(){X().notif.forEach(n=>n.r=1);shK='';renderSheet()},clearAlerts(){X().notif=[];shK='';renderSheet()},
+ msg:onMsg7,state:()=>({x:X(),srv:SRV,dev:dev7(),bon:BON,modc:MODC,ann:ANN.length})});
+
+/* ===================== 6b. MAP, HUD, MENU, TILE PANEL ===================== */
+let MK=[],capT=null;
+const hs7=(a,b)=>C0.h32(a+'|'+b);
+function ownEdge(){const o=[];for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o==1&&t.t!='w'){const x=i%N,y=(i/N)|0;if(D4.some(([a,b])=>ok(x+a,y+b)&&T(x+a,y+b).o!=1&&T(x+a,y+b).t!='w'))o.push(i)}}return o}
+function pickN(list,seed,n){return list.slice().sort((a,b)=>hs7(seed,a)-hs7(seed,b)).slice(0,n)}
+function markers(){const v=WV(),out=[],x=X();if(!S.tiles)return out;
+ const e=v.cur,cz=(l,seed,n,ic,col,tip)=>{for(const i of pickN(l,seed,n))out.push({i,ic,col,tip})};
+ if(e){const seed=e.key,id=e.id;
+  if(id=='invasion')cz(ownEdge(),seed,3,'⚠️','#ff5a5a','Threatened region');
+  else if(id=='drought'){const m=[];S.tiles.forEach((t,i)=>{if(t.o==1&&t.b==2)m.push(i)});cz(m,seed,4,'☀️','#f0a040','Drought-stricken mine')}
+  else if(id=='trade'){const m=[];S.tiles.forEach((t,i)=>{if(t.o==1&&(t.b==5||t.b==4))m.push(i)});cz(m,seed,3,'🐪','#ffd34a','Trade route')}
+  else if(id=='empire'){const m=[];S.tiles.forEach((t,i)=>{if(!t.o&&t.t!='w'&&t.t!='m')m.push(i)});cz(m,seed,2,'🏺','#d7a6ff','Expedition site')}
+  else if(id=='succession'){const ed=ownEdge();const a=pickN(ed,seed+'a',1),b=pickN(ed,seed+'b',1);if(a[0]!=null)out.push({i:a[0],ic:'🔵',col:'#4a8cff',tip:WEF.succession.fac[0]});if(b[0]!=null&&b[0]!==a[0])out.push({i:b[0],ic:'🟣',col:'#9d4dff',tip:WEF.succession.fac[1]})}}
+ for(const m of v.mods||[]){if(m.key&&m.key.startsWith('trade')){const l=[];S.tiles.forEach((t,i)=>{if(t.o==1&&t.b==5)l.push(i)});cz(l,m.key,2,'🐪','#ffd34a','Golden trade route')}}
+ return out}
+function capital(){let b=null,bl_=0;for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o==1&&t.b==1&&(t.l||1)>bl_){bl_=t.l||1;b=i}}return b}
+const _dr7=draw;draw=function(){_dr7();try{overlay7()}catch(e){}};
+function overlay7(){if(!S||!S.cam||!S.tiles)return;const ts=T0*zoom;if(ts<16)return;const cam=S.cam,x0=Math.floor(cam.x/ts)-1,y0=Math.floor(cam.y/ts)-1,x1=Math.ceil((cam.x+W)/ts)+1,y1=Math.ceil((cam.y+H)/ts)+1,tm=performance.now()/1000,x=S.x7;
+ cx.save();cx.textAlign='center';cx.textBaseline='middle';
+ for(const m of MK){const px=m.i%N,py=(m.i/N)|0;if(px<x0||px>x1||py<y0||py>y1)continue;const sx=px*ts-cam.x+ts/2,sy=py*ts-cam.y+ts/2,k=(tm*1.3)%1;
+  cx.globalAlpha=.85*(1-k*.6);cx.strokeStyle=m.col;cx.lineWidth=3;cx.beginPath();cx.arc(sx,sy-ts*.05,ts*(.34+k*.3),0,7);cx.stroke();cx.globalAlpha=1;cx.font=`${Math.round(ts*.42)}px serif`;cx.fillText(m.ic,sx,sy-ts*.34)}
+ if(x){for(const i in x.up){const r=ruOn(+i);if(!r)continue;const px=i%N,py=(i/N)|0;if(px<x0||px>x1||py<y0||py>y1)continue;cx.font=`${Math.round(ts*.3)}px serif`;cx.fillText('👑',px*ts-cam.x+ts*.8,py*ts-cam.y+ts*.18)}
+  if(capT!=null){const px=capT%N,py=(capT/N)|0;if(px>=x0-3&&px<=x1+3&&py>=y0-3&&py<=y1+3){const sx=px*ts-cam.x,sy=py*ts-cam.y,done=MON.filter(m=>monSt(m.id)>=3),pl=prLevel();
+   if(pl>=2){cx.strokeStyle='#ffd34a';cx.globalAlpha=.55;cx.lineWidth=2;cx.beginPath();cx.arc(sx+ts/2,sy+ts/2,ts*(.62+.04*Math.sin(tm*2)),0,7);cx.stroke();cx.globalAlpha=1}
+   let k=0;for(const m of done){cx.font=`${Math.round(ts*.28)}px serif`;cx.fillText(m.ic,sx-ts*.2+k*ts*.3,sy-ts*.12);k++}
+   const pen=Object.keys(x.dec).filter(q=>q.endsWith('p')).slice(-3);pen.forEach((q,j)=>{const th=C0.seasonAt(+q.slice(1,-1));cx.fillStyle=th.col;cx.fillRect(sx+ts*(.06+j*.14),sy+ts*.9,ts*.1,ts*.1);cx.fillRect(sx+ts*(.06+j*.14)-1,sy+ts*.86,2,ts*.14)})}}}
+ cx.restore()}
+const _hud7=hud;hud=function(){_hud7();try{const f=document.querySelector('#hud .fxr'),x=S&&S.x7;if(!f||!x)return;let h='';const w=x.ev.act.length,v=WV();
+ if(w)h+=`<button type="button" class="event-waiting" onclick="X7.openEC('ev')">❗ ${w} decision${w>1?'s':''} waiting</button>`;
+ else if(v.recent&&v.recent.some(e=>e.my&&e.my.rw&&e.my.rw.tier&&!e.my.claimed))h+=`<button type="button" class="event-waiting" onclick="X7.openEC('wo')">🎁 Event reward ready</button>`;
+ for(const m of v.mods||[])h+=`<span>${m.ic} ${esc(m.n)} ${dt1(m.until-v.now)}</span>`;
+ if(h)f.insertAdjacentHTML('afterbegin',h);const mb_=$('mnb');if(mb_&&(w||unread()>0||(x.sn&&C0.TRACK.some(t=>x.sn.pts>=t.p&&!x.sn.cl[t.id]))))mb_.classList.add('dot')}catch(e){}};
+const _vm7=vMenu;vMenu=function(){const r=_vm7();try{const x=X(),v=WV(),sn=x.sn,cur=C0.seasonFor(nowMs()),ready=sn?C0.TRACK.filter(t=>sn.pts>=t.p&&!sn.cl[t.id]).length:0,w=x.ev.act.length;
+ const sub=w?`❗ ${w} decision${w>1?'s':''} waiting`:ready?`🎁 ${ready} season reward${ready>1?'s':''} ready`:v.cur?`${WEF[v.cur.id].ic} ${WEF[v.cur.id].n} is active`:`${cur.ic} ${cur.n}`;
+ const btn=mb('🌍','Event Centre',sub,"X7.openEC()"),k='openKingdomOverview()',i=r[1].indexOf(k);if(i>=0){const j=r[1].indexOf('</button>',i)+9;r[1]=r[1].slice(0,j)+btn+r[1].slice(j)}else r[1]=btn+r[1]}catch(e){console.error(e)}return r};
+const _xh7=xtraHtml;xtraHtml=function(x,y,t){let h=_xh7(x,y,t);try{if(t.o==1&&t.b&&!S.x7)X();if(t.o==1&&[1,3,5,6,7,10].includes(t.b)){const xx=X(),i=y*N+x,cur=xx.up[i],r=cur?RUID[cur]:RU.find(q=>q.b==t.b&&!Object.values(xx.up).includes(q.id));
+  if(r){const lv_=t.l||1,c=ruCost(r);h+=`<div class="mi v7-ru"><div class="mh"><span>${r.ic}</span><b>${r.n}</b><em>${cur?(ruOn(i)?'Active':'Inactive'):'Rare upgrade'}</em></div><div class="mu">${r.d} ${r.fxt}.</div>`;
+   if(cur)h+=ruOn(i)?`<div class="mu">👑 Built here.</div>`:`<div class="mu">Needs level ${r.lvl} again to work.</div>`;
+   else if(lv_<r.lvl)h+=`<div class="mf"><span>🔒 Needs this building at level ${r.lvl}</span></div>`;else if(!r.req())h+=`<div class="mf"><span>🔒 Needs ${r.rq}</span></div>`;
+   else h+=`<div class="mf cost"><span>${costStr(c)}</span></div><button style="width:100%;margin-top:6px" ${afford(c)?'':'disabled'} onclick="X7.ruBuy(${i})">Build ${r.n}<small>One per kingdom · ${r.fxt}</small></button>`;h+='</div>'}}}catch(e){}return h};
+Object.assign(window.X7,{ruBuy});
+const _so7=scoreOf;scoreOf=function(){const r=_so7();try{if(S&&S.title&&/^[A-Za-z' ]{1,28}$/.test(S.title))r.ti=S.title}catch(e){}return r};
+
+/* ===================== wiring: wrap existing actions to count what the player really does ===================== */
+const _bb7=buildB;buildB=function(b){const s=S.sel,t=s&&T(s[0],s[1]),had=t?t.b:0,idx=s?s[1]*N+s[0]:-1;_bb7(b);try{if(t&&!had&&t.b==b){const x=X();if([2,4,5,7,10].includes(b))x.c.econb++;if([7,9,10,12].includes(b))x.c.advb++;if(x.sn&&!inSet(x.sn.t0,idx))x.c.nb++}}catch(e){}};
+const _ub7=upB;upB=function(){const s=S.sel,t=s&&T(s[0],s[1]),l0=t?t.l:0;_ub7();try{if(t&&t.l>l0&&[2,4,5,7,10].includes(t.b))X().c.econb++}catch(e){}};
+const _rc7=recruit;recruit=function(u,n){const b=S.army[u]||0;_rc7(u,n);try{const d=(S.army[u]||0)-b;if(d>0)X().c.trn+=d}catch(e){}};
+const _fs7=finishSiege;finishSiege=function(g){const k=g&&g.k,i=g&&g.idx,o=S.tiles[i]&&S.tiles[i].o;_fs7(g);try{if(k==1){X().c.sg++;if(o>1&&S.tiles[i].o==1)X().c.cap++}}catch(e){}};
+const _rs7=resolve;resolve=function(k,att,i,tac){const o=S.tiles[i]&&S.tiles[i].o,r=_rs7(k,att,i,tac);try{if(k==1&&o>1&&S.tiles[i].o==1)X().c.cap++}catch(e){}return r};
+const _sl7=sell;sell=function(r,f){const c0=S.coins,r0=S.res[r];_sl7(r,f);try{if(!S.on){const n=r0-S.res[r];if(n>0&&(S.coins-c0)>=n*(BASE[r]||1)*1.12)X().c.tp++}}catch(e){}};
+const _mc7=misClaim;misClaim=function(id,side){const m0=S.st.missions||0;_mc7(id,side);try{if((S.st.missions||0)>m0)addPts(2,'ms')}catch(e){}};
+const _fx7=fxm;fxm=function(k){const v=_fx7(k);const m=MODC[k];return m?v*m:v};
+const _rt7=rt;rt=function(k){return _rt7(k)+(BON[k]||0)+(k=='spr'&&MODC.spr||0)};
+let n7=0;
+function tick7(){if(!S||!V||!S.tiles||S.on&&!window.ONL)return;try{const x=X();n7++;sampler();seasonTick();evTick7();if(!S.on)localWorld();modTick();
+ if(n7%3==0)actSync();
+ if(n7%5==0){titleTick();honTick();calcBon();capT=capital();const g=ctr('gwt');if(x.c.gwSeen==null)x.c.gwSeen=g;if(g>x.c.gwSeen){addPts(10*(g-x.c.gwSeen),'gw');x.c.gwSeen=g}}
+ if(n7%2==0)MK=markers();
+ if(S.on&&onl()&&SH==='ev7'&&n7%45==0)MPX.send({t:'we'});
+ if(SH==='ev7'&&n7%5==0){}}catch(e){console.error('v7 tick',e)}}
+setInterval(tick7,1000);
+setTimeout(()=>{try{if(S&&S.tiles){X();calcBon()}}catch(e){}},600);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S&&S.on&&onl())MPX.send({t:'we'})});
+window.X7.openEC=window.X7.openEC;
+})();
+
 </script>
 </body></html>
