@@ -408,21 +408,32 @@ const MRES = ['wood', 'stone', 'silver', 'gold', 'diamond'], MIC = { wood: '🪵
 const MB = { wood: 3, stone: 5, silver: 22, gold: 65, diamond: 220 }, MV = { wood: .6, stone: .7, silver: 1, gold: 1.2, diamond: 1.5 };
 const MI = { wood: .0015, stone: .002, silver: .006, gold: .015, diamond: .04 }, MM0 = { wood: 600, stone: 400, silver: 150, gold: 60, diamond: 20 };
 const MD = { wood: .5, stone: .4, silver: .12, gold: .05, diamond: .015 };
+// Rebalance 19.11 (same model as the offline market in the game): the fair price m.price drifts with supply and demand only;
+// trades move a separate pressure m.z (quantity / depth) that fades back over ~150 s. Price = fair x exp(-z), kept in
+// 0.5x..2x, and every trade is filled along that same curve, so splitting trades or buying back after a sale can never
+// make money (the old capped per-trade impact could). The client must use the same depth (MKD x MKSRV) for its quotes.
+const MKD = { wood: 4000, stone: 3000, silver: 900, gold: 320, diamond: 100 }, MKSRV = 3, MKLO = .5, MKHI = 2, MKTAU = 150, PLO = .6, PHI = 1.7;
 const cl = (v, a, b) => Math.max(a, Math.min(b, v));
-function mkNew() { const m = { price: {}, mom: {}, mk: {}, hist: {}, news: '', feed: [], tk: 0 }; for (const r of MRES) { m.price[r] = MB[r]; m.mom[r] = 0; m.mk[r] = MM0[r]; m.hist[r] = [MB[r]]; } return m; }
-function mkStep(m) {   // pacing matches the offline market: slower drift, calmer noise, 2-minute chart
-  m.tk++;
+const mkM = z => cl(Math.exp(-z), MKLO, MKHI);
+function mkArea(a, b) { const za = -Math.log(MKHI), zb = -Math.log(MKLO); let s = 0;
+  if (a < za) { const e = Math.min(b, za); s += MKHI * (e - a); a = e; } if (a >= b) return s;
+  if (b > zb) { const e = Math.max(a, zb); s += MKLO * (b - e); b = e; } if (a < b) s += Math.exp(-a) - Math.exp(-b); return s; }
+function mkNew() { const m = { price: {}, mom: {}, mk: {}, hist: {}, z: {}, news: '', feed: [], tk: 0 }; for (const r of MRES) { m.price[r] = MB[r]; m.mom[r] = 0; m.mk[r] = MM0[r]; m.z[r] = 0; m.hist[r] = [MB[r]]; } return m; }
+function mkFix(m) { if (!m.z || typeof m.z !== 'object') m.z = {}; for (const r of MRES) { if (!Number.isFinite(m.z[r])) m.z[r] = 0; if (!Number.isFinite(m.price[r])) m.price[r] = MB[r]; m.price[r] = cl(m.price[r], MB[r] * PLO, MB[r] * PHI); } return m; }
+function mkStep(m) {   // pacing matches the offline market: slow drift, calm noise, 2-minute chart
+  m.tk++; mkFix(m); const fade = Math.exp(-1 / MKTAU);
   for (const r of MRES) {
     const dem = MD[r] * Math.pow(MB[r] / m.price[r], .15); m.mk[r] = cl(m.mk[r] + MD[r] - dem, 0, MM0[r] * 3);
-    const sh = Math.max(.15, m.mk[r] / MM0[r]), tg = cl(MB[r] * Math.pow(1 / sh, .6), MB[r] * .35, MB[r] * 2.8);
-    m.mom[r] = m.mom[r] * .9 + (Math.random() * 2 - 1) * .22 * MV[r];
-    m.price[r] = cl(m.price[r] + (tg - m.price[r]) * .03 + m.price[r] * m.mom[r] * .004, MB[r] * .35, MB[r] * 2.8);
+    const sh = Math.max(.3, m.mk[r] / MM0[r]), tg = cl(MB[r] * Math.pow(1 / sh, .45), MB[r] * PLO, MB[r] * PHI);
+    m.mom[r] = m.mom[r] * .9 + (Math.random() * 2 - 1) * .12 * MV[r];
+    m.price[r] = cl(m.price[r] + (tg - m.price[r]) * .02 + m.price[r] * m.mom[r] * .003, MB[r] * PLO, MB[r] * PHI);
+    m.z[r] = Math.abs(m.z[r]) < 1e-4 ? 0 : m.z[r] * fade;
   }
-  if (Math.random() < .004) { const r = MRES[Math.floor(Math.random() * 5)], up = Math.random() < .5; m.mk[r] = cl(m.mk[r] * (up ? .7 : 1.5), 0, MM0[r] * 3);
-    m.news = up ? MIC[r] + ' A shortage of ' + r + ' is driving demand up. Good time to sell!' : MIC[r] + ' ' + r[0].toUpperCase() + r.slice(1) + ' floods the market. Time to buy?'; }
-  if (m.tk % 3 == 0) for (const r of MRES) { const h = m.hist[r]; h.push(+m.price[r].toFixed(3)); if (h.length > 40) h.shift(); }
+  if (Math.random() < .004) { const r = MRES[Math.floor(Math.random() * 5)], up = Math.random() < .5; m.mk[r] = cl(m.mk[r] * (up ? .8 : 1.25), 0, MM0[r] * 3);
+    m.news = up ? MIC[r] + ' A shortage of ' + r + ' is pushing its price up.' : MIC[r] + ' ' + r[0].toUpperCase() + r.slice(1) + ' floods the market: its price is sliding.'; }
+  if (m.tk % 3 == 0) for (const r of MRES) { const h = m.hist[r]; h.push(+(m.price[r] * mkM(m.z[r])).toFixed(3)); if (h.length > 40) h.shift(); }
 }
-const mkPub = m => { const o = { t: 'mkt', price: {}, mk: {}, hist: m.hist, news: m.news, feed: m.feed }; for (const r of MRES) { o.price[r] = +m.price[r].toFixed(3); o.mk[r] = Math.round(m.mk[r]); } return o; };
+const mkPub = m => { mkFix(m); const o = { t: 'mkt', price: {}, z: {}, mk: {}, hist: m.hist, news: m.news, feed: m.feed }; for (const r of MRES) { o.price[r] = +m.price[r].toFixed(4); o.z[r] = +m.z[r].toFixed(6); o.mk[r] = Math.round(m.mk[r]); } return o; };
 setInterval(() => { for (const r of rooms.values()) { if (!r.started || !r.pl.some(p => p.ws)) continue; if (!r.mkt) r.mkt = mkNew(); mkStep(r.mkt); if (r.mkt.tk % 2 == 0) { const o = mkPub(r.mkt); r.pl.forEach(p => send(p.ws, o)); } } }, 1000);
 
 /* ---------- island snapshots (visit other players' offline islands) ----------
@@ -447,6 +458,8 @@ async function getSnap(id) { if (snapMem.has(id)) return snapMem.get(id);
 const hash = (p, s) => crypto.scryptSync(p, s, 32).toString('hex');
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 const dname = u => (db.users[u] || {}).name || u;
+const ctit = u => { const t = (db.users[u] || {}).ct; return typeof t === 'string' && t ? t : undefined; };   // custom title set by an admin
+const ctOk = v => typeof v === 'string' && /^[\p{L}\p{N}' .,!?&\-]{0,24}$/u.test(v.trim()) ? v.trim().replace(/\s+/g, ' ') : null;
 const num = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
 const fin = (v, a, b) => typeof v === 'number' && Number.isFinite(v) && v >= a && v <= b;
 const touch = r => { r.at = Date.now(); persist(); };
@@ -454,7 +467,7 @@ const bad = (ws, what) => logOnce('bad:' + ws.u + what, 'warn', `invalid action 
 
 function roomMsg(r, p, init) {
   const o = { t: 'room', code: r.code, host: dname(r.host), isHost: r.host === p.u, slot: p.s, seed: r.seed, diff: r.diff, started: r.started,
-    pl: r.pl.map(q => ({ s: q.s, n: dname(q.u), on: !!q.ws, sc: q.sc ? q.sc.s : 0, sp: q.sc ? q.sc.p : null, fx: q.fx || null })) };
+    pl: r.pl.map(q => ({ s: q.s, n: dname(q.u), ct: ctit(q.u), on: !!q.ws, sc: q.sc ? q.sc.s : 0, sp: q.sc ? q.sc.p : null, fx: q.fx || null })) };
   if (init && r.started) { if (!r.mkt) r.mkt = mkNew(); o.init = { mkt: mkPub(r.mkt), chat: (r.chat || []).slice(-50), shield: r.shield || {}, save: p.save || null, snap: [...r.tiles].map(([i, v]) => [i, ...v]), pend: p.pend || [],
     tal: Object.fromEntries(r.pl.filter(q => q !== p && q.tal).map(q => [q.s, q.tal])), terr: r.terr || {} }; }
   return o;
@@ -592,7 +605,15 @@ function admHandle(ws, r, me, m) {
   if (!admOk(m.tok)) { ws.admF.push(now); log('warn', 'admin (in game): wrong token from ' + (ws.u || '?')); return send(ws, { t: 'admok', op: m.op, err: 'Wrong admin token.' }); }
   if (!r || !r.started || !me) return send(ws, { t: 'admok', op: m.op, err: 'Open a started island first.' });
   if (m.op === 'who') return send(ws, { t: 'admok', op: 'who', ok: 1, code: r.code, pl: r.pl.map(p => { const s = p.save || {};
-    return { s: p.s, n: dname(p.u), on: !!p.ws, sc: p.sc ? p.sc.s : 0, coins: Math.floor(+s.coins || 0), res: s.res || {}, army: s.army || {}, wait: (p.gifts || []).length }; }) });
+    return { s: p.s, n: dname(p.u), ct: ctit(p.u) || '', on: !!p.ws, sc: p.sc ? p.sc.s : 0, coins: Math.floor(+s.coins || 0), res: s.res || {}, army: s.army || {}, wait: (p.gifts || []).length }; }) });
+  if (m.op === 'ctitle') {   // a custom title everyone sees next to the player's name: a player on this island (to = slot) or any account (id)
+    const id = m.id != null && m.id !== '' ? String(m.id).toLowerCase().trim() : (r.pl.find(p => p.s === m.to) || {}).u;
+    const u = id && db.users[id]; if (!u) return send(ws, { t: 'admok', op: 'ctitle', err: 'No such player.' });
+    const ti = ctOk(String(m.ti == null ? '' : m.ti)); if (ti === null) return send(ws, { t: 'admok', op: 'ctitle', err: 'Up to 24 letters, digits, spaces and . , ! ? & - \'' });
+    if (ti) u.ct = ti; else delete u.ct; saveDb(); log('warn', 'admin (in game): ' + ws.u + ' set the title of ' + id + ' to ' + JSON.stringify(ti));
+    for (const q of rooms.values()) if (q.pl.some(p => p.u === id)) bc(q);
+    return send(ws, { t: 'admok', op: 'ctitle', ok: 1, n: dname(id), ti });
+  }
   if (m.op === 'give') {
     const to = r.pl.find(p => p.s === m.to); if (!to) return send(ws, { t: 'admok', op: 'give', err: 'No such player.' });
     const n = (v, a, b) => typeof v === 'number' && Number.isFinite(v) ? cl(Math.round(v), a, b) : undefined, g = { t: 'agift', id: crypto.randomBytes(6).toString('hex'), mode: m.mode === 'set' ? 'set' : 'add', from: dname(ws.u), at: now };
@@ -665,9 +686,10 @@ function handle(ws, m) {
       if (!r || !r.started || !me) return; if (!r.mkt) r.mkt = mkNew(); const m0 = r.mkt, res = String(m.r), n = Math.floor(+m.n);
       if (!MRES.includes(res) || !(n >= 1 && n <= 1e12) || (m.side !== 'buy' && m.side !== 'sell')) return bad(ws, 'trade');
       ws.tids = ws.tids || new Set(); if (m.id != null) { if (ws.tids.has(m.id)) return; ws.tids.add(m.id); if (ws.tids.size > 200) ws.tids = new Set([...ws.tids].slice(-100)); }
-      const mid = m0.price[res]; let px;
-      if (m.side === 'sell') { const imp = Math.min(.3, n * MI[res] * .5); px = mid * (1 - imp / 2); m0.mk[res] = Math.min(MM0[res] * 3, m0.mk[res] + n); m0.price[res] = cl(mid * (1 - imp), MB[res] * .35, MB[res] * 2.8); }
-      else { const imp = Math.min(.25, n * MI[res] * .4); px = mid * (1 + imp / 2); m0.mk[res] = Math.max(0, m0.mk[res] - n); m0.price[res] = cl(mid * (1 + imp), MB[res] * .35, MB[res] * 2.8); }
+      mkFix(m0); const z0 = m0.z[res], d = n / (MKD[res] * MKSRV), mid = m0.price[res] * mkM(z0);
+      // average fill price along the curve (the client adds its spread); the trade only moves the pressure, not the fair price
+      const px = m0.price[res] * (m.side === 'sell' ? mkArea(z0, z0 + d) : mkArea(z0 - d, z0)) / d;
+      m0.z[res] = cl(z0 + (m.side === 'sell' ? d : -d), -3, 3);   // beyond +-0.7 the price is already at its 0.5x / 2x limit
       m0.feed.push({ n: dname(me.u), s: m.side, r: res, q: n, at: Date.now() }); if (m0.feed.length > 8) m0.feed.shift();
       send(ws, { t: 'tr', id: m.id, r: res, side: m.side, n, mid: +mid.toFixed(3), px: +px.toFixed(4) }); const o = mkPub(m0); r.pl.forEach(p => send(p.ws, o)); touch(r); return;
     }
@@ -684,7 +706,7 @@ function handle(ws, m) {
       u.gs = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now, ti: tit(m.s.ti) }; saveDb(); return;
     }
     case 'lb': { // world ranking: every account's best island
-      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs, b = u.is; const best = !a ? (b ? [b, 'online'] : null) : !b ? [a, 'solo'] : (b.s > a.s ? [b, 'online'] : [a, 'solo']); if (best && best[0].s > 0) rows.push({ id, n: u.name || id, s: Math.min(SCORE_MAX, best[0].s), m: best[1], p: best[0].p, d: best[0].d, ti: best[0].ti || '', vi: hasSnap(id) ? 1 : 0, on: online(id) ? 1 : 0 }); }
+      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs, b = u.is; const best = !a ? (b ? [b, 'online'] : null) : !b ? [a, 'solo'] : (b.s > a.s ? [b, 'online'] : [a, 'solo']); if (best && best[0].s > 0) rows.push({ id, n: u.name || id, ct: ctit(id) || '', s: Math.min(SCORE_MAX, best[0].s), m: best[1], p: best[0].p, d: best[0].d, ti: best[0].ti || '', vi: hasSnap(id) ? 1 : 0, on: online(id) ? 1 : 0 }); }
       rows.sort((x, y) => y.s - x.s); const mine = rows.findIndex(x => x.id === ws.u);
       send(ws, { t: 'lb', top: rows.slice(0, 50), total: rows.length, me: mine < 0 ? null : { rank: mine + 1, s: rows[mine].s, m: rows[mine].m } }); return;
     }
@@ -697,8 +719,8 @@ function handle(ws, m) {
       if (!r || !r.started || !me) return; const now = Date.now(); if (me.chAt && now - me.chAt < 900) return; me.chAt = now;
       const text = String(m.m || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200); if (!text) return;
       let loc = null; if (m.loc && typeof m.loc === 'object' && (m.loc.r === 'h' || m.loc.r === 'c') && num(m.loc.x, 0, NCOL - 1) && num(m.loc.y, 0, NCOL - 1)) loc = { r: m.loc.r, x: m.loc.x, y: m.loc.y, t: String(m.loc.t || '').slice(0, 40) };
-      const msg = { id: r.cid = (r.cid || 0) + 1, s: me.s, n: dname(me.u), m: text, at: now }; if (loc) msg.loc = loc;
-      if (m.fx && typeof m.fx === 'object') { const fx = {}; for (const [k, mx] of [['pf', 13], ['nf', 9], ['mf', 8]]) { const q = m.fx[k]; if (Number.isInteger(q) && q >= 0 && q < mx) fx[k] = q; } if (Object.keys(fx).length) msg.fx = fx; }
+      const msg = { id: r.cid = (r.cid || 0) + 1, s: me.s, n: dname(me.u), m: text, at: now }; if (loc) msg.loc = loc; if (ctit(me.u)) msg.ct = ctit(me.u);
+      if (m.fx && typeof m.fx === 'object') { const fx = {}; for (const [k, mx] of [['pf', 13], ['nf', 9], ['mf', 9]]) { const q = m.fx[k]; if (Number.isInteger(q) && q >= 0 && q < mx) fx[k] = q; } if (Object.keys(fx).length) msg.fx = fx; }
       if (me.fx) { msg.fx = msg.fx || {}; for (const k of ['pf', 'nf']) if (me.fx[k] != null) msg.fx[k] = me.fx[k]; }
       (r.chat = r.chat || []).push(msg); if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);
       r.pl.forEach(p => send(p.ws, { t: 'chat', msg })); touch(r); return;
@@ -720,7 +742,7 @@ function handle(ws, m) {
     case 'visit': { // read someone's offline island
       const id = String(m.id || '').toLowerCase(); if (!db.users[id]) return send(ws, { t: 'isle', id, no: 1 });
       const now = Date.now(); if (ws.viAt && now - ws.viAt < 1500) return; ws.viAt = now;
-      getSnap(id).then(j => send(ws, j ? { t: 'isle', id, n: dname(id), d: JSON.parse(j), at: (snapMeta[id] || {}).at || 0, sc: (db.users[id].gs || {}).s || 0, p: (db.users[id].gs || {}).p || null } : { t: 'isle', id, no: 1 })).catch(() => send(ws, { t: 'isle', id, no: 1 }));
+      getSnap(id).then(j => send(ws, j ? { t: 'isle', id, n: dname(id), ct: ctit(id), d: JSON.parse(j), at: (snapMeta[id] || {}).at || 0, sc: (db.users[id].gs || {}).s || 0, p: (db.users[id].gs || {}).p || null } : { t: 'isle', id, no: 1 })).catch(() => send(ws, { t: 'isle', id, no: 1 }));
       return;
     }
     case 'save': { // the player's own realm (coins, army, research...) so it survives switching the phone off
