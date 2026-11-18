@@ -3062,7 +3062,7 @@ function openCh(ti){if(!S){toast('Start a game first');return}if(!(M.chests[ti]>
  $$('cht').innerHTML=TR[ti].n+`<div style="font-size:13px;color:${RCOL[ti]}">${TR[ti].r}</div>`;$$('chh').style.display='none';$$('chr').innerHTML='';$$('chb').innerHTML='';const lb=$$('chl');lb.className='lvb';lb.innerHTML='';cancelAnimationFrame(oraf);oraf=requestAnimationFrame(oLoop)}
 /* the glow inside the chest moves smoothly from one colour to the next */
 function glow(col,now){O.gA=O.gc;O.gB=col;O.gT=now;O.pk=now}
-function oGo(){if(!(M.chests[O.ti]>0))return;chestAdd(O.ti,-1);O.loot=roll(O.ti);O.lv=O.loot.lv|0;O.ph='shake';const now=performance.now();O.t1=now;O.dur=1050+O.lv*750;O.st=0;glow(PL[0].col,now);sfx('cho1');buzz();$$('chh').style.display='none'}
+function oGo(){if(!(M.chests[O.ti]>0))return;chestAdd(O.ti,-1);O.loot=roll(O.ti);O.lv=O.loot.lv|0;$$('chr').classList.toggle('many',O.loot.length>7);O.ph='shake';const now=performance.now();O.t1=now;O.dur=1050+O.lv*750;O.st=0;glow(PL[0].col,now);sfx('cho1');buzz();$$('chh').style.display='none'}
 function burst(n,col,y0){const l=LOW||RM?.5:1;for(let i=0;i<n*l&&O.pt.length<190;i++){const a=rnd(0,6.28),v=rnd(120,560);O.pt.push({x:innerWidth/2,y:y0||innerHeight*.42,vx:Math.cos(a)*v,vy:Math.sin(a)*v-170,l:rnd(.7,1.6),c:col[ri(0,col.length-1)],r:rnd(2,5.5)})}}
 function oLoop(now){if(!O)return;const W=innerWidth,H=innerHeight,tm=(now-O.t0)/1000,ti=O.ti,P=TR[ti].pal,dt=Math.min(.05,(now-(O.last||now))/1000);O.last=now;ox.clearRect(0,0,W,H);
  const cxp=W/2,cyp=H*.42,s=Math.min(W*.5,230)*(1+ti*.04);let sh=0,sc=1,y=cyp,rot=0;
@@ -3804,7 +3804,6 @@ const _vWar6=vWar;vWar=function(){const r=_vWar6();if(S.on)return r;let h=`<div 
   for(let k=2;k<6;k++){if(!S.tiles.some(t=>t.o===k))continue;const m=mem(k),at=attitude(m),st=(window.clAIStyle&&clAIStyle(k))||'?',a=S.ai[k]||{},mode={defend:'fortifying its borders',coalition:'in the coalition against you',revenge:'planning revenge on you',normal:'growing its realm'}[m.mode||'normal'];
     h+=`<div class="mf"><span><b style="color:${OWN[k].c}">${OWN[k].n}</b> · ${st[0].toUpperCase()+st.slice(1)}<br><small class="mu">${mode} · army about ${Math.round(sum(a)/5)*5||sum(a)} · income ${(a.inc||0).toFixed(1)}/s</small>${m.plan?`<br><small>🧠 ${escH(m.plan)}</small>`:''}${(m.log||[]).length?`<br><small class="mu">${m.log.slice(0,3).map(e=>'• '+escH(e.s)).join('<br>')}</small>`:''}</span><span class="v6-pill ${at[1]}">${at[0]}</span></div>`}
   r[1]+=h+'</div>';
-  if((S.aiL||[]).length)r[1]+=`<div class="mi"><b>🎓 Learn from your rivals</b><div class="mu">What the strongest rivals did recently, and why it works. ${(S.diff|0)<2?'On Medium and harder difficulties rivals plan like strong players.':''}</div>${S.aiL.slice(0,5).map(x=>`<div class="mf"><span>💡 ${escH(x.s)} <small class="mu">— ${OWN[x.k]?OWN[x.k].n:'a rival'}</small></span></div>`).join('')}</div>`;
   return r};
 
 /* ---------- the game tick: smoothed income, trade-pact deliveries, online siege pause ---------- */
@@ -5161,6 +5160,10 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)try{SPR.cle
 #visit .vi{display:flex;gap:6px;overflow-x:auto;font-size:12px}#visit .vi span{flex:none;background:#0b1620;border:1px solid #2b4a68;border-radius:10px;padding:4px 8px}
 #visit .vtip{position:absolute;left:8px;top:8px;background:#000b;border-radius:10px;padding:4px 9px;font-size:12px;pointer-events:none;max-width:70%}
 .vis-b{min-height:26px!important;padding:0 8px!important;font-size:12px!important;margin-left:4px}
+/* chest opening: the rewards sit below the chest and wrap downwards, smaller, so every prize stays visible */
+#cho .rw{top:calc(42% + min(17vw,96px));bottom:calc(74px + env(safe-area-inset-bottom,0px));max-height:none;align-content:flex-start;padding:10px 12px 14px;gap:6px}
+#cho .rcd{min-width:64px;padding:4px 7px;border-radius:11px}#cho .rcd span{font-size:21px}#cho .rcd b{font-size:11.5px}
+#cho .rw.many .rcd{min-width:54px;padding:3px 5px}#cho .rw.many .rcd span{font-size:17px}#cho .rw.many .rcd b{font-size:10.5px}
 </style>
 <script>
 /* ===== Crownlands update 18.11 (loaded last) =====
