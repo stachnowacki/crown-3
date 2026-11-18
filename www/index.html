@@ -1639,7 +1639,7 @@ function onMsg(e){let m;try{m=JSON.parse(e.data)}catch(x){return}
   else if(!S||!S.on)return;
   else if(m.t=='snap'||m.t=='tiles'){if(m.sp&&m.sp!=ONL.slot&&S.realm!='c'){const lost=m.d.filter(([i,o])=>i<ONL.CO&&S.tiles[i]&&S.tiles[i].o==1&&o!=ONL.slot).length;applyTiles.q=1;try{applyTiles(m.d)}finally{applyTiles.q=0}
     if(lost){const nm=ONL.names[m.sp]||'A new realm';toast(`🏝️ ${nm} landed on the island and took ${lost} unbuilt tile${lost>1?'s':''} of yours`);chron('🏝️',`${nm} landed and took ${lost} unbuilt tile${lost>1?'s':''}`)}}else applyTiles(m.d)}
-  else if(m.t=='mkt'||m.t=='tr'||m.t=='chat'||m.t=='lb'||m.t=='react'||m.t=='isle'){try{window.srvMsg&&window.srvMsg(m)}catch(e){console.error(e)}}
+  else if(m.t=='mkt'||m.t=='tr'||m.t=='chat'||m.t=='lb'||m.t=='react'||m.t=='isle'||m.t=='agift'||m.t=='terr'||m.t=='admok'){try{window.srvMsg&&window.srvMsg(m)}catch(e){console.error(e)}}
   else if(m.t=='tally')setTallyIn(m.from,m.r=='c'?'c':'h',m.u)
   else if(m.t=='shield'){SHD[m.s]=m.until;const mins=Math.max(1,Math.ceil((m.until-Date.now())/6e4)),k=L(m.s);
     if(m.s==ONL.slot){toast(`🛡 Your realm is shielded for ${mins} min`);chron('🛡️',`Your realm is shielded for ${mins} min`)}else toast(`🛡 ${OWN[k].n} is shielded for ${mins} min`)}
@@ -1897,10 +1897,10 @@ function apply(kind,val,x,y){if(S.on)return;let terr=0;const r=A.size==3&&(kind=
 function after(){calcCB();hud();save();A.sig=sg()}
 
 window.adm={
-  code(){if(S&&S.on)return toast('Admin tools only work in offline games');const d=$('dm');
+  code(){const d=$('dm');
     d.innerHTML=`<div class="dbox"><b style="font-size:22px">🧑‍💻 Developer mode</b><input id="adm-c" type="password" placeholder="Password" autocapitalize="none" autocomplete="off" spellcheck="false"><div id="adm-e" class="bad"></div><button onclick="adm.try()">Unlock</button><button onclick="$('dm').style.display='none'">Cancel</button></div>`;d.style.display='flex'},
   try(){if(h53(norm($('adm-c').value))===ADMIN_HASH){A.on=true;localStorage.setItem('cl-adm','1');$('dm').style.display='none';toast('Developer mode unlocked');adm.open()}else $('adm-e').textContent='Wrong password'},
-  open(){if(S&&S.on)return toast('Admin tools only work in offline games');closeSheet();A.open=1;document.body.classList.add('adm');adr()},
+  open(){if(S&&S.on){closeSheet();return window.oadmOpen&&oadmOpen()}closeSheet();A.open=1;document.body.classList.add('adm');adr()},
   close(){A.open=0;A.paint=0;A.brush=null;document.body.classList.remove('adm');root.style.display='none'},
   tab(k){A.tab=k;A.min=0;adr()},
   min(){A.min=A.min?0:1;adr()},
@@ -1929,7 +1929,7 @@ setInterval(()=>{if(!A.open)return;if(S.on)return adm.close();if(sg()!==A.sig){c
 /* faster game speed: extra ticks on top of the normal 10/s */
 setInterval(()=>{if(A.speed>1&&!window.ADM_PAUSE&&S&&!S.on)for(let k=1;k<A.speed;k++)tick()},100);
 /* menu entry */
-const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools','Edit buildings, resources, terrain · pause / speed','adm.open()'):mb('🔑','Admin code','Unlock the admin tools','adm.code()');return r};
+const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools',S&&S.on?'Online island: give resources, land, buildings, terrain to any player':'Edit buildings, resources, terrain · pause / speed','adm.open()'):mb('🔑','Admin code','Unlock the admin tools','adm.code()');return r};
 })();
 </script><script>
 /* ===== Crownlands Major Update: strategy, events, onboarding, minimap, safe migration ===== */
@@ -5415,6 +5415,79 @@ function bulkRun(steps,N0){const g=window.__gx,el=document.createElement('div');
     sum.querySelector('[data-x]').onclick=close;const mm=sum.querySelector('[data-m]');if(mm)mm.onclick=()=>{close();setTimeout(()=>gxBulk(-1,N0),60)}};
   const close=()=>{if(!BULK)return;cancelAnimationFrame(BULK.raf);BULK=null;el.remove();try{hud();if(vis('tre'))treTab('ch');qBadges(true)}catch(e){}};
   setTimeout(step,250)}
+
+/* ---------- 7. online admin tools ----------
+   Opened from Menu → Admin tools while on an online island (the admin code unlocks the entry). Every change is checked by
+   the server with its ADMIN_TOKEN, so the code in this page alone cannot change anyone's realm. */
+const TE7={g:.5,f:.6,m:.9,S:.93,G:.93,D:.95},TN7={g:'Grassland',f:'Forest',m:'Mountain',S:'Silver vein',G:'Gold vein',D:'Diamond vein',w:'Sea',r:'River'};
+const KN7={1:'City',2:'Mine',3:'Stronghold',4:'Port',5:'Market',6:'Barracks',7:'Academy',9:'Palace',10:'Workshop',11:'Watchtower',12:'Monument'};
+const OA={open:0,tab:'give',to:0,pl:[],rad:0,b:1,l:5,mode:'add',msg:'',code:''};
+const tok=()=>{try{return localStorage.getItem('cl-admtok')||''}catch(e){return''}};
+const admSend=(op,o)=>{if(!tok()){OA.msg='Enter the admin token first.';return oaR()}MPX.send(Object.assign({t:'adm',op,tok:tok()},o||{}))};
+const gSlot=k=>{if(k==1)return ONL.slot;for(const s of ONL.act)if(MPX.L(s)==k)return s;return 0};
+const gIdx=i=>S.realm=='c'?ONL.CO+i:i;
+function oEl7(){let e=$u('oadm');if(e)return e;e=document.createElement('div');e.id='oadm';e.style.cssText='position:fixed;left:6px;right:6px;bottom:calc(76px + env(safe-area-inset-bottom,0px));max-height:52%;overflow:auto;z-index:5;background:#102338f7;border:2px solid #ffcf4a;border-radius:16px;padding:8px;display:none';document.body.appendChild(e);return e}
+window.oadmOpen=function(){if(!S||!S.on||!window.ONL)return toast('Open an online island first');OA.open=1;oEl7().style.display='block';oaR();if(tok())admSend('who')};
+window.oadm={
+ close(){OA.open=0;const e=$u('oadm');if(e)e.style.display='none'},
+ tab(t){OA.tab=t;oaR()},
+ tok(){const v=($u('oa-tok')||{}).value||'';try{localStorage.setItem('cl-admtok',v.trim())}catch(e){}OA.msg='Token saved.';OA.tab='give';admSend('who')},
+ forget(){try{localStorage.removeItem('cl-admtok')}catch(e){}OA.msg='Token removed from this device.';oaR()},
+ who(){admSend('who')},
+ to(s){OA.to=s;oaR()},
+ mode(m){OA.mode=m;oaR()},
+ give(preset){if(!OA.to)return toast('Pick a player first');const v=id=>{const e=$u(id);if(!e||e.value==='')return undefined;const n=+e.value;return Number.isFinite(n)?n:undefined};
+  let o;if(preset=='fill')o={res:{wood:20000,stone:20000,silver:4000,gold:1500,diamond:300},c:500000};else if(preset=='army')o={army:{inf:200,arc:150,cav:100,sie:40}};else if(preset=='coins')o={c:1000000};
+  else{o={c:v('oa-coins'),res:{},army:{},gm:v('oa-gm')};for(const k of RES)o.res[k]=v('oa-'+k);for(const k of ['inf','arc','cav','sie'])o.army[k]=v('oa-'+k);const ct=v('oa-cht'),cn=v('oa-chn');if(ct!=null&&cn)o.ch=[ct|0,cn|0]}
+  admSend('give',Object.assign({to:OA.to,mode:preset?'add':OA.mode},o))},
+ rad(v){OA.rad=+v;oaR()},
+ area(){const s=S.sel;if(!s)return null;const out=[];for(let y=-OA.rad;y<=OA.rad;y++)for(let x=-OA.rad;x<=OA.rad;x++){if(x*x+y*y>OA.rad*OA.rad+OA.rad)continue;const X=s[0]+x,Y=s[1]+y;if(ok(X,Y))out.push(Y*N+X)}return out},
+ land(own){const a=oadm.area();if(!a)return toast('Tap a tile on the map first');const o=own?OA.to:0;if(own&&!o)return toast('Pick a player first');
+  const d=[];for(const i of a){const t=S.tiles[i];if(t.t=='w'&&!t.r)continue;d.push(own?[gIdx(i),o,t.b|0,t.l|0,t.w|0]:[gIdx(i),0,0,0,0])}admSend('tiles',{d})},
+ bset(b){OA.b=+b;oaR()},lset(l){OA.l=Math.max(1,Math.min(40,+l|0))},
+ build(){const s=S.sel;if(!s)return toast('Tap a tile on the map first');const i=s[1]*N+s[0],t=S.tiles[i],o=OA.b?(OA.to||gSlot(t.o)||ONL.slot):gSlot(t.o);
+  if(OA.b==2&&!MR[t.t])admSend('terr',{d:[[gIdx(i),'m']]});else if(OA.b&&t.t=='w')admSend('terr',{d:[[gIdx(i),'g']]});
+  admSend('tiles',{d:[[gIdx(i),o,OA.b,OA.b?OA.l:0,0]]})},
+ terr(c){const a=oadm.area();if(!a)return toast('Tap a tile on the map first');admSend('terr',{d:a.map(i=>[gIdx(i),c])})}};
+function oaR(){const e=$u('oadm');if(!e||!OA.open)return;const B=(l,f,on)=>`<button class="${on?'on':''}" style="min-height:40px;padding:4px 8px;${on?'background:#ffcf4a;color:#2a1a00':''}" onclick="${f}">${l}</button>`,G=n=>`display:grid;grid-template-columns:repeat(${n},1fr);gap:6px;margin:6px 0`;
+ const sel=S.sel?(()=>{const [x,y]=S.sel,t=T(x,y);return`(${x},${y}) · ${t.r?'River':TN7[t.t]} · ${OWN[t.o].n}${t.b?' · '+(KN7[t.b]||'')+' Lv'+(t.l||1):''}`})():'none — tap a tile on the map';
+ const who=OA.pl.length?OA.pl.map(p=>B(`${p.on?'🟢':'⚪'} ${esc(p.n)}${p.s==ONL.slot?' (you)':''}`,`oadm.to(${p.s})`,OA.to==p.s)).join(''):'<span class="mu">Press ↻ to load the players.</span>';
+ const tp=OA.pl.find(p=>p.s==OA.to);
+ let h=`<div style="display:flex;gap:6px;align-items:center;position:sticky;top:-8px;background:#102338;padding:4px 0;z-index:1"><b style="color:#ffcf4a">🛠️ Online admin${OA.code?' · '+OA.code:''}</b><span style="flex:1"></span>${[['give','🎁 Give'],['land','🗺️ Land'],['terr','⛰ Terrain'],['key','🔑']].map(([k,n])=>B(n,`oadm.tab('${k}')`,OA.tab==k)).join('')}<button style="min-height:40px;width:40px" onclick="oadm.close()">✕</button></div>`;
+ if(OA.msg)h+=`<div class="mu" style="color:#ffe9a0">${esc(OA.msg)}</div>`;
+ if(!tok()||OA.tab=='key')h+=`<div class="mu">The server's <b>ADMIN_TOKEN</b> (the same one the /admin pages use). It is kept on this device only.</div><div style="display:flex;gap:6px;margin:6px 0"><input id="oa-tok" type="password" placeholder="Admin token" autocomplete="off" style="flex:1;min-width:0;font:inherit;background:#0b1620;color:#e9f1f8;border:1px solid #3a638a;border-radius:10px;padding:8px">${B('Save','oadm.tok()')}${tok()?B('Forget','oadm.forget()'):''}</div>`;
+ if(tok()&&OA.tab!='key'){h+=`<div class="mu" style="margin-top:4px">Player:</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0">${who}${B('↻','oadm.who()')}</div>`;
+  if(OA.tab=='give'){const inp=(id,ph)=>`<input id="oa-${id}" type="number" inputmode="numeric" placeholder="${ph}" style="min-width:0;font:inherit;background:#0b1620;color:#e9f1f8;border:1px solid #3a638a;border-radius:10px;padding:7px">`;
+   h+=(tp?`<div class="mu">Last saved realm: 🪙${fm(tp.coins)} · ${RES.map(k=>ICON[k]+fm((tp.res||{})[k])).join(' ')} · army ${['inf','arc','cav','sie'].map(k=>(tp.army||{})[k]|0).join('/')}${tp.wait?' · '+tp.wait+' gift(s) waiting':''}</div>`:'')
+    +`<div style="${G(2)}">${B('➕ Add to what they have','oadm.mode(\'add\')',OA.mode=='add')}${B('✏️ Set exactly','oadm.mode(\'set\')',OA.mode=='set')}</div>`
+    +`<div style="${G(3)}">${inp('coins','🪙 coins')}${RES.map(k=>inp(k,ICON[k]+' '+k)).join('')}${inp('inf','🗡️ infantry')}${inp('arc','🏹 archers')}${inp('cav','🐎 cavalry')}${inp('sie','🏰 siege')}${inp('gm','💜 gems')}${inp('cht','📦 chest tier 0-5')}${inp('chn','📦 how many')}</div>`
+    +`<div class="mu">Empty fields are left alone. A minus number takes away (never below zero).</div><div style="${G(2)}">${B('🎁 Send','oadm.give()')}${B('💰 +1M coins','oadm.give(\'coins\')')}${B('📦 Big material pack','oadm.give(\'fill\')')}${B('⚔️ Army pack','oadm.give(\'army\')')}</div>`}
+  else if(OA.tab=='land'){h+=`<div class="mu">Selected tile: ${sel}</div><div style="display:flex;gap:6px;align-items:center"><span>Radius ${OA.rad}</span><input type="range" min="0" max="6" value="${OA.rad}" oninput="oadm.rad(this.value)" style="flex:1"></div>
+    <div style="${G(2)}">${B('🏳️ Give this land to the player','oadm.land(1)')}${B('⬜ Make it nobody\'s','oadm.land(0)')}</div>
+    <div class="mu" style="margin-top:6px">Building on the selected tile (owner: the picked player, or whoever holds it):</div><div style="${G(4)}">${B('None','oadm.bset(0)',OA.b==0)}${Object.keys(KN7).map(b=>B(KN7[b],`oadm.bset(${b})`,OA.b==b)).join('')}</div>
+    <div style="display:flex;gap:6px;align-items:center"><span>Level</span><input type="number" min="1" max="40" value="${OA.l}" onchange="oadm.lset(this.value)" style="width:80px;font:inherit;background:#0b1620;color:#e9f1f8;border:1px solid #3a638a;border-radius:10px;padding:7px">${B('🏗️ Place / set','oadm.build()')}</div>`}
+  else if(OA.tab=='terr')h+=`<div class="mu">Selected tile: ${sel}</div><div style="display:flex;gap:6px;align-items:center"><span>Radius ${OA.rad}</span><input type="range" min="0" max="6" value="${OA.rad}" oninput="oadm.rad(this.value)" style="flex:1"></div><div style="${G(4)}">${Object.keys(TN7).map(k=>B(TN7[k],`oadm.terr('${k}')`)).join('')}</div><div class="mu">Everyone on the island sees the new landscape. Sea also clears the tile.</div>`}
+ const a=document.activeElement,keep=a&&e.contains(a)&&a.tagName=='INPUT';if(keep)return;e.innerHTML=h}
+let oaSel='';setInterval(()=>{if(!OA.open)return;if(!S||!S.on){oadm.close();return}const k=S.sel?S.sel.join():'';if(k!==oaSel){oaSel=k;oaR()}},300);
+/* terrain set by an admin: kept per island and laid over the generated map on every device */
+function terrApply(){if(!window.ONL||!ONL.terr||!S||!S.on)return;let cur=0;
+ for(const k in ONL.terr){const gi=+k,c=ONL.terr[k],r=gi>=ONL.CO?'c':'h',ix=r=='c'?gi-ONL.CO:gi,R=S.realm==r?S:(S.rl&&S.rl[r]);if(!R||!R.tiles||!R.tiles[ix])continue;const t=R.tiles[ix];
+  const want=c=='r'?'w':c;if(t.t===want&&!!t.r===(c=='r'))continue;t.t=want;if(c=='r')t.r=1;else delete t.r;t.e=TE7[want]||0;if(want=='w'){t.b=0;t.l=0;delete t.w;if(c!='r')t.o=0}else if(t.b==2&&!MR[want]){t.b=0;t.l=0}if(R===S)cur=1}
+ if(cur){calcWD();CHK.clear();SPR.clear();last='';render()}}
+setInterval(terrApply,2000);
+const _si7=window.srvInit;window.srvInit=function(I){_si7&&_si7(I);try{ONL.terr=Object.assign({},I.terr||{});terrApply()}catch(e){}};
+const _sm7=window.srvMsg;window.srvMsg=function(m){
+ if(m.t=='terr'){ONL.terr=ONL.terr||{};for(const [i,c] of m.d||[])ONL.terr[i]=c;terrApply();return}
+ if(m.t=='admok'){if(m.err)OA.msg='⚠️ '+m.err;else if(m.op=='who'){OA.pl=m.pl||[];OA.code=m.code;if(/token|Token/.test(OA.msg))OA.msg='';if(!OA.to&&OA.pl.length)OA.to=OA.pl[0].s}else if(m.op=='give'){OA.msg='✔ Sent to '+m.n+(m.on?' (online: applied now)':' (offline: waiting until they come back)');setTimeout(()=>admSend('who'),800)}else OA.msg='✔ '+(m.n||0)+' tile'+(m.n==1?'':'s')+' changed';oaR();return}
+ if(m.t=='agift'){agift(m);return}
+ return _sm7&&_sm7(m)};
+/* a gift from an admin: applied exactly once (the id is remembered), then confirmed to the server */
+function agift(g){S.agIds=Array.isArray(S.agIds)?S.agIds:[];if(!S.agIds.includes(g.id)){S.agIds.push(g.id);if(S.agIds.length>80)S.agIds.splice(0,S.agIds.length-60);
+  const set=g.mode=='set',ad=(o,k,v)=>{if(v==null)return;o[k]=Math.max(0,set?v:(o[k]||0)+v)},got=[];
+  if(g.c!=null){ad(S,'coins',g.c);got.push('🪙'+fm(g.c))}for(const k in g.res||{}){ad(S.res,k,g.res[k]);got.push(ICON[k]+fm(g.res[k]))}for(const k in g.army||{}){ad(S.army,k,g.army[k]);got.push(fm(g.army[k])+' '+k)}
+  try{const gx=window.__gx;if(gx){if(g.gm){if(set)gx.M.gems=Math.max(0,g.gm);else if(g.gm>0)gx.addGems(g.gm,true);else gx.M.gems=Math.max(0,gx.M.gems+g.gm);got.push(g.gm+' gems')}if(g.ch){gx.chestAdd(g.ch[0],g.ch[1]);got.push(g.ch[1]+'× '+gx.TR[g.ch[0]].n)}}}catch(e){}
+  hud();last='';render();try{MPX.upSave()}catch(e){}try{chron('🛠️','An admin ('+g.from+') '+(set?'set':'sent')+': '+got.join(' '))}catch(e){}toast('🛠️ Admin '+(set?'set':'gift')+': '+got.join(' '))}
+ MPX.send({t:'agok',id:g.id})}
 })();
 </script>
 </body></html>

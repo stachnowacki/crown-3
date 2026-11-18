@@ -36,7 +36,7 @@ Find each block with `Grep "<script" www/index.html`. Later blocks change earlie
 | `minor changes` | Upgrade max (`gxUpMax`, `plan`), demolish dialog (`demo`, `#gxdm`), map FX (`fxUp`, `fxDemo`). |
 | `map performance` | `CHK`/`SPR` become LRU caches with a pixel budget (evicted canvases released with width=0), chunk resolution capped (`e.pr`), `sprite`/`spriteBig`/`paintB` guarded, canvas `contextlost`/`contextrestored` recovery. |
 | `missions redesign` (`<style id="q-css">` + `<script>`) | The live mission screen: tabs Daily (`S.dq` gift streak, 3 tasks, bonus chest) · Tasks (`MIS`, no chests) · Quests (`S.side`, 3 at a time, chest) · Goals (`V6G` milestones/objectives, rare chest) · Wonders (Great Works + Monuments). Live `openMis`/`renderMis`/`setTab`/`sideFill`; dock/menu badges (`qBadges`); `renderSheet` patches the DOM (`qMorph`) so scrolling survives refreshes. |
-| `update 18.11` (`<style id="u1811-css">` + last `<script>`) | Far-zoom overview renderer (`drawFar`, below 13 px per tile), `UPC` cost balance (`upBal`), island snapshots + read-only viewer (`visitIsland`), chat reactions + "new messages" line, `lateBoost` for late joiners, daily gift pop-up (`dailyPop`), chest pop-up (`chestGot`) and opening many chests (`gxBulk`). |
+| `update 18.11` (`<style id="u1811-css">` + last `<script>`) | Far-zoom overview renderer (`drawFar`, below 13 px per tile), `UPC` cost balance (`upBal`), island snapshots + read-only viewer (`visitIsland`), chat reactions + "new messages" line, `lateBoost` for late joiners, daily gift pop-up (`dailyPop`), chest pop-up (`chestGot`), opening many chests (`gxBulk`), and the online admin panel (`oadmOpen`/`oadm`: gifts, land, buildings, terrain; checked by the server's `ADMIN_TOKEN`). |
 
 The **first** `<script>` after the pre-boot check also holds the 18.11 map code, because `load()`/`newGame()` run during boot: the compact tile codec (`encT`/`decT`, `packS`/`unpackS`), map growth (`genLand`, `stampOld`, `growHome`, `growCol`, `growSave`) and the per-tick scan cache (`tcache`).
 
@@ -87,5 +87,6 @@ Search for these anchors:
 - up to 7 players per island (`MAXP`); local owner ids 1–7 map to global slots with `L(s)`
 - shared-market pacing (server `mkStep` mirrors the offline market)
 - tile index layout (`126*126` home + `404*404` shared; rooms from before are migrated once, `r.mv=2`). Clients send `pv:2` on `auth`/`resume`; an older page is told to reload and is not let into an island
+- online admin: `adm` (ops `who`, `give`, `tiles`, `terr`) → `admok`; gifts `agift` wait in `p.gifts` until the player confirms with `agok`; admin terrain is `r.terr` (sent in init and as `terr`)
 - extra messages: `react` (chat emoji), `gsnap`/`visit` → `isle` (offline island snapshots in `DATA_DIR/snaps`, cloud key `snap:<id>`)
 - tile message `[i, owner, b, l, w, conquest]`, with `l ≤ 40`

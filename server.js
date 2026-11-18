@@ -305,7 +305,7 @@ catch (e) { if (e.code !== 'ENOENT') log('error', 'rooms load failed: ' + e.mess
 let dirty = 0;
 const snapRoom = r => ({ v: Math.max(r.v || 0, SCHEMA), mv: r.mv || 2, code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield || {},
     tiles: [...r.tiles], mkt: r.mkt, chat: (r.chat || []).slice(-80), cid: r.cid || 0,
-    pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last || 0, sp: p.sp || null, late: p.late ? 1 : 0, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc || null, fx: p.fx, mids: (p.mids || []).slice(-300) })) });
+    pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last || 0, sp: p.sp || null, late: p.late ? 1 : 0, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc || null, fx: p.fx, mids: (p.mids || []).slice(-300), gifts: Array.isArray(p.gifts) && p.gifts.length ? p.gifts : undefined })), terr: r.terr && Object.keys(r.terr).length ? r.terr : undefined });
 const snapshotRooms = () => [...rooms.values()].map(snapRoom);
 function persistNow() { const list = snapshotRooms(), j = JSON.stringify(list); if (!okRooms(j)) return log('error', 'room snapshot invalid, not saved');
   remote.pushRooms(list); remote.push('rooms', j); return writeData('rooms', j); }
@@ -456,7 +456,7 @@ function roomMsg(r, p, init) {
   const o = { t: 'room', code: r.code, host: dname(r.host), isHost: r.host === p.u, slot: p.s, seed: r.seed, diff: r.diff, started: r.started,
     pl: r.pl.map(q => ({ s: q.s, n: dname(q.u), on: !!q.ws, sc: q.sc ? q.sc.s : 0, sp: q.sc ? q.sc.p : null, fx: q.fx || null })) };
   if (init && r.started) { if (!r.mkt) r.mkt = mkNew(); o.init = { mkt: mkPub(r.mkt), chat: (r.chat || []).slice(-50), shield: r.shield || {}, save: p.save || null, snap: [...r.tiles].map(([i, v]) => [i, ...v]), pend: p.pend || [],
-    tal: Object.fromEntries(r.pl.filter(q => q !== p && q.tal).map(q => [q.s, q.tal])) }; }
+    tal: Object.fromEntries(r.pl.filter(q => q !== p && q.tal).map(q => [q.s, q.tal])), terr: r.terr || {} }; }
   return o;
 }
 const bc = r => r.pl.forEach(p => send(p.ws, roomMsg(r, p)));
@@ -469,7 +469,7 @@ function attach(ws) { // connect a signed-in user to the island they used most r
   if ((ws.pv | 0) < PROTO) return send(ws, { t: 'err', m: OLD_CLIENT, reload: 1 });
   if (bp.ws && bp.ws !== ws) { try { send(bp.ws, { t: 'kicked', m: 'Your realm was opened on another device.' }); bp.ws.room = null; bp.ws.close(); } catch (e) {} log('info', `session replaced by a newer connection: room ${best.code} slot ${bp.s}`); }
   bp.ws = ws; ws.room = best; bp.last = Date.now(); log('info', `player (re)connected: room ${best.code} slot ${bp.s}`);
-  send(ws, roomMsg(best, bp, true)); bp.pend = []; touch(best); bc(best);
+  send(ws, roomMsg(best, bp, true)); bp.pend = []; for (const g of bp.gifts || []) send(ws, g); touch(best); bc(best);
 }
 function leave(ws) {
   const r = ws.room; if (!r) return; ws.room = null;
@@ -579,6 +579,47 @@ function w7Handle(ws, m) {
     return send(ws, { t: 'sclok', sid: m.sid, m: m.m, dup: had ? 1 : 0 }); }
 }
 setInterval(tickWorld, 30000); setTimeout(tickWorld, 1500);
+/* ---------- online admin tools (update 18.11): change any player's resources, land, buildings and the terrain ----------
+   Authorised by the server's ADMIN_TOKEN (typed once in the game's admin panel), never by anything in the game itself.
+   Gifts go to the player at once if they are online, otherwise they wait on the island until they come back (and are
+   applied exactly once: the game confirms each gift id). Tiles and terrain are broadcast to everyone on the island. */
+const admOk = tok => !!ADMIN && typeof tok === 'string' && tok.length === ADMIN.length && crypto.timingSafeEqual(Buffer.from(tok), Buffer.from(ADMIN));
+const TERR = 'gfmwSGDr';
+function admHandle(ws, r, me, m) {
+  const now = Date.now(); ws.admF = (ws.admF || []).filter(t => now - t < 10 * 60e3);
+  if (ws.admF.length >= 5) return send(ws, { t: 'admok', op: m.op, err: 'Too many wrong tokens. Wait 10 minutes.' });
+  if (!ADMIN) return send(ws, { t: 'admok', op: m.op, err: 'Admin tools are off on this server: set ADMIN_TOKEN.' });
+  if (!admOk(m.tok)) { ws.admF.push(now); log('warn', 'admin (in game): wrong token from ' + (ws.u || '?')); return send(ws, { t: 'admok', op: m.op, err: 'Wrong admin token.' }); }
+  if (!r || !r.started || !me) return send(ws, { t: 'admok', op: m.op, err: 'Open a started island first.' });
+  if (m.op === 'who') return send(ws, { t: 'admok', op: 'who', ok: 1, code: r.code, pl: r.pl.map(p => { const s = p.save || {};
+    return { s: p.s, n: dname(p.u), on: !!p.ws, sc: p.sc ? p.sc.s : 0, coins: Math.floor(+s.coins || 0), res: s.res || {}, army: s.army || {}, wait: (p.gifts || []).length }; }) });
+  if (m.op === 'give') {
+    const to = r.pl.find(p => p.s === m.to); if (!to) return send(ws, { t: 'admok', op: 'give', err: 'No such player.' });
+    const n = (v, a, b) => typeof v === 'number' && Number.isFinite(v) ? cl(Math.round(v), a, b) : undefined, g = { t: 'agift', id: crypto.randomBytes(6).toString('hex'), mode: m.mode === 'set' ? 'set' : 'add', from: dname(ws.u), at: now };
+    g.c = n(m.c, -1e15, 1e15); g.res = {}; for (const k of MRES) { const v = n(m.res && m.res[k], -1e12, 1e12); if (v !== undefined) g.res[k] = v; }
+    g.army = {}; for (const k of UNITS) { const v = n(m.army && m.army[k], -1e6, 1e6); if (v !== undefined) g.army[k] = v; }
+    g.gm = n(m.gm, -1e6, 1e6); g.ch = Array.isArray(m.ch) && num(m.ch[0], 0, 5) && num(m.ch[1], 1, 100) ? [m.ch[0], m.ch[1]] : undefined;
+    (to.gifts = to.gifts || []).push(g); if (to.gifts.length > 50) to.gifts.shift();
+    if (to.ws) send(to.ws, g); touch(r); log('warn', 'admin (in game): ' + ws.u + ' gave to ' + to.u + ' on ' + r.code + ': ' + JSON.stringify({ c: g.c, res: g.res, army: g.army, gm: g.gm, ch: g.ch, mode: g.mode }));
+    return send(ws, { t: 'admok', op: 'give', ok: 1, n: dname(to.u), on: !!to.ws });
+  }
+  if (m.op === 'tiles') {   // [index, owner (global slot, 0 = nobody), building, level, walls]
+    if (!Array.isArray(m.d)) return; const ok = [];
+    for (const e of m.d.slice(0, 600)) { if (!Array.isArray(e)) continue; const [i, o, b, l, w] = e;
+      if (!num(i, 0, NT - 1) || !num(o, 0, MAXP) || !num(b, 0, 12) || !num(l, 0, 40) || !num(w || 0, 0, 3)) continue;
+      if (o && !r.pl.some(p => p.s === o)) continue;
+      if (!o && !b) r.tiles.delete(i); else r.tiles.set(i, [o, b, l, w || 0]); ok.push([i, o, b, l, w || 0]); }
+    if (ok.length) { r.pl.forEach(p => send(p.ws, { t: 'tiles', d: ok })); touch(r); log('warn', 'admin (in game): ' + ws.u + ' changed ' + ok.length + ' tiles on ' + r.code); }
+    return send(ws, { t: 'admok', op: 'tiles', ok: 1, n: ok.length });
+  }
+  if (m.op === 'terr') {   // [index, terrain letter]; water also clears the tile
+    if (!Array.isArray(m.d)) return; const ok = [], cleared = []; r.terr = r.terr || {};
+    for (const e of m.d.slice(0, 600)) { if (!Array.isArray(e)) continue; const [i, c] = e; if (!num(i, 0, NT - 1) || typeof c !== 'string' || c.length !== 1 || !TERR.includes(c)) continue;
+      r.terr[i] = c; ok.push([i, c]); if (c === 'w' && r.tiles.has(i)) { r.tiles.delete(i); cleared.push([i, 0, 0, 0, 0]); } }
+    if (ok.length) { r.pl.forEach(p => { send(p.ws, { t: 'terr', d: ok }); if (cleared.length) send(p.ws, { t: 'tiles', d: cleared }); }); touch(r); log('warn', 'admin (in game): ' + ws.u + ' changed terrain of ' + ok.length + ' tiles on ' + r.code); }
+    return send(ws, { t: 'admok', op: 'terr', ok: 1, n: ok.length });
+  }
+}
 function handle(ws, m) {
   if (m.t === 'auth' || m.t === 'resume') return auth(ws, m);
   if (!ws.u) return;
@@ -617,6 +658,8 @@ function handle(ws, m) {
       me.sp = [cx, cy]; me.late = 0; log('info', `spawned: room ${r.code} slot ${me.s} at ${cx},${cy} (${ok.length} tiles)`);
       r.pl.forEach(p => send(p.ws, { t: 'tiles', d: ok, sp: me.s })); send(ws, { t: 'spawnok' }); touch(r); bc(r); return;
     }
+    case 'adm': return admHandle(ws, r, me, m);
+    case 'agok': { if (me && Array.isArray(me.gifts)) { const n = me.gifts.length; me.gifts = me.gifts.filter(g => g.id !== m.id); if (me.gifts.length !== n) touch(r); } return; }
     case 'leave': return leave(ws);
     case 'trade': { // a trade at the island's shared market; filled along the price curve like the offline market
       if (!r || !r.started || !me) return; if (!r.mkt) r.mkt = mkNew(); const m0 = r.mkt, res = String(m.r), n = Math.floor(+m.n);
