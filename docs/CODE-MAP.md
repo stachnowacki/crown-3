@@ -34,8 +34,11 @@ Find each block with `Grep "<script" www/index.html`. Later blocks change earlie
 | `v6 launch layer` | Launch features. |
 | `CORE7` | Seasons + world events, **verbatim copy** of `server.js` `/*@@CORE7@@*/…/*@@END CORE7@@*/`; edit both. Then `window.X7` (Event Centre). |
 | `minor changes` | Upgrade max (`gxUpMax`, `plan`), demolish dialog (`demo`, `#gxdm`), map FX (`fxUp`, `fxDemo`). |
-| `map performance` (last `<script>`) | `CHK`/`SPR` become LRU caches with a pixel budget (evicted canvases released with width=0), chunk resolution capped (`e.pr`), `sprite`/`spriteBig`/`paintB` guarded, canvas `contextlost`/`contextrestored` recovery. |
-| `missions redesign` (`<style id="q-css">` + last `<script>`) | The live mission screen: tabs Daily (`S.dq` gift streak, 3 tasks, bonus chest) · Tasks (`MIS`, no chests) · Quests (`S.side`, 3 at a time, chest) · Goals (`V6G` milestones/objectives, rare chest) · Wonders (Great Works + Monuments). Live `openMis`/`renderMis`/`setTab`/`sideFill`; dock/menu badges (`qBadges`); `renderSheet` patches the DOM (`qMorph`) so scrolling survives refreshes. |
+| `map performance` | `CHK`/`SPR` become LRU caches with a pixel budget (evicted canvases released with width=0), chunk resolution capped (`e.pr`), `sprite`/`spriteBig`/`paintB` guarded, canvas `contextlost`/`contextrestored` recovery. |
+| `missions redesign` (`<style id="q-css">` + `<script>`) | The live mission screen: tabs Daily (`S.dq` gift streak, 3 tasks, bonus chest) · Tasks (`MIS`, no chests) · Quests (`S.side`, 3 at a time, chest) · Goals (`V6G` milestones/objectives, rare chest) · Wonders (Great Works + Monuments). Live `openMis`/`renderMis`/`setTab`/`sideFill`; dock/menu badges (`qBadges`); `renderSheet` patches the DOM (`qMorph`) so scrolling survives refreshes. |
+| `update 18.11` (`<style id="u1811-css">` + last `<script>`) | Far-zoom overview renderer (`drawFar`, below 13 px per tile), `UPC` cost balance (`upBal`), island snapshots + read-only viewer (`visitIsland`), chat reactions + "new messages" line, `lateBoost` for late joiners, daily gift pop-up (`dailyPop`), chest pop-up (`chestGot`) and opening many chests (`gxBulk`). |
+
+The **first** `<script>` after the pre-boot check also holds the 18.11 map code, because `load()`/`newGame()` run during boot: the compact tile codec (`encT`/`decT`, `packS`/`unpackS`), map growth (`genLand`, `stampOld`, `growHome`, `growCol`, `growSave`) and the per-tick scan cache (`tcache`).
 
 ### Most-wrapped functions
 
@@ -57,9 +60,10 @@ The **last** definition is the live entry point. Check all of them before you ed
 
 ### Key facts
 
-- **Map:** `S.tiles` is `N×N` (N ∈ 56/96/128). Tile fields: `o` owner (1 = player), `b` building (1 city, 2 mine, 3 stronghold, 4 port, 5–12 `BLD`), `l` level, `w` walls, `t` terrain.
+- **Map:** `S.tiles` is `N×N`: home island `HN0`=126, New Land `NL_CN`=404 (before 18.11: 56 and 128; `NL_OLD`). Old maps are grown on load with the old map kept in the middle (`HOFF`=35, `COFF`=138); a save is marked `gv:2` once grown. Tile fields: `o` owner (1 = player), `b` building (1 city, 2 mine, 3 stronghold, 4 port, 5–12 `BLD`), `l` level, `w` walls, `t` terrain.
 - **Drawing:** `draw()` paints terrain chunks (`renderChunk`/`CHK`), then auras (`window.AUH` hook), then building sprites (`SPR`), then `drawFX`.
-- **Saves:** schema `v:2`. The pre-boot check must keep accepting any format change.
+- **Saves:** schema `v:2`. Tiles are stored compactly as `tz` (`{n,t,x}`: 2 chars per tile + a sparse list of owned/built tiles); the old `tiles` array format still loads. The pre-boot check must keep accepting any format change.
+- **Scans:** `owned`, `cities`, `ports`, `portLv`, `maxLv` are cached for ~95 ms (`tcache`). Wrap a new player action in `tcacheOff` if it reads them in a loop while changing tiles.
 
 ## `server.js`
 
@@ -79,8 +83,9 @@ Search for these anchors:
 
 **Client and server must agree** on these:
 
-- `START` spawn points for slots 1–5 (slots 6–7 and late joiners send a `spawn` message instead; kept as `p.sp`)
+- `START` spawn points for slots 1–5, offset by `OFFH` (slots 6–7 and late joiners send a `spawn` message instead; kept as `p.sp`)
 - up to 7 players per island (`MAXP`); local owner ids 1–7 map to global slots with `L(s)`
 - shared-market pacing (server `mkStep` mirrors the offline market)
-- tile index layout (`56*56` home + `128*128` shared)
+- tile index layout (`126*126` home + `404*404` shared; rooms from before are migrated once, `r.mv=2`). Clients send `pv:2` on `auth`/`resume`; an older page is told to reload and is not let into an island
+- extra messages: `react` (chat emoji), `gsnap`/`visit` → `isle` (offline island snapshots in `DATA_DIR/snaps`, cloud key `snap:<id>`)
 - tile message `[i, owner, b, l, w, conquest]`, with `l ≤ 40`

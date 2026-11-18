@@ -147,14 +147,95 @@ input[type=range]{width:100%;accent-color:#ffcf4a}.sw{display:inline-block;width
    is copied aside for inspection, and the newest valid automatic backup takes its place. */
 (function(){try{var K='crownlands2',raw=localStorage.getItem(K);
 function SUM(s){var h1=0x811c9dc5,h2=0x01000193;for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);h1=Math.imul(h1^c,16777619)>>>0;h2=Math.imul(h2+c,2246822519)>>>0}return h1.toString(36)+h2.toString(36)}
-function ok(r){try{var s=JSON.parse(r);if(!s||s.v!=2||!(s.n==56||s.n==96||s.n==128)||!Array.isArray(s.tiles)||s.tiles.length!=s.n*s.n)return false;if(s.fp&&s.fp!==SUM(r.replace(/,"fp":"[0-9a-z]*"\}$/,'}')))return false;return true}catch(e){return false}}
+function ok(r){try{var s=JSON.parse(r);if(!s||s.v!=2||[56,96,128,126,404].indexOf(s.n)<0)return false;if(s.tz){if(typeof s.tz.t!='string'||s.tz.t.length!=s.n*s.n*2)return false}else if(!Array.isArray(s.tiles)||s.tiles.length!=s.n*s.n)return false;if(s.fp&&s.fp!==SUM(r.replace(/,"fp":"[0-9a-z]*"\}$/,'}')))return false;return true}catch(e){return false}}
 if(raw&&ok(raw))return;var c=[K+'-backup',K+'-bk2',K+'-bk3'];for(var i=0;i<c.length;i++){var b=localStorage.getItem(c[i]);if(b&&ok(b)){if(raw){try{localStorage.setItem(K+'-damaged',raw)}catch(e){}}localStorage.setItem(K,b);window.__gxRestored=c[i];break}}}catch(e){}})();</script><script>
 /* ===== New Lands: compact save of two worlds + per-world tables ===== */
-const NL_CN=128;
+/* update 18.11: islands are bigger. Home 126x126 (was 56), New Land 404x404 (was 128). Old maps are kept intact in the
+   middle of the new ones (offsets HOFF / COFF); see "update 18.11" at the end of the file. */
+const NL_CN=404,NL_OLD=128,HN0=126,HOFF=35,COFF=138;
 const packT=t=>[t.t,t.o,t.b,t.l,Math.round((t.e||0)*100)/100,t.r?1:0,t.w||0,t.q||0,t.off||0,t.oi||'',t.z?1:0,t.mx==null?-1:t.mx,t.my==null?-1:t.my,t.pt?1:0,t.pa==null?-1:t.pa];
 const unpackT=a=>{const t={t:a[0],o:a[1],b:a[2],l:a[3],e:a[4]};if(a[5])t.r=1;if(a[6])t.w=a[6];if(a[7])t.q=a[7];if(a[8])t.off=a[8];if(a[9])t.oi=a[9];if(a[10])t.z=1;if(a[11]>=0){t.mx=a[11];t.my=a[12]}if(a[13]){t.pt=1;t.pa=a[14]}return t};
-function packS(S0){const rl={};for(const k in S0.rl||{}){const r=S0.rl[k];rl[k]=Object.assign({},r,{tiles:r.tiles.map(packT)})}return Object.assign({},S0,{tiles:S0.tiles.map(packT),rl})}
-function unpackS(s){if(Array.isArray(s.tiles[0]))s.tiles=s.tiles.map(unpackT);for(const k in s.rl||{}){const r=s.rl[k];if(Array.isArray(r.tiles[0]))r.tiles=r.tiles.map(unpackT)}}
+/* update 18.11: compact tile save. A tile is 2 characters (terrain + river/desert flags, elevation in steps of 0.02);
+   owners, buildings and everything else are listed only for the tiles that have them. A 404x404 New Land is ~330 KB
+   instead of ~6 MB, so the save and its three backups still fit in the browser's storage. Old saves still load. */
+/* update 18.11: on the big maps a full scan of the tiles is costly, and the game asks the same questions (land, cities,
+   highest level, ports) many times per tick. The answers are cached for one tick (~95 ms). The cache is switched off
+   while a player action runs (act, multi-claim) and cleared on every tap, so prices and checks are always exact there. */
+const TC_={t:0,tl:null,c:Object.create(null),off:0};
+function tcache(k,fn){if(TC_.off||!S)return fn();const now=performance.now();if(TC_.tl!==S.tiles||now-TC_.t>95){TC_.c=Object.create(null);TC_.t=now;TC_.tl=S.tiles}const v=TC_.c[k];if(v!==undefined)return v;return TC_.c[k]=fn()}
+function tcacheOff(fn){TC_.off++;TC_.c=Object.create(null);try{return fn()}finally{TC_.off--;TC_.c=Object.create(null)}}
+addEventListener('pointerdown',()=>{TC_.c=Object.create(null)},true);addEventListener('keydown',()=>{TC_.c=Object.create(null)},true);
+const TTC='gfmwSGD';
+function encT(tiles,n){const a=new Array(n*n),x=[];
+  for(let i=0;i<n*n;i++){const t=tiles[i]||{t:'w'};let ti=TTC.indexOf(t.t);if(ti<0)ti=0;let q=Math.round((+t.e||0)*50);q=q<0?0:q>85?85:q;let c2=35+q;if(c2>=92)c2++;
+    a[i]=String.fromCharCode(48+ti*4+(t.r?1:0)+(t.z?2:0),c2);
+    if(t.o||t.b||t.l||t.w||t.q||t.off||t.oi||t.mx!=null||t.pt)x.push([i,t.o|0,t.b|0,t.l|0,t.w|0,t.q||0,t.off||0,t.oi||'',t.mx==null?-1:t.mx,t.my==null?-1:t.my,t.pt?1:0,t.pa==null?-1:t.pa])}
+  return{n,t:a.join(''),x}}
+function decT(z){const n=z.n,s=z.t,g=new Array(n*n);
+  for(let i=0;i<n*n;i++){const c1=s.charCodeAt(2*i)-48,c2=s.charCodeAt(2*i+1);let q=c2-35;if(c2>92)q--;const t={t:TTC[c1>>2]||'g',o:0,b:0,l:0,e:q/50};if(c1&1)t.r=1;if(c1&2)t.z=1;g[i]=t}
+  for(const a of z.x||[]){const t=g[a[0]];if(!t)continue;t.o=a[1];t.b=a[2];t.l=a[3];if(a[4])t.w=a[4];if(a[5])t.q=a[5];if(a[6])t.off=a[6];if(a[7])t.oi=a[7];if(a[8]>=0){t.mx=a[8];t.my=a[9]}if(a[10]){t.pt=1;t.pa=a[11]}}
+  return g}
+const sideOf=r=>r.n||Math.round(Math.sqrt(r.tiles.length));
+function packS(S0){const rl={};for(const k in S0.rl||{}){const r=S0.rl[k];if(r&&Array.isArray(r.tiles)){const o=Object.assign({},r,{tz:encT(r.tiles,sideOf(r))});delete o.tiles;rl[k]=o}else rl[k]=r}
+  const o=Object.assign({},S0,{tz:encT(S0.tiles,S0.n),rl});delete o.tiles;return o}
+function unpackS(s){if(s.tz){s.tiles=decT(s.tz);delete s.tz}else if(Array.isArray(s.tiles[0]))s.tiles=s.tiles.map(unpackT);
+  for(const k in s.rl||{}){const r=s.rl[k];if(!r)continue;if(r.tz){r.tiles=decT(r.tz);delete r.tz}else if(r.tiles&&Array.isArray(r.tiles[0]))r.tiles=r.tiles.map(unpackT)}}
+
+/* ===== update 18.11: bigger islands, and existing islands grow without losing anything =====
+   The old map is kept tile for tile (terrain, owners, buildings) in the middle of the new one. Its surrounding sea
+   becomes new land, except rivers and the water next to old ports (so they stay ports). Everything that points at a
+   tile (garrisons, sieges, sea landings, events, rare upgrades, Metropolis anchors) is moved with it.
+   Online islands do the same on every device: the old map comes from the island's seed, then grows with the same
+   seeded random numbers, so all players see the same island. */
+function genLand(n,kind){const g=new Array(n*n),C=n/2,ox=rnd(0,300),oy=rnd(0,300),H=kind!='c',R=n*(H?.445:.46),
+  f=(x,y,s,o)=>vn(x/s+ox+o,y/s+oy+o)*.65+vn(x*2/s+ox+o,y*2/s+oy+o)*.35,rg=(x,y,s,o)=>1-Math.abs(vn(x/s+ox+o,y/s+oy+o)*2-1);
+  for(let i=0;i<n*n;i++){const x=i%n,y=(i/n)|0,t={t:'g',o:0,b:0,l:0,e:0};g[i]=t;
+    if(H){const v=1-Math.pow(Math.hypot(x-C,y-C)/R,1.8)+(f(x,y,9,0)-.5)*.6+(f(x,y,24,30)-.5)*.35;
+      if(v<.2||(v>.42&&f(x,y,6,120)>.7)){t.t='w';continue}
+      t.e=v;const r=rg(x,y,8,50)*.75+rg(x,y,4,70)*.25;
+      if(v>.36&&r>.88){t.e=r;const q=Math.random();t.t=r>.95?(q<.18?'D':q<.52?'G':'S'):r>.92?(q<.16?'G':q<.5?'S':'m'):(q<.12?'S':'m')}
+      else if(v>.3&&f(x,y,10,200)*.8+f(x,y,3,300)*.2>.56)t.t='f'}
+    else{const v=1-Math.pow(Math.hypot(x-C,y-C)/R,1.7)+(f(x,y,11,0)-.5)*.75+(f(x,y,26,40)-.5)*.3;
+      if(v<.2||(v>.46&&f(x,y,9,120)>.72)){t.t='w';continue}
+      t.e=v;const r=rg(x,y,14,50)*.7+rg(x,y,7,70)*.3;
+      if(v>.34&&r>.84){t.e=Math.max(.9,r);const q=Math.random();t.t=r>.93?(r>.96?(q<.2?'D':q<.55?'G':'S'):(q<.2?'G':q<.55?'S':'m')):(q<.15?'S':'m')}
+      else if(v>.28&&f(x,y,13,200)*.8+f(x,y,4,300)*.2>.54){t.t='f';t.e=.6}
+      if(v>.3&&f(x,y,17,500)>.57&&(t.t=='g'||t.t=='f')){t.z=1;if(t.t=='f'&&Math.random()>.35){t.t='g';t.e=.5}}}}
+  return g}
+function stampOld(old,n0,g,n1,off){const keepW=new Uint8Array(n0*n0);
+  for(let i=0;i<n0*n0;i++)if(old[i]&&old[i].b==4){const x=i%n0,y=(i/n0)|0;for(let b=-2;b<=2;b++)for(let a=-2;a<=2;a++){const X=x+a,Y=y+b;if(X>=0&&Y>=0&&X<n0&&Y<n0)keepW[Y*n0+X]=1}}
+  for(let i=0;i<n0*n0;i++){const t=old[i];if(!t)continue;const j=((i/n0|0)+off)*n1+(i%n0)+off;if(t.t!='w'||t.r||t.o||t.b||keepW[i])g[j]=t}
+  return g}
+/* a new game: grow the classic 56x56 island; offline, the rival capitals move out so the realms have room */
+function growHome(){if(!S||!S.tiles||S.tiles.length!==56*56)return;const g=genLand(HN0,'h');stampOld(S.tiles,56,g,HN0,HOFF);S.tiles=g;S.n=HN0;N=HN0;S.gv=2;
+  if(!window.ONL)try{spreadRivals()}catch(e){console.error(e)}calcWD()}
+function spreadRivals(){const C=N/2;
+  for(let k=2;k<6;k++){const own=[];S.tiles.forEach((t,i)=>{if(t.o==k)own.push(i)});if(!own.length)continue;
+    let cx=0,cy=0;own.forEach(i=>{cx+=i%N;cy+=(i/N)|0});cx/=own.length;cy/=own.length;const ang=Math.atan2(cy-C,cx-C),dist=N*.3;let best=null,bs=-1e9;
+    for(let tr=0;tr<240;tr++){const a=ang+(Math.random()-.5)*.9,d=dist*(.8+Math.random()*.45),x=Math.round(C+Math.cos(a)*d),y=Math.round(C+Math.sin(a)*d);if(x<7||y<7||x>N-8||y>N-8)continue;
+      let land=0;for(let b=-3;b<=3;b++)for(let q=-3;q<=3;q++)if(q*q+b*b<=9&&S.tiles[(y+b)*N+x+q].t!='w')land++;const s=land-Math.abs(d-dist)*.05;if(s>bs){bs=s;best=[x,y]}}
+    if(!best||bs<22)continue;const cap=own.map(i=>S.tiles[i]).find(t=>t.b==1),lvl=cap?cap.l:3;
+    own.forEach(i=>{const t=S.tiles[i];t.o=0;t.b=0;t.l=0});const [sx,sy]=best;
+    for(let y=-3;y<=3;y++)for(let x=-3;x<=3;x++)if(x*x+y*y<=9){const t=S.tiles[(sy+y)*N+sx+x];t.o=k;if(t.t=='w'&&!t.r){t.t='g';t.e=.5}}
+    const c=S.tiles[sy*N+sx];c.t='g';c.e=Math.max(c.e||0,.5);c.b=1;c.l=lvl}}
+/* the online New Land: the old 128x128 map from the seed, grown to 404x404 */
+function growCol(b){const n0=b.n||NL_OLD,n1=NL_CN;if(n0>=n1)return b;const off=(n1-n0)>>1,g=genLand(n1,'c');stampOld(b.g,n0,g,n1,off);
+  return Object.assign({},b,{g,n:n1,lands:(b.lands||[]).map(l=>({lx:l.lx+off,ly:l.ly+off}))})}
+/* a save from before the update (offline, or the realm part of an online save: noTiles) */
+function growSave(s,noTiles){if(!s||typeof s!=='object'||s.gv>=2)return s;
+  const cur=s.realm=='c'?'c':'h',realms=[[cur,s]],maps={};let grew=0;for(const k in s.rl||{})if(s.rl[k]&&typeof s.rl[k]=='object'&&k!==cur)realms.push([k,s.rl[k]]);
+  for(const [k,R] of realms){const n1=k=='c'?NL_CN:HN0;let n0=R.n||(Array.isArray(R.tiles)&&R.tiles.length?Math.round(Math.sqrt(R.tiles.length)):0);if(!n0&&noTiles)n0=k=='c'?NL_OLD:56;if(!n0||n0>=n1)continue;
+    const off=(n1-n0)>>1,mi=i=>{i=+i;return((i/n0|0)+off)*n1+(i%n0)+off};maps[k]={mi,off};
+    if(!noTiles&&Array.isArray(R.tiles)&&R.tiles.length==n0*n0){for(const t of R.tiles){if(!t)continue;if(t.mx!=null&&t.mx>=0){t.mx+=off;t.my+=off}if(t.pa!=null&&t.pa>=0)t.pa=mi(t.pa)}R.tiles=stampOld(R.tiles,n0,genLand(n1,k),n1,off)}
+    R.n=n1;
+    if(R.gar&&typeof R.gar=='object'){const o={};for(const i in R.gar)o[mi(i)]=R.gar[i];R.gar=o}
+    if(Array.isArray(R.sieges))for(const q of R.sieges)if(q&&q.idx!=null)q.idx=mi(q.idx);
+    if(R.evp&&R.evp.tgt!=null)R.evp.tgt=mi(R.evp.tgt);
+    R.cam={x:0,y:0};R.sel=null;if(R.clAiPlans)R.clAiPlans={};grew=1}
+  for(const op of s.seaOps||[]){const m=maps[op.realm=='c'?'c':'h'];if(!m||op.idx==null)continue;op.idx=m.mi(op.idx);if(Array.isArray(op.pts))op.pts=op.pts.map(p=>[p[0]+m.off,p[1]+m.off])}
+  if(maps.h&&s.x7&&s.x7.up&&typeof s.x7.up=='object'){const o={};for(const i in s.x7.up)o[maps.h.mi(i)]=s.x7.up[i];s.x7.up=o}
+  if(s.aim)for(const k in s.aim)if(s.aim[k])s.aim[k].lost=[];
+  s.gv=2;if(grew)s.grewAt=Date.now();return s}
 const NL_OWN=[null,null,{n:'Dune Nomads',c:'#ffb14a'},{n:'Stone Clans',c:'#c3cad6'},{n:'Jungle Tribe',c:'#4ade80'},{n:'Ash Raiders',c:'#ff6b6b'}];let NL_HOME=null;
 function nlApplyTables(r){if(!NL_HOME)NL_HOME=OWN.map(o=>({n:o.n,c:o.c}));if(window.ONL){Object.assign(MAXL,r=='c'?{1:40,2:25,3:35}:{1:25,2:15,3:20});return}for(let k=2;k<6;k++){const s=r=='c'?NL_OWN[k]:NL_HOME[k];OWN[k].n=s.n;OWN[k].c=s.c}Object.assign(MAXL,r=='c'?{1:40,2:25,3:35}:{1:25,2:15,3:20})}
 function spriteBig(key,t,x,y,qs,ph){let s=SPR.get(key);if(s)return s;if(SPR.size>320)SPR.clear();const w=Math.ceil(4.8*qs*PR),h=Math.ceil(4.2*qs*PR),cvv=mkc(w,h),c=cvv.getContext('2d');c.setTransform(PR,0,0,PR,0,0);drawMetro(c,2.4*qs,2.7*qs,2*qs,t.l,OWN[t.o].c,1+ph*.9);s={c:cvv,ox:2.4*qs,oy:2.7*qs,w:w/PR,h:h/PR};SPR.set(key,s);return s}
@@ -357,7 +438,12 @@ const UPC={
  1:(t,l)=>({coins:Math.round(120*Math.pow(1.32,l-1)),wood:12*l,stone:10*l,...ore(l,3,2,1)}),
  3:(t,l)=>({coins:Math.round(100*Math.pow(1.28,l-1)),wood:15+6*l,stone:50+22*l,...ore(l,3,2,1)}),
  2:(t,l)=>{const m=MM[t.t];return{coins:Math.round(40*m*Math.pow(1.38,l-1)),wood:8*l,stone:6*m*l,silver:'fm'.includes(t.t)?0:3*l,gold:l>=9&&m>1?2*(l-8):0}}};
-const claimCost=()=>Math.max(1,Math.round((12+owned(1)*1.2)*(1-rt('claim'))));
+/* update 18.11: land grows exponentially more expensive with the size of the kingdom, so a big realm is a real achievement */
+const landPrice=n=>Math.round((14+1.6*n)*Math.pow(1.0045,n));
+/* update 18.11: chests and daily gifts now hand out far more materials (and are no longer cut off by storage), so
+   upgrades ask for more materials as levels rise; coins grow a little faster too. Level 1-3 costs are unchanged. */
+function upBal(c,l){const fr=1+.07*Math.max(0,l-3),fc=1+.015*Math.max(0,l-4),o={};for(const k in c){const v=c[k];o[k]=!v?v:Math.max(1,Math.round(v*(k=='coins'?fc:fr)))}return o}
+const claimCost=()=>Math.max(1,Math.round(landPrice(owned(1))*(1-rt('claim'))));
 const cityCost=()=>{const n=cities(1).length;return{coins:Math.round(120*Math.pow(1.7,n)/(1+1.8*Math.pow(Math.max(0,Math.min(1,(n-5)/10)),2))),wood:20+10*n,stone:10+8*n}};
 const mineCost=t=>({coins:30*MM[t],wood:12,stone:6*MM[t]});
 const SC=c=>{const m=DF().cost*fxm('cost')*wsm(),o={};for(const k in c)o[k]=c[k]?Math.max(1,Math.round(c[k]*m)):0;return o};
@@ -366,8 +452,8 @@ const pay=c=>{c=SC(c);S.coins-=c.coins||0;RES.forEach(r=>S.res[r]-=c[r]||0)};
 const AMOUNT_UNITS=['K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc'];
 function compactAmount(value){const n=Number(value);if(!Number.isFinite(n))return n>0?'∞':n<0?'−∞':'0';const abs=Math.abs(n);if(abs<1000)return Number.isInteger(n)?String(n):String(Number(n.toFixed(3)));let tier=Math.floor(Math.log10(abs)/3);if(tier>AMOUNT_UNITS.length)return n.toExponential(3);let scaled=n/Math.pow(1000,tier);if(Math.abs(Number(scaled.toFixed(3)))>=1000){tier++;scaled=n/Math.pow(1000,tier)}const suffix=AMOUNT_UNITS[tier-1];return suffix?`${scaled.toFixed(3)}${suffix}`:n.toExponential(3)}
 const costStr=c=>{c=SC(c);return ['coins',...RES].filter(k=>c[k]).map(k=>`<span class="${(k=='coins'?S.coins:S.res[k])>=c[k]?'':'bad'}">${ICON[k]}${compactAmount(c[k])}</span>`).join(' ')};
-const cities=o=>S.tiles.filter(t=>t.o==o&&t.b==1),owned=o=>S.tiles.reduce((n,t)=>n+(t.o==o),0);
-const ports=()=>S.tiles.reduce((n,t)=>n+(t.o==1&&t.b==4),0);
+const cities=o=>tcache('c'+o,()=>S.tiles.filter(t=>t.o==o&&t.b==1)).slice(),owned=o=>tcache('o'+o,()=>S.tiles.reduce((n,t)=>n+(t.o==o),0));
+const ports=()=>tcache('po',()=>S.tiles.reduce((n,t)=>n+(t.o==1&&t.b==4),0));
 const cap=()=>Math.round((120+70*cities(1).reduce((n,t)=>n+t.l,0)+10*owned(1)+150*portLv())*(1+rt('store'))*(1+.01*bl(12)+.08*bl(9))*(window.gwMul?gwMul('store'):1));
 const adj=(x,y,o)=>D4.some(([a,b])=>ok(x+a,y+b)&&T(x+a,y+b).o==o);
 const seaAdj=(x,y)=>D4.some(([a,b])=>ok(x+a,y+b)&&T(x+a,y+b).t=='w'&&!T(x+a,y+b).r);
@@ -396,7 +482,7 @@ function newGame(d){
   const dd=DIFFS[d];
   S={v:2,n:N,tiles:g,coins:Math.round(250*dd.st),res:{},price:{...BASE},hist:{},mom:{},cam:{x:0,y:0},sel:null,time:0,inc:0,news:'',diff:d,ts:Date.now(),mb:1};
   RES.forEach(r=>{S.res[r]=Math.round((r=='wood'?40:r=='stone'?25:0)*dd.st);S.hist[r]=[BASE[r]]});
-  ensureM();sideFill();calcWD();rivers();center(28,43);
+  ensureM();sideFill();calcWD();rivers();growHome();home();
 }
 function rivers(){
   const ld=bfs(S.tiles.map((t,i)=>t.t=='w'?i:-1).filter(i=>i>=0),()=>true),src=[];
@@ -406,8 +492,10 @@ function rivers(){
       const t=S.tiles[i];t.t='w';t.r=1;t.b=0;i=c[rnd(0,c.length)|0]}}
   calcWD()}
 const center=(x,y)=>{const ts=T0*zoom;S.cam.x=x*ts-W/2;S.cam.y=y*ts-H/2};
-function home(){const i=S.tiles.findIndex(t=>t.o==1&&t.b==1);i<0?center(28,43):center(i%N,(i/N)|0)}
-function zoomBy(f){const ts=T0*zoom,a=(S.cam.x+W/2)/ts,b=(S.cam.y+H/2)/ts;zoom=Math.max(.5,Math.min(2.2,zoom*f));const t2=T0*zoom;S.cam.x=a*t2-W/2;S.cam.y=b*t2-H/2}
+function home(){const i=S.tiles.findIndex(t=>t.o==1&&t.b==1);i<0?center(N>>1,N>>1):center(i%N,(i/N)|0)}
+/* the farthest zoom shows (almost) the whole island; below ~0.35 the map switches to the light overview renderer */
+function zMin(){return Math.max(.04,Math.min(.5,(Math.min(W||400,H||400)/(T0*Math.max(8,N)))*.92))}
+function zoomBy(f){const ts=T0*zoom,a=(S.cam.x+W/2)/ts,b=(S.cam.y+H/2)/ts;zoom=Math.max(zMin(),Math.min(2.2,zoom*f));const t2=T0*zoom;S.cam.x=a*t2-W/2;S.cam.y=b*t2-H/2}
 function save(){if(!S)return;S.ts=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.v==2&&s.n==N){S=s;ensureM();calcWD();return true}}catch(e){}return false}
 
@@ -627,14 +715,14 @@ function renderMarket(){
 function openM(){mOpen=true;lastM='';seen=S.news;$('market').style.display='flex';renderMarket();hud()}
 function closeM(){mOpen=false;$('market').style.display='none'}
 function showDiff(){const d=$('dm');d.innerHTML=`<div class="dbox"><b style="font-size:22px">Choose difficulty</b><div class="mu">This starts a fresh island.</div>`+DIFFS.map((x,i)=>`<button onclick="startDiff(${i})"><b>${x.n}</b><small>${x.d}</small></button>`).join('')+`<button onclick="$('dm').style.display='none'">Cancel</button></div>`;d.style.display='flex'}
-function startDiff(i){newGame(i);save();$('dm').style.display='none';closeM();last='';render();hud();toast(DIFFS[i].n+' — good luck!');try{if(!META.tut.clGuided)setTimeout(()=>{try{clStartTutorial()}catch(e){}},900)}catch(e){}}
+function startDiff(i){newGame(i);save();$('dm').style.display='none';closeM();last='';render();hud();toast(DIFFS[i].n+' — good luck!');try{if(!META.tut.clGuided&&!META.tut.clSeen){META.tut.clSeen=1;saveMeta();setTimeout(()=>{try{clStartTutorial()}catch(e){}},900)}}catch(e){}}
 
 /* ===== input ===== */
 const ptr=new Map();let dr=null,pd0=0,z0=1;
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptr.size==1)dr={x:e.clientX,y:e.clientY,cx:S.cam.x,cy:S.cam.y,m:0};else{dr=null;const [a,b]=[...ptr.values()];pd0=Math.hypot(a.x-b.x,a.y-b.y);z0=zoom}});
 cv.addEventListener('pointermove',e=>{if(!ptr.has(e.pointerId))return;ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(ptr.size==2){const [a,b]=[...ptr.values()];zoomBy(Math.max(.5,Math.min(2.2,z0*Math.hypot(a.x-b.x,a.y-b.y)/pd0))/zoom)}
+  if(ptr.size==2){const [a,b]=[...ptr.values()];zoomBy(Math.max(zMin(),Math.min(2.2,z0*Math.hypot(a.x-b.x,a.y-b.y)/pd0))/zoom)}
   else if(dr){const dx=e.clientX-dr.x,dy=e.clientY-dr.y;if(Math.abs(dx)+Math.abs(dy)>6)dr.m=1;if(dr.m){S.cam.x=dr.cx-dx;S.cam.y=dr.cy-dy}}});
 const up=e=>{if(dr&&!dr.m&&ptr.size==1&&e.type=='pointerup'){const r=cv.getBoundingClientRect(),ts=T0*zoom,x=Math.floor((e.clientX-r.left+S.cam.x)/ts),y=Math.floor((e.clientY-r.top+S.cam.y)/ts);S.sel=ok(x,y)?[x,y]:null;buzz();render()}ptr.delete(e.pointerId);if(!ptr.size)dr=null};
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
@@ -888,7 +976,7 @@ function reqOf(b,x,y){const B=BLD[b],t=T(x,y);if(t.o!=1)return 'not your land';i
   if(b==9&&!cities(1).some(c=>c.l>=5))return 'needs a level 5 city';
   if(b==12&&!cities(1).some(c=>c.l>=8))return 'needs a level 8 city';
   return null}
-const bup=(b,l)=>{const o={},base=BLD[b].cost;for(const k in base){const scale=k=='coins'?Math.pow(1.38,l):k=='wood'||k=='stone'?.4+.055*l:.14+.045*l;o[k]=Math.max(1,Math.round(base[k]*scale))}if(l>=5)o.silver=(o.silver||0)+Math.ceil((l-4)*1.1);if(l>=10)o.gold=(o.gold||0)+Math.ceil((l-9)*.9);if(l>=14)o.diamond=(o.diamond||0)+Math.ceil((l-13)*1.5);return o};
+const bup=(b,l)=>{const o={},base=BLD[b].cost;for(const k in base){const scale=k=='coins'?Math.pow(1.38,l):k=='wood'||k=='stone'?.4+.055*l:.14+.045*l;o[k]=Math.max(1,Math.round(base[k]*scale))}if(l>=5)o.silver=(o.silver||0)+Math.ceil((l-4)*1.1);if(l>=10)o.gold=(o.gold||0)+Math.ceil((l-9)*.9);if(l>=14)o.diamond=(o.diamond||0)+Math.ceil((l-13)*1.5);return upBal(o,l)};
 function buildB(b){const s=S.sel;if(!s)return;const [x,y]=s,t=T(x,y),why=reqOf(b,x,y);if(why)return toast('Cannot build: '+why);const c=BLD[b].cost;if(!canPay(c))return toast('Missing: '+missStr(SC(c)));
   pay(c);t.b=b;t.l=1;t.q=qual(b,x,y);BA[y*N+x]=performance.now();fxAdd(x,y,'build');S.st.built++;if(b==12)S.score+=300;calcCB();sfx('build');toast(BLD[b].n+' built');buzz();save();last='';xk='';closeSheet();hud()}
 function upB(){const s=S.sel;if(!s)return;const [x,y]=s,t=T(x,y);if(t.o!=1||t.b<5)return;const B=BLD[t.b],l=lv(t);if(l>=B.max)return;const c=bup(t.b,l);if(!canPay(c))return toast('Missing: '+missStr(SC(c)));pay(c);t.l=l+1;S.st.upgrades++;BA[y*N+x]=performance.now();fxAdd(x,y,'build');calcCB();toast(B.n+' upgraded to level '+t.l);buzz();save();last='';xk='';render();hud()}
@@ -1308,7 +1396,7 @@ function setOpt(k,v){SET[k]=v;saveSet();if(k=='lowfx'||k=='rm'||k=='gfx'){CHK.cl
 let sT=0;
 function doSave(){if(!S||S.on)return;S.ts=Date.now();try{localStorage.setItem(KEY,JSON.stringify(packS(S)))}catch(e){}}
 function save(){if(sT)return;sT=setTimeout(()=>{sT=0;(window.requestIdleCallback||(f=>f()))(doSave)},2500)}
-function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.v==2&&(s.n==56||s.n==96||s.n==NL_CN)){unpackS(s);N=s.n;S=s;nlApplyTables(S.realm=='c'?'c':'h');ensureM();calcWD();CHK.clear();SPR.clear();return true}}catch(e){}return false}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.v==2&&[56,96,NL_OLD,HN0,NL_CN].includes(s.n)){unpackS(s);growSave(s);N=s.n;S=s;nlApplyTables(S.realm=='c'?'c':'h');ensureM();calcWD();CHK.clear();SPR.clear();return true}}catch(e){}return false}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)doSave()});addEventListener('pagehide',()=>doSave());
 const _ng3=newGame;newGame=function(d){_ng3(d);CHK.clear();SPR.clear()};
 /* --- hold & drag to claim many tiles --- */
@@ -1316,10 +1404,10 @@ const tileAt=e=>{const r=cv.getBoundingClientRect(),ts=T0*zoom,x=Math.floor((e.c
 function claimable(x,y){const t=T(x,y);if(t.o||(t.t=='w'&&!t.r))return false;return adj(x,y,1)||D4.some(([a,b])=>MS.order.includes((y+b)*N+x+a))}
 function addMark(p){const i=p[1]*N+p[0];if(!MS.order.includes(i)&&claimable(p[0],p[1])){MS.order.push(i);buzz();showMS()}}
 function toggleMark(p){const i=p[1]*N+p[0],j=MS.order.indexOf(i);if(j>=0){MS.order.splice(j,1);showMS()}else addMark(p)}
-function msCost(){let o=owned(1),s=0;for(const i of MS.order){if(T(i%N,(i/N)|0).o)continue;s+=SC({coins:Math.round(12+o*1.2)}).coins;o++}return s}
+function msCost(){let o=owned(1),s=0;for(const i of MS.order){if(T(i%N,(i/N)|0).o)continue;s+=SC({coins:Math.max(1,Math.round(landPrice(o)*(1-rt('claim'))))}).coins;o++}return s}
 function showMS(){const b=$('msb');if(!MS.on||!MS.order.length){b.style.display='none';if(!MS.drag&&!MS.order.length)MS.on=false;return}const n=MS.order.length,c=msCost();b.style.display='flex';b.innerHTML=`<div><b>${n} tile${n>1?'s':''} marked</b><br><span class="${c>S.coins?'bad':'mu'}">Cost 🪙${compactAmount(c)}</span></div><div class="row2"><button onclick="cancelMS()">Cancel</button><button class="buy" ${c>S.coins?'disabled':''} onclick="claimMulti()">Claim all</button></div>`}
 function cancelMS(){MS.on=false;MS.order=[];MS.drag=false;showMS()}
-function claimMulti(){if(!MS.on)return;let n=0;for(const i of MS.order){const x=i%N,y=(i/N)|0,t=T(x,y);if(t.o||!adj(x,y,1))continue;const c={coins:claimCost()};if(!canPay(c)){toast('Out of coins after '+n+' tiles');break}pay(c);t.o=1;S.st.gained++;fxAdd(x,y,'cap',n*50);n++}MS.on=false;MS.order=[];showMS();if(n){toast('Land claimed ×'+n);buzz();save();hud()}}
+function claimMulti(){if(!MS.on)return;if(!TC_.off)return tcacheOff(claimMulti);let n=0;for(const i of MS.order){const x=i%N,y=(i/N)|0,t=T(x,y);if(t.o||!adj(x,y,1))continue;const c={coins:claimCost()};if(!canPay(c)){toast('Out of coins after '+n+' tiles');break}pay(c);t.o=1;S.st.gained++;fxAdd(x,y,'cap',n*50);n++}MS.on=false;MS.order=[];showMS();if(n){toast('Land claimed ×'+n);buzz();save();hud()}}
 cv.addEventListener('pointerdown',e=>{clearTimeout(MS.lp);MS.sx=e.clientX;MS.sy=e.clientY;MS.lp=setTimeout(()=>{MS.lp=0;if(ptr.size!=1)return;const p=tileAt({clientX:MS.sx,clientY:MS.sy});if(!p)return;if(!MS.on&&!claimable(p[0],p[1]))return;MS.on=true;MS.drag=true;dr=null;S.sel=null;render();addMark(p);hint('ms','Hold and drag across neutral land to mark many tiles, then tap Claim all.')},380)},true);
 cv.addEventListener('pointermove',e=>{if(MS.lp&&Math.hypot(e.clientX-MS.sx,e.clientY-MS.sy)>10){clearTimeout(MS.lp);MS.lp=0}if(MS.drag){e.stopImmediatePropagation();const p=tileAt(e);if(p)addMark(p)}},true);
 const msUp=e=>{clearTimeout(MS.lp);MS.lp=0;if(MS.drag){MS.drag=false;showMS();return}if(MS.on&&ptr.size==1&&e.type=='pointerup'&&Math.hypot(e.clientX-MS.sx,e.clientY-MS.sy)<10){const p=tileAt(e);if(p)toggleMark(p);e.stopImmediatePropagation();ptr.delete(e.pointerId);dr=null}};
@@ -1340,7 +1428,7 @@ function marketTick(){mkEnsure();const sp0=mkSupply(),own=S.tiles.reduce((n,t)=>
 const sellImp=(r,n)=>Math.min(.3,n*IMP[r]*.5),buyImp=(r,n)=>Math.min(.25,n*IMP[r]*.4);
 const sellQuote=(r,n)=>Math.floor(n*bid(r)*(1-sellImp(r,n)/2)),buyQuote=(r,n)=>Math.ceil(n*ask(r)*(1+buyImp(r,n)/2));
 function buyQty(r,q){const room=Math.max(0,cap()-Math.floor(S.res[r]));let n=Math.min(room,q=='max'?room:q);if(q=='max'){while(n>0&&buyQuote(r,n)>S.coins)n=Math.floor(n*.85)}return n}
-function sell(r,f){mkEnsure();const n=Math.floor(S.res[r]*f);if(!n)return;S.coins+=sellQuote(r,n);S.res[r]-=n;S.st.trades++;S.mk[r]=Math.min(M0[r]*3,S.mk[r]+n);S.price[r]*=1-sellImp(r,n);fin()}
+function sell(r,f){mkEnsure();const h=Math.floor(S.res[r]||0),n=Math.min(h,Math.max(h>=1?1:0,Math.floor((S.res[r]||0)*f)));if(!n)return toast('Nothing to sell');S.coins+=sellQuote(r,n);S.res[r]-=n;S.st.trades++;S.mk[r]=Math.min(M0[r]*3,S.mk[r]+n);S.price[r]*=1-sellImp(r,n);fin()}
 function buy(r,q){mkEnsure();const n=buyQty(r,q||10);if(n<=0)return toast(cap()-S.res[r]<1?'Storage is full':'Not enough coins');const c=buyQuote(r,n);if(c>S.coins)return toast('Not enough coins');S.coins-=c;S.res[r]+=n;S.st.trades++;S.mk[r]=Math.max(0,S.mk[r]-n);S.price[r]*=1+buyImp(r,n);fin()}
 function mkWhy(r){let me=0,ai=0;for(const q of S.tiles)if(MR[q.t]==r){if(q.o==1)me++;else if(q.o>1)ai++}const m=S.mk[r]/M0[r];return `${m<.8?'<span class="bad">Shortage</span>':m>1.25?'<span class="ok">Surplus</span>':'Balanced'} · stock ${Math.round(S.mk[r])} · rivals hold ${ai} source tile${ai==1?'':'s'}, you hold ${me}`}
 function renderMarket(){mkEnsure();
@@ -1357,9 +1445,9 @@ BLD[9].eff=l=>`+${(3.5*l).toFixed(1)}% income, +${3*l} defence, +${8*l}% storage
 BLD[10].eff=(l,q)=>`−${(2*l*q).toFixed(1)}% build cost, +${(2*l*q).toFixed(1)}% mine output nearby`;
 BLD[11].eff=(l,q)=>`+${3*l} defence within ${(q>1?3:2)+(l>=8?1:0)} tiles (overlap cap +75)${q>1?' (high ground)':''}`;
 BLD[12].eff=l=>`+${l}% income, +${2*l}% mine output, +${l}% storage (+300 score, +60 per level)`;
-const portUp=l=>({coins:Math.round(500*Math.pow(1.38,l-1)*(l==14?1.5:1)),wood:Math.round(40+18*l),stone:Math.round(55+22*l),silver:l>=5?Math.ceil((l-4)*1.5):0,gold:l>=10?Math.ceil((l-9)*.75):0,diamond:l>=14?1:0});
-const portLv=()=>S.tiles.reduce((n,t)=>n+(t.o==1&&t.b==4?1+.25*(lv(t)-1):0),0);
-const maxLv=b=>{let m=0;for(const t of S.tiles)if(t.o==1&&t.b==b&&lv(t)>m)m=lv(t);return m};
+const portUp=l=>upBal({coins:Math.round(500*Math.pow(1.38,l-1)*(l==14?1.5:1)),wood:Math.round(40+18*l),stone:Math.round(55+22*l),silver:l>=5?Math.ceil((l-4)*1.5):0,gold:l>=10?Math.ceil((l-9)*.75):0,diamond:l>=14?1:0},l);
+const portLv=()=>tcache('pl',()=>S.tiles.reduce((n,t)=>n+(t.o==1&&t.b==4?1+.25*(lv(t)-1):0),0));
+const maxLv=b=>tcache('m'+b,()=>{let m=0;for(const t of S.tiles)if(t.o==1&&t.b==b&&lv(t)>m)m=lv(t);return m});
 const maxCity=()=>maxLv(1);
 function calcCB(){CB={};CQ={};MBON={};const ws=[];for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i];if(t.o==1&&t.b>=5&&!(t.off>S.time)){const l=lv(t);CB[t.b]=(CB[t.b]||0)+l;CQ[t.b]=(CQ[t.b]||0)+(t.b==5?Math.pow(l,.85):l)*(t.q||1);if(t.b==10)ws.push(i)}}
   for(const i of ws){const t=S.tiles[i],x=i%N,y=(i/N)|0,b=.02*lv(t)*(t.q||1);for(let q=-2;q<=2;q++)for(let p=-2;p<=2;p++)if(ok(x+p,y+q)){const j=(y+q)*N+x+p,m=S.tiles[j];if(m.o==1&&m.b==2)MBON[j]=Math.min(.6,(MBON[j]||0)+b)}}}
@@ -1523,9 +1611,9 @@ const APP=HOME.replace(/^ws/,'http');
 const MP={ws:null,name:'',key:localStorage.getItem('cl-key')||'',open:0,v:'mode',err:'',room:null,want:'',url:HOME||localStorage.getItem('cl-srv')||'wss://'};
 let LAST=[],retry=0;const SHD={};   // SHD[global slot] = time until which that realm is shielded from conquest
 const E=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const sig=t=>t.o+'|'+t.b+'|'+(t.l||0)+'|'+(t.w||0);
+const sig=t=>(t.o|0)+(t.b|0)*16+(t.l|0)*1024+(t.w|0)*65536;   /* update 18.11: a number (owner|building|level|walls) instead of a string: no garbage on 163k-tile maps */
 const L=s=>s==ONL.slot?1:s==1?ONL.slot:s;            // global slot <-> local owner id (a swap, so it is its own inverse)
-const wsend=o=>{if(MP.ws&&MP.ws.readyState==1)MP.ws.send(JSON.stringify(o))};
+const wsend=o=>{if(o&&(o.t=='auth'||o.t=='resume'))o.pv=2;if(MP.ws&&MP.ws.readyState==1)MP.ws.send(JSON.stringify(o))};   /* pv: tile layout version (update 18.11) */
 
 /* ---------- connection ---------- */
 function conn(cb){
@@ -1551,12 +1639,12 @@ function onMsg(e){let m;try{m=JSON.parse(e.data)}catch(x){return}
   else if(!S||!S.on)return;
   else if(m.t=='snap'||m.t=='tiles'){if(m.sp&&m.sp!=ONL.slot&&S.realm!='c'){const lost=m.d.filter(([i,o])=>i<ONL.CO&&S.tiles[i]&&S.tiles[i].o==1&&o!=ONL.slot).length;applyTiles.q=1;try{applyTiles(m.d)}finally{applyTiles.q=0}
     if(lost){const nm=ONL.names[m.sp]||'A new realm';toast(`🏝️ ${nm} landed on the island and took ${lost} unbuilt tile${lost>1?'s':''} of yours`);chron('🏝️',`${nm} landed and took ${lost} unbuilt tile${lost>1?'s':''}`)}}else applyTiles(m.d)}
-  else if(m.t=='mkt'||m.t=='tr'||m.t=='chat'||m.t=='lb'){try{window.srvMsg&&window.srvMsg(m)}catch(e){console.error(e)}}
+  else if(m.t=='mkt'||m.t=='tr'||m.t=='chat'||m.t=='lb'||m.t=='react'||m.t=='isle'){try{window.srvMsg&&window.srvMsg(m)}catch(e){console.error(e)}}
   else if(m.t=='tally')setTallyIn(m.from,m.r=='c'?'c':'h',m.u)
   else if(m.t=='shield'){SHD[m.s]=m.until;const mins=Math.max(1,Math.ceil((m.until-Date.now())/6e4)),k=L(m.s);
     if(m.s==ONL.slot){toast(`🛡 Your realm is shielded for ${mins} min`);chron('🛡️',`Your realm is shielded for ${mins} min`)}else toast(`🛡 ${OWN[k].n} is shielded for ${mins} min`)}
   else if(m.t=='joined'){toast('🏝️ '+m.n+' joined the island!');chron('🏝️',m.n+' joined the island')}
-  else if(m.t=='spawnok'){ONL.spAt=0;if(!m.had){toast('🏰 Your realm has landed on the island!');setTimeout(()=>{try{home()}catch(e){}},300)}}
+  else if(m.t=='spawnok'){ONL.spAt=0;if(!m.had){toast('🏰 Your realm has landed on the island!');setTimeout(()=>{try{home()}catch(e){}},300);setTimeout(()=>{try{window.lateBoost&&lateBoost()}catch(e){console.error(e)}},1200)}}
   else if(m.t=='spawnno'){ONL.spAt=Date.now()-3000}
   else if(m.t=='hit')onHit(m);
   else if(m.t=='siege')onSiege(m)}
@@ -1565,9 +1653,9 @@ function onSiege(m){const x=m.i%N,y=(m.i/N)|0;sfx('warn');toast(`⚠️ ${OWN[L(
 /* ---------- online game ---------- */
 function startOn(m){
   try{doSave()}catch(e){}                            // flush the offline realm first
-  window.ONL={slot:m.slot,seed:m.seed,code:m.code,act:m.pl.map(p=>p.s),names:{},off:{},CO:56*56,cq:[],claim:null};m.pl.forEach(p=>{ONL.names[p.s]=p.n;ONL.off[p.s]=!p.on});
+  window.ONL={slot:m.slot,seed:m.seed,code:m.code,act:m.pl.map(p=>p.s),names:{},off:{},CO:HN0*HN0,cq:[],claim:null};m.pl.forEach(p=>{ONL.names[p.s]=p.n;ONL.off[p.s]=!p.on});
   newGame(m.diff);const I=m.init||{};
-  if(I.save){const keep={tiles:S.tiles,cam:S.cam,ai:S.ai,on:S.on};Object.assign(S,I.save,keep);S.sel=null;try{onlRestore(I.save,keep)}catch(e){console.error(e)}ensureM();
+  if(I.save){try{growSave(I.save,true)}catch(e){console.error(e)}const keep={tiles:S.tiles,cam:S.cam,ai:S.ai,on:S.on};Object.assign(S,I.save,keep);S.sel=null;try{onlRestore(I.save,keep)}catch(e){console.error(e)}ensureM();
     const off=Math.min(7200,(Date.now()-(I.save.ts||Date.now()))/1000),g=off>60?Math.floor((S.inc||0)*off*.5):0;
     if(g>0){S.coins+=g;setTimeout(()=>toast(`Welcome back! Your realm earned 🪙${compactAmount(g)} while you were away`),900)}}
   applyInit(I);MP.open=0;closeM();S.sel=null;last='';render();hud();badge();setTimeout(()=>{try{needSpawn()}catch(e){}},600);
@@ -1583,19 +1671,19 @@ newGame=function(d){
     if(ONL.act.includes(g))OWN[k].n=ONL.names[g]||OWN[k].n;else if(k<6&&!S.st.def.includes(k))S.st.def.push(k)}
   S.tiles.forEach(t=>{if(t.o){t.o=0;t.b=0;t.l=0;delete t.w}});   // every realm's land comes from the server snapshot (applyInit)
   LAST=S.tiles.map(sig);home()};
-function pickSpawn(){const n=56,g=S.tiles,cl=t=>t.t!='w'||t.r,cities=[];g.forEach((t,i)=>{if(t.o>1&&(t.b==1||t.b==3))cities.push(i)});
+function pickSpawn(){const n=N,g=S.tiles,cl=t=>t.t!='w'||t.r,cities=[];g.forEach((t,i)=>{if(t.o>1&&(t.b==1||t.b==3))cities.push(i)});
   const salt=(ONL.slot*7919)%97;let best=null;
   for(let y=4;y<n-4;y++)for(let x=4;x<n-4;x++){const ci=y*n+x,c=g[ci];if(!cl(c)||c.t=='w'||(c.o>1&&c.b))continue;
     const d=[];let cost=c.t=='g'?0:6;
     for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){if(dx*dx+dy*dy>9)continue;const i=(y+dy)*n+x+dx,t=g[i];if(!cl(t))continue;
       if(t.o>1&&t.b){cost+=30+(t.b==1?120:t.b==3?60:0);continue}   // a building stays with its owner: avoid it
-      if(t.o>1)cost+=5;d.push(i)}
+      if(t.o>1)cost+=5;else if(MR[t.t]&&t.t!='f')cost-=2;d.push(i)}
     if(d.length<16)continue;cost+=(29-d.length)*3;
     let near=99;for(const j of cities){const q=Math.abs(j%n-x)+Math.abs(((j/n)|0)-y);if(q<near)near=q}if(near<7)cost+=(7-near)*10;
     cost+=((x*31+y*17+salt)%13)*.01;                               // two new players never pick the very same spot
     if(!best||cost<best.cost)best={c:ci,d,cost}}
   return best}
-function needSpawn(){if(!S||!S.on||!window.ONL||S.realm=='c'||!S.tiles||S.tiles.length!=56*56)return;if(S.tiles.some(t=>t.o==1))return;
+function needSpawn(){if(!S||!S.on||!window.ONL||S.realm=='c'||!S.tiles||S.tiles.length!=HN0*HN0)return;if(S.tiles.some(t=>t.o==1))return;
   if(ONL.spAt&&Date.now()-ONL.spAt<5000)return;const p=pickSpawn();if(!p)return;ONL.spAt=Date.now();wsend({t:'spawn',c:p.c,d:p.d})}
 setInterval(()=>{try{needSpawn()}catch(e){}},2500);
 function applyInit(I){try{window.srvInit&&window.srvInit(I)}catch(e){console.error(e)}Object.assign(SHD,I.shield||{});applyTiles(I.snap||[]);for(const s in I.tal||{}){const v=I.tal[s];if(v&&'inf' in v)setTallyIn(+s,'h',v);else for(const r in v||{})setTallyIn(+s,r,v[r])}(I.pend||[]).forEach(h=>h.t=='hit'?onHit(h):onSiege(h))}
@@ -1613,7 +1701,7 @@ function badge(){let b=$('mpb');
 
 /* tiles I change are pushed to everyone; tiles others change are applied here */
 function syncOut(){if(!S||!S.on||!MP.ws||MP.ws.readyState!=1)return;const d=[],off=S.realm=='c'?ONL.CO:0;
-  for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i],s=sig(t);if(LAST[i]===s)continue;const ps=LAST[i].split('|'),prev=+ps[0],pb=+ps[1]||0;LAST[i]=s;
+  for(let i=0;i<S.tiles.length;i++){const t=S.tiles[i],s=sig(t);if(LAST[i]===s)continue;const ps=LAST[i]|0,prev=ps&15,pb=(ps>>4)&63;LAST[i]=s;
     if(t.o==1)d.push([i+off,ONL.slot,t.b,t.l||0,t.w||0,prev>1?1+pb+20*L(prev):0])}   // conquest flag also tells the server who lost which building
   if(d.length)wsend({t:'tiles',d})}
 setInterval(syncOut,400);
@@ -1621,7 +1709,7 @@ setInterval(()=>{if(!S||!S.on)return;wsend({t:'tally',r:S.realm=='c'?'c':'h',u:t
   if(R){const u={inf:0,arc:0,cav:0,sie:0};addTo(u,R.army);for(const i in R.gar||{})addTo(u,R.gar[i]);for(const g of R.sieges||[])if(g.k==1)addTo(u,g.comp);wsend({t:'tally',r:o,u})}},2000);
 function applyTiles(d){for(const [i,o,b,l,w] of d){const r=i>=ONL.CO?'c':'h',ix=i>=ONL.CO?i-ONL.CO:i,R=S.realm==r?S:(S.rl&&S.rl[r]);
   if(!R||!R.tiles){if(r=='c')ONL.cq.push([i,o,b,l,w]);continue}
-  const t=R.tiles[ix];if(!t)continue;const was=t.o,lo=o?L(o):0,cur=R===S,n=R.n||(r=='c'?NL_CN:56);
+  const t=R.tiles[ix];if(!t)continue;const was=t.o,lo=o?L(o):0,cur=R===S,n=R.n||(r=='c'?NL_CN:HN0);
   t.o=lo;t.b=b;t.l=l;if(w)t.w=w;else delete t.w;if(b>=5&&!t.q)t.q=1;if(cur){LAST[ix]=sig(t);BA[ix]=performance.now()}
   if(was==1&&lo!=1){delete R.gar[ix];S.st.lost++;S.st.hold=0;if(cur&&S.sel&&S.sel[1]*N+S.sel[0]==ix)S.sel=null;
     const x=ix%n,y=(ix/n)|0;if(!applyTiles.q)toast(`${OWN[lo].n} captured (${x},${y})!`),chron('🚩',`${OWN[lo].n} captured (${x},${y})`)}}
@@ -2231,7 +2319,7 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
   /* Preserve v2 save structure/key; default new fields on load and before saving. */
   const _clLoad=load;
   load=function(){
-    let raw=null;try{raw=localStorage.getItem(KEY);if(raw){const q=JSON.parse(raw);const valid=q&&q.v===2&&q.n===N&&Array.isArray(q.tiles)&&q.tiles.length===N*N&&q.tiles.every(t=>Array.isArray(t)?t.length>=4&&(Number.isFinite(+t[0])||typeof t[0]==='string'):t&&typeof t==='object');if(!valid){try{localStorage.setItem(KEY+'-recovery',raw);localStorage.setItem(KEY+'-recovery-time',new Date().toISOString())}catch(_){}}}}catch(_){if(raw){try{localStorage.setItem(KEY+'-recovery',raw)}catch(__){}}}
+    let raw=null;try{raw=localStorage.getItem(KEY);if(raw){const q=JSON.parse(raw);const valid=q&&q.v===2&&(q.tz?typeof q.tz.t==='string'&&q.tz.t.length===q.n*q.n*2:Array.isArray(q.tiles)&&q.tiles.length===q.n*q.n&&q.tiles.every(t=>Array.isArray(t)?t.length>=4&&(Number.isFinite(+t[0])||typeof t[0]==='string'):t&&typeof t==='object'));if(!valid){try{localStorage.setItem(KEY+'-recovery',raw);localStorage.setItem(KEY+'-recovery-time',new Date().toISOString())}catch(_){}}}}catch(_){if(raw){try{localStorage.setItem(KEY+'-recovery',raw)}catch(__){}}}
     const okLoad=_clLoad();if(okLoad)initCLState();return okLoad;
   };
   const _clDoSave=doSave;
@@ -2245,11 +2333,12 @@ const _vm=vMenu;vMenu=function(){const r=_vm();r[1]+=A.on?mb('🔧','Admin tools
      one-tap hint launcher without resetting missions or the player's realm. */
   
   /* offer the guide once the player actually has a kingdom (not over the difficulty picker) */
-  function tutMaybeAuto(){try{if(had||META.tut.clGuided||TUT.open)return;if(!S||S.on)return;if($('dm').style.display==='flex'){setTimeout(tutMaybeAuto,1500);return}clStartTutorial()}catch(e){}}
-  function tutFirstSession(){if(!had&&!META.tut.clGuided)setTimeout(tutMaybeAuto,3500)}
+  function tutMaybeAuto(){try{if(had||META.tut.clGuided||META.tut.clSeen||TUT.open)return;if(!S||S.on)return;if($('dm').style.display==='flex'){setTimeout(tutMaybeAuto,1500);return}META.tut.clSeen=1;saveMeta();clStartTutorial()}catch(e){}}
+  function tutFirstSession(){if(!had&&!META.tut.clGuided&&!META.tut.clSeen)setTimeout(tutMaybeAuto,3500)}
   tutFirstSession();
   /* resume a guide that was in progress when the page was closed */
-  (function(){try{TUT.load();if(TUT.started&&!TUT.paused&&!TUT.finished()&&!had)setTimeout(()=>{try{clTutResume()}catch(e){}},1600);else if(TUT.started&&!TUT.paused&&!TUT.finished()&&had)setTimeout(()=>{try{clTutResume()}catch(e){}},2500)}catch(e){}})();
+  /* update 18.11: an unfinished guide is no longer re-opened on every visit (it opened once; Menu > Help continues it) */
+  (function(){try{TUT.load();if(META.tut.clSeen||META.tut.clGuided)return;if(TUT.started){META.tut.clSeen=1;saveMeta();return}if(TUT.started&&!TUT.paused&&!TUT.finished()&&!had)setTimeout(()=>{try{clTutResume()}catch(e){}},1600);else if(TUT.started&&!TUT.paused&&!TUT.finished()&&had)setTimeout(()=>{try{clTutResume()}catch(e){}},2500)}catch(e){}})();
   /* UI hints: never rely on colour alone; give overlays a visible legend. */
   
   setInterval(()=>{if(overlayTag.textContent!=='Overlay: '+overlayNames[overlayMode])overlayTag.textContent='Overlay: '+overlayNames[overlayMode]},500);
@@ -2335,7 +2424,7 @@ function swapRealm(to){const from=here();if(from==to)return;if(window.ONL&&S.on)
   if(window.ONL&&S.on)onlSwapFix(to);
   if(typeof threats=='function')try{threats()}catch(e){}hud();render()}
 /* ---------- the New Land ---------- */
-function colBuild(cfg){const n=NL_CN,C=n/2,g=[];for(let i=0;i<n*n;i++)g.push({t:'g',o:0,b:0,l:0,e:0});
+function colBuild(cfg){const n=cfg.n||NL_CN,C=n/2,g=[];for(let i=0;i<n*n;i++)g.push({t:'g',o:0,b:0,l:0,e:0});
   const ox=rnd(0,300),oy=rnd(0,300),f=(x,y,s,o)=>vn(x/s+ox+o,y/s+oy+o)*.65+vn(x*2/s+ox+o,y*2/s+oy+o)*.35,rg=(x,y,s,o)=>1-Math.abs(vn(x/s+ox+o,y/s+oy+o)*2-1),R=n*.46,I=(x,y)=>y*n+x;
   g.forEach((t,i)=>{const x=i%n,y=(i/n)|0,v=1-Math.pow(Math.hypot(x-C,y-C)/R,1.7)+(f(x,y,11,0)-.5)*.75+(f(x,y,5,40)-.5)*.12;
     if(v<.2||(v>.46&&f(x,y,9,120)>.72)){t.t='w';return}
@@ -2481,10 +2570,10 @@ function autoSub(){const au=S.auto||{},ks=Object.keys(au);if(!ks.length)return''
 /* ---------- online New Land: one shared island, a landing spot for every player side by side ---------- */
 function withSeed(sd,fn){const R=Math.random;let a=sd>>>0;Math.random=()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};try{return fn()}finally{Math.random=R}}
 function colBase(){const act=ONL.act.slice().sort((a,b)=>a-b),dd=S.diff==null?1:S.diff,sd=((ONL.seed>>>0)^0x9e3779b9)>>>0;
-  return withSeed(sd,()=>{const a0=rnd(0,6.283),P=act.length,angs=act.map((s,j)=>a0+(j-(P-1)/2)*.26),b=colBuild({tid:[6,7,8,9],angs,claim:false,dd}),keep=[];
-    b.lands.forEach(({lx,ly})=>{for(let y=-4;y<=4;y++)for(let x=-4;x<=4;x++)if(x*x+y*y<=16){const t=b.g[(ly+y)*NL_CN+lx+x];if(t&&!t.o){t.o=99;keep.push(t)}}});
-    const sT=S.tiles,sN=N,sW=WD;S.tiles=b.g;N=NL_CN;try{rivers()}finally{S.tiles=sT;N=sN;WD=sW}
-    keep.forEach(t=>{if(t.o==99)t.o=0});return b})}
+  return withSeed(sd,()=>{const a0=rnd(0,6.283),P=act.length,angs=act.map((s,j)=>a0+(j-(P-1)/2)*.26),b=colBuild({tid:[6,7,8,9],angs,claim:false,dd,n:NL_OLD}),keep=[];   /* online: the old 128 map from the seed, then grown to 404 */
+    b.lands.forEach(({lx,ly})=>{for(let y=-4;y<=4;y++)for(let x=-4;x<=4;x++)if(x*x+y*y<=16){const t=b.g[(ly+y)*NL_OLD+lx+x];if(t&&!t.o){t.o=99;keep.push(t)}}});
+    const sT=S.tiles,sN=N,sW=WD;S.tiles=b.g;N=NL_OLD;try{rivers()}finally{S.tiles=sT;N=sN;WD=sW}
+    keep.forEach(t=>{if(t.o==99)t.o=0});return growCol(b)})}
 function genColonyOn(cg){const b=colBase(),j=Math.max(0,ONL.act.slice().sort((a,c)=>a-c).indexOf(ONL.slot)),ld=b.lands[j]||b.lands[0],g=b.g,I=(x,y)=>y*NL_CN+x;
   (ONL.cq||[]).forEach(e=>colTile(g,e));ONL.cq=[];const claim=[];
   for(let y=-3;y<=3;y++)for(let x=-3;x<=3;x++)if(x*x+y*y<=5.3){const i=I(ld.lx+x,ld.ly+y),t=g[i];if(!t.o&&t.t!='w'){t.o=1;claim.push(i)}}
@@ -2495,9 +2584,9 @@ function genColonyOn(cg){const b=colBase(),j=Math.max(0,ONL.act.slice().sort((a,
 function colTile(g,e){const[i,o,b,l,w]=e,t=g[i-ONL.CO];if(!t)return;t.o=o?MPX.L(o):0;t.b=b;t.l=l;if(w)t.w=w;else delete t.w;if(b>=5&&!t.q)t.q=1}
 function onlRestore(sv,keep){
   if(sv.realm=='c'&&sv.rl&&sv.rl.h){const b=colBase();S.rl.h.tiles=keep.tiles;S.tiles=b.g;S.ai=b.ai;S.n=NL_CN;N=NL_CN;nlApplyTables('c');ONL.act.forEach(s=>{if(s!=ONL.slot)S.ai[MPX.L(s)]={c:0,inf:0,arc:0,cav:0,sie:0}});MPX.setLast(S.tiles.map(MPX.sig))}
-  else{N=56;S.n=56;if(S.rl&&S.rl.c){S.rl.c.tiles=colBase().g;S.rl.c.n=NL_CN}}
+  else{N=HN0;S.n=HN0;if(S.rl&&S.rl.c){S.rl.c.tiles=colBase().g;S.rl.c.n=NL_CN}}
   calcWD();CHK.clear();SPR.clear();home()}
-function onlSwapFix(to){const la=S.tiles.map(MPX.sig);if(to=='c'&&ONL.claim){ONL.claim.forEach(i=>la[i]='0|0|0|0');ONL.claim=null}MPX.setLast(la)}
+function onlSwapFix(to){const la=S.tiles.map(MPX.sig);if(to=='c'&&ONL.claim){ONL.claim.forEach(i=>la[i]=0);ONL.claim=null}MPX.setLast(la)}
 /* ---------- attack by sea: ships carry a landing force to any rival coast ---------- */
 window.SEAN=1;let SEAC={};
 const seaMul=n=>.85*(1+.12*Math.min(6,n));
@@ -2728,9 +2817,9 @@ function vWar(){const s=S.sel;let h=`<div class="mi"><b>How war works</b>
 const MKT={live:0,id:0,pend:{},busy:0,feed:[]};
 const _mt0=marketTick;marketTick=function(){if(S.on&&MKT.live)return;_mt0()};
 const _sell0=sell,_buy0=buy;
-sell=function(r,f){if(!(S.on&&MKT.live))return _sell0(r,f);const n=Math.floor(S.res[r]*f);if(!n)return;mktReq('sell',r,n)};
+sell=function(r,f){if(!(S.on&&MKT.live))return _sell0(r,f);const h=Math.floor(S.res[r]||0),n=Math.min(h,Math.max(h>=1?1:0,Math.floor((S.res[r]||0)*f)));if(!n)return toast('Nothing to sell');if(MKT.busy)return toast('One moment — the last trade is still being filled');mktReq('sell',r,n)};
 buy=function(r,q){if(!(S.on&&MKT.live))return _buy0(r,q);const n=buyQty(r,q||10);if(n<=0)return toast(cap()-S.res[r]<1?'Storage is full':'Not enough coins');if(buyQuote(r,n)>S.coins)return toast('Not enough coins');mktReq('buy',r,n)};
-function mktReq(side,r,n){if(MKT.busy)return;const id=++MKT.id;MKT.pend[id]={side,r,n};MKT.busy=1;MPX.send({t:'trade',id,r,side,n});setTimeout(()=>{if(MKT.pend[id]){delete MKT.pend[id];MKT.busy=0;toast('The market did not answer')}},3500)}
+function mktReq(side,r,n){if(MKT.busy&&Date.now()-(MKT.at||0)<4000)return;MKT.at=Date.now();const id=++MKT.id;MKT.pend[id]={side,r,n};MKT.busy=1;MPX.send({t:'trade',id,r,side,n});setTimeout(()=>{if(MKT.pend[id]){delete MKT.pend[id];MKT.busy=0;toast('The market did not answer')}},3500)}
 function mktNote(){if(S.on&&MKT.live){const ago=t=>{const s=Math.max(0,Math.round((Date.now()-t)/1000));return s<60?s+'s':Math.round(s/60)+'m'};
   return`<div class="mu" style="margin:4px 0">🌍 <b>Shared island market.</b> Everyone on this island trades at the same prices. Big sales push the price down for everybody, and whoever holds a lot of one resource has an edge.</div>`+(MKT.feed.length?`<div class="mu" style="font-size:12px">${MKT.feed.slice(-4).reverse().map(f=>`${escH(f.n)} ${f.s=='sell'?'sold':'bought'} ${f.q} ${ICON[f.r]} · ${ago(f.at)} ago`).join('<br>')}</div>`:'')}
   return`<div class="mu" style="margin:4px 0">Prices follow real supply and demand: rivals sell what their land produces; what you hoard stays off the market, and what you sell floods it.</div>`}
@@ -2738,14 +2827,17 @@ function mktNote(){if(S.on&&MKT.live){const ago=t=>{const s=Math.max(0,Math.roun
 const SC_W=[['🗺️','Land',14],['💰','Economy',14],['🏗️','Development',14],['⚔️','Military',14],['🛡️','Defence',10],['💎','Wealth',10],['🎓','Research',12],['🏆','Conquest & exploration',12]];
 function scoreOf(){let tiles=0,dev=0,inc=0,fort=0,mil=0,wealth=0;const realms=[S];if(S.rl)for(const k in S.rl)if(S.rl[k]&&S.rl[k].tiles&&S.rl[k]!==S)realms.push(S.rl[k]);
   const addU=c=>{for(const u in UN)mil+=((c||{})[u]||0)*(UN[u].atk+UN[u].def)*(1+UN[u].hp/40)};
-  realms.forEach((R,ri)=>{const nl=R.n&&R.n>56;for(const t of R.tiles){if(t.o!=1)continue;tiles+=nl?1.3:1;if(!t.b)continue;const l=t.l||1;
+  realms.forEach((R,ri)=>{const nl=R.n&&R.n>HN0;for(const t of R.tiles){if(t.o!=1)continue;tiles+=nl?1.3:1;if(!t.b)continue;const l=t.l||1;
       if(t.b==1){dev+=l;inc+=fx.inc(l);fort+=fx.cdef(l)+12*(t.w||0)}else if(t.b==2){dev+=l;const r=MR[t.t];if(r)inc+=RATE[r]*fx.mine(l)*BASE[r]}else if(t.b==3){dev+=l;fort+=fx.fdef(l)}else if(t.b==4){dev+=l;inc+=1.5+.45*(l-1)}else dev+=l}
     addU(R.army);for(const i in R.gar||{})addU(R.gar[i]);for(const g of R.sieges||[])if(g.k==1)addU(g.comp);
     wealth+=(R.coins||0);for(const r of RES)wealth+=((R.res||{})[r]||0)*BASE[r]});
   const st=S.st||{},conq=(st.won||0)*4+Math.min(st.gained||0,300)*.4+(st.voy||0)*6;
-  const sat=(x,k)=>100*(1-Math.exp(-x/k)),f=[sat(tiles,200),sat(inc,40),sat(dev,250),sat(mil,4000),sat(fort,2500),Math.min(100,Math.log10(1+wealth/50)/5*100),(Object.keys(S.tech||{}).length/Math.max(1,TECH.length))*100,sat(conq,120)];
-  const dm=[.85,1,1.1,1.2,1.3][S.diff==null?1:S.diff]||1,s=Math.round(SC_W.reduce((a,w,i)=>a+w[2]*f[i],0)/10*dm);
-  return{s,p:f.map(v=>Math.round(v)),d:S.diff==null?1:S.diff,dm}}
+  /* update 18.11: no ceiling. Each part grows like 100*ln(1+x/k): about the same as before for a young realm, and it keeps
+     growing for as long as the kingdom does (every doubling still adds points). */
+  const gr=(x,k)=>100*Math.log1p(Math.max(0,x)/k),techs=Object.keys(S.tech||{}).length,gw=(()=>{try{return(window.V6G?V6G.GW.reduce((a,g)=>a+V6G.gwSt(g.id),0):0)}catch(e){return 0}})();
+  const f=[gr(tiles,200),gr(inc,40),gr(dev,250),gr(mil,4000),gr(fort,2500),Math.log10(1+wealth/50)/5*100,(techs/Math.max(1,TECH.length))*100+gr(gw,6)*.5,gr(conq,120)];
+  const dm=[.85,1,1.1,1.2,1.3][S.diff==null?1:S.diff]||1,pts=f.map((v,i)=>SC_W[i][2]*v/10*dm),s=Math.round(pts.reduce((a,b)=>a+b,0));
+  return{s,p:f.map(v=>Math.round(v)),pts:pts.map(v=>Math.round(v)),raw:{tiles:Math.round(tiles),inc:+inc.toFixed(1),dev,mil:Math.round(mil),fort:Math.round(fort),wealth:Math.round(wealth),techs,conq:Math.round(conq)},d:S.diff==null?1:S.diff,dm}}
 const RK={isl:[],world:null,me:null,total:0,bonus:0,tier:5,lbErr:'',lbAt:0};
 const MEDAL=['🥇','🥈','🥉'];
 const ISL_B=[.06,.04,.03,.02,.01],ISL_T=[0,1,2,3,4];
@@ -2761,7 +2853,7 @@ const LB={ws:null,busy:0};
 function lbConn(cb){const c=MPX.srv();if(!c.key||!/^wss?:\/\/.{3,}/.test(c.url)){RK.lbErr=c.key?'Set the server address in the Online menu first.':'Log in through the Online menu to join the world ranking.';cb&&cb(false);return}
   if(LB.busy)return;LB.busy=1;let ws;try{ws=new WebSocket(c.url)}catch(e){LB.busy=0;RK.lbErr='Cannot reach the server';cb&&cb(false);return}
   const done=ok=>{LB.busy=0;try{ws.close()}catch(e){}cb&&cb(ok)};const to=setTimeout(()=>{RK.lbErr='The server did not answer';done(false)},9000);
-  ws.onopen=()=>ws.send(JSON.stringify({t:'resume',k:c.key,lb:1}));ws.onerror=()=>{clearTimeout(to);RK.lbErr='Cannot reach the server';done(false)};
+  ws.onopen=()=>ws.send(JSON.stringify({t:'resume',k:c.key,lb:1,pv:2}));ws.onerror=()=>{clearTimeout(to);RK.lbErr='Cannot reach the server';done(false)};
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
     if(m.t=='auth'){if(!m.ok){clearTimeout(to);RK.lbErr='Session expired — log in again through the Online menu.';return done(false)}ws.send(JSON.stringify({t:'gscore',s:scoreOf()}));ws.send(JSON.stringify({t:'lb'}))}
     else if(m.t=='lb'){clearTimeout(to);lbGot(m);done(true)}}}
@@ -2784,17 +2876,23 @@ const CH_MULT=[2.2,1.8,1.5,1.25,1.1,1],CH_DIA=[3,2,1,0,0,0];
 function chestReady(){return !S.rw||Date.now()-S.rw.at>20*36e5}
 function chestLoot(){const t=RK.tier,m=CH_MULT[t],inc=Math.max(5,S.inc||5);return{coins:Math.round(inc*600*m),wood:Math.round(120*m),stone:Math.round(90*m),silver:Math.round(10*m),diamond:CH_DIA[t]}}
 function claimChest(){if(!chestReady())return;const l=chestLoot();S.coins+=l.coins;for(const k of['wood','stone','silver','diamond'])S.res[k]=(S.res[k]||0)+l[k];S.rw={at:Date.now()};toast('🎁 Daily chest: 🪙'+compactAmount(l.coins)+' 🪵'+l.wood+' 🪨'+l.stone+' 🥈'+l.silver+(l.diamond?' 💎'+l.diamond:''));chron('🎁','Opened the daily rank chest');buzz();save();hud();renderSheet()}
+/* update 18.11: what each part of the kingdom adds to the index, biggest first, with the cheapest next step */
+const SC_HOW=['Claim land (each tile counts; New Land tiles ×1.3)','Raise income: cities, mines on rich veins, ports, markets','Build and upgrade buildings','Recruit and keep an army','Strongholds, city walls and watchtowers','Keep coins and resources in the treasury','Research the development tree and finish Great Works','Win battles and sail voyages'];
+const SC_RAW=r=>[r.tiles+' tiles',r.inc+'/s income',r.dev+' building levels',r.mil+' army strength',r.fort+' fortification',compactAmount(r.wealth)+' wealth',r.techs+' research',r.conq+' conquest pts'];
+function scBreak(sc){const P=sc.pts||sc.p,tot=Math.max(1,P.reduce((a,b)=>a+b,0)),mx=Math.max(1,...P),raw=sc.raw?SC_RAW(sc.raw):null,ord=P.map((v,i)=>i).sort((a,b)=>P[b]-P[a]),low=ord[ord.length-1];
+  return ord.map((i,k)=>{const w=SC_W[i],pc=P[i]/tot*100,top=k<2,weak=k>=ord.length-2;return`<div class="mf" style="gap:8px;align-items:center"><span style="min-width:150px">${w[0]} ${w[1]}${raw?`<br><small class="mu">${raw[i]}</small>`:''}</span><span style="flex:1;height:10px;background:#0b1620;border-radius:6px;overflow:hidden;align-self:center"><i style="display:block;height:100%;width:${(P[i]/mx*100).toFixed(1)}%;background:${top?'linear-gradient(90deg,#2f6aa3,#ffd23f)':weak?'linear-gradient(90deg,#5a2a2a,#ff8a5a)':'linear-gradient(90deg,#2f6aa3,#7fc7ff)'}"></i></span><b style="min-width:72px;text-align:right">${compactAmount(P[i])}<small class="mu"> ${pc.toFixed(0)}%</small></b></div>`}).join('')+
+  `<div class="mu" style="margin-top:6px">🔼 Gives the most: <b>${SC_W[ord[0]][1]}</b>${ord[1]!=null?' and <b>'+SC_W[ord[1]][1]+'</b>':''}. 🔽 Gives the least: <b>${SC_W[low][1]}</b> — ${SC_HOW[low]}.</div>`}
 function scBars(p){return SC_W.map((w,i)=>`<div class="mf" style="gap:8px"><span style="min-width:140px">${w[0]} ${w[1]} <small class="mu">${w[2]}%</small></span><span style="flex:1;height:8px;background:#0b1620;border-radius:6px;overflow:hidden;align-self:center"><i style="display:block;height:100%;width:${p[i]}%;background:linear-gradient(90deg,#2f6aa3,#ffd23f)"></i></span><b>${p[i]}</b></div>`).join('')}
 let rkTab='isl';
 function vRank(){const sc=RK.mine=scoreOf();rkRecalc();const on=S.on&&window.ONL,tab=on?rkTab:'world';
   let h=on?`<div class="row2" style="display:flex;gap:8px;margin-bottom:6px"><button style="flex:1;text-align:center" class="${tab=='isl'?'on':''}" onclick="rkTab='isl';shK='';renderSheet()">🏝️ This island</button><button style="flex:1;text-align:center" class="${tab=='world'?'on':''}" onclick="rkTab='world';shK='';renderSheet();lbRefresh()">🌍 World</button></div>`:'';
-  h+=`<div class="mi ready"><div class="mh"><b>Your progress score</b><em style="font-size:20px">${sc.s}</em></div><div class="mu">A balanced index of land, economy, buildings, army, defence, wealth, research and conquest — each factor saturates, so no single thing wins alone.${sc.dm!=1?` Difficulty bonus ×${sc.dm}.`:''}</div>${scBars(sc.p)}</div>`;
+  h+=`<div class="mi ready"><div class="mh"><b>Your kingdom index</b><em style="font-size:20px">${compactAmount(sc.s)}</em></div><div class="mu">The kingdom index has no ceiling: it keeps growing with your realm. Every part below adds points; the longest bars are where your index comes from, the short ones are your cheapest way up.${sc.dm!=1?` Difficulty bonus ×${sc.dm}.`:''}</div>${scBreak(sc)}</div>`;
   if(tab=='isl'){const ir=RK.ir;h+=`<div class="mi"><b>🏝️ Island ranking</b>`;
-    if(!ir)h+=`<div class="mu">Scores appear a few seconds after everyone is online.</div>`;else{h+=ir.arr.map((q,i)=>{const p=ONL.sc[q.s],mine=q.s==ONL.slot,nm=escH(p.n||('Player '+q.s)),b=ir.n>=2?(ISL_B[i]||0):0;return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${nm}${p.on?'':' <small class="mu">(away)</small>'}${b?` <small class="ok">+${Math.round(b*100)}% income</small>`:''}</span><b>${q.v}</b></div>`}).join('');if(ir.n<2)h+=`<div class="mu">Island rewards start when at least two players are on the island.</div>`}h+=`</div>`}
+    if(!ir)h+=`<div class="mu">Scores appear a few seconds after everyone is online.</div>`;else{h+=ir.arr.map((q,i)=>{const p=ONL.sc[q.s],mine=q.s==ONL.slot,nm=escH(p.n||('Player '+q.s)),b=ir.n>=2?(ISL_B[i]||0):0;return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${nm}${p.on?'':' <small class="mu">(away)</small>'}${b?` <small class="ok">+${Math.round(b*100)}% income</small>`:''}</span><b>${compactAmount(q.v)}</b></div>`}).join('');if(ir.n<2)h+=`<div class="mu">Island rewards start when at least two players are on the island.</div>`}h+=`</div>`}
   else{h+=`<div class="mi"><b>🌍 World ranking</b> <small class="mu">best island of every logged-in account — solo or online</small>`;
     if(RK.lbErr)h+=`<div class="bad">${RK.lbErr}</div>`;
-    if(RK.world){h+=RK.world.slice(0,30).map((q,i)=>{const mine=RK.me&&q.s==RK.me.s&&q.m==RK.me.m&&(RK.me.rank==i+1);return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${escH(q.n)}${q.ti?' <small class="mu">· '+escH(q.ti)+'</small>':''} <small class="mu">${q.m=='solo'?'🏝️ solo':'⚔️ online'}</small></span><b>${q.s}</b></div>`}).join('');
-      if(RK.me&&RK.me.rank>30)h+=`<div class="mf" style="color:#ffd23f"><span>#${RK.me.rank} You</span><b>${RK.me.s}</b></div>`;h+=`<div class="mu">${RK.total} players ranked</div>`}
+    if(RK.world){h+=RK.world.slice(0,30).map((q,i)=>{const mine=RK.me&&q.s==RK.me.s&&q.m==RK.me.m&&(RK.me.rank==i+1);return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${escH(q.n)}${q.ti?' <small class="mu">· '+escH(q.ti)+'</small>':''} <small class="mu">${q.m=='solo'?'🏝️ solo':'⚔️ online'}</small>${q.on?' <small class="ok">● online</small>':''}${q.vi&&q.id&&!mine?` <button class="q-sm vis-b" onclick="visitIsland('${escH(q.id)}','${escH(q.n).replace(/'/g,'')}')">👁 Visit</button>`:''}</span><b>${compactAmount(q.s)}</b></div>`}).join('');
+      if(RK.me&&RK.me.rank>30)h+=`<div class="mf" style="color:#ffd23f"><span>#${RK.me.rank} You</span><b>${compactAmount(RK.me.s)}</b></div>`;h+=`<div class="mu">${RK.total} players ranked</div>`}
     else if(!RK.lbErr)h+=`<div class="mu">Loading…</div>`;h+=`<button style="width:100%;margin-top:6px" onclick="lbRefresh()">↻ Refresh</button></div>`}
   const b=Math.round(RK.bonus*100),l=chestLoot();
   h+=`<div class="mi"><b>🎁 Rewards</b><div class="mu">${b?`Your rank gives <b class="ok">+${b}% coin income</b> right now.`:'Rank in the top places to earn a coin-income bonus.'} Island: 🥇+6% 🥈+4% 🥉+3% · 4th +2% · 5th +1%. World: top 1 +8%, top 3 +6%, top 10 +4%, top 25 +2% (bonuses add up to a maximum of +10%).</div>
@@ -2915,19 +3013,22 @@ function addGems(n,quiet){if(!n)return;M.gems+=n;SV();const b=$$('gemn');if(b){b
 window.gemAch=i=>{const g=GEMA[i];if(g)addGems(g,true);const t=wpick([[80,20],[0,65,30,5],[0,0,65,30,5]][i]);chestAdd(t,1);return` — ${g?'+'+g+' gems · ':''}${TR[t].n}`};
 window.gemTxt=i=>i==null?'Silver +1 gem · Gold +3 gems · random chest':`${GEMA[i]?'+'+GEMA[i]+' gems · ':''}random chest`;
 function wpick(w){let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<w.length;i++){if((r-=w[i])<0)return i}return 0}
-function chestAdd(t,n){M.chests[t]=(M.chests[t]|0)+n;SV()}
+function chestAdd(t,n){M.chests[t]=(M.chests[t]|0)+n;SV();if(n>0&&!chestAdd.quiet)try{window.chestGot&&window.chestGot(t,n)}catch(e){}}
 /* ---------- loot ---------- */
 function roll(ti){const T=TR[ti],B=Math.max(5,S.inc||5)*600,out=[],c=cap(),lv=wpick(LW[ti]),K=PL[lv].k,sp=[[.8,1.2],[.9,1.35],[1,1.6]][lv];
- const co=Math.round(B*T.mul*K*rnd(sp[0],sp[1]));S.coins+=co;out.push({ic:'🪙',tx:fmt(co),r:ti});
+ const co=Math.max(Math.round(300*(1+ti*2)*(1+lv)),Math.round(B*T.mul*K*rnd(sp[0],sp[1])));S.coins+=co;out.push({ic:'🪙',tx:fmt(co),r:ti,k:'coins',n:co});
  const ks=['wood','stone','silver','gold'].sort(()=>Math.random()-.5).slice(0,Math.min(4,1+ti+lv));
- ks.forEach(k=>{const a=Math.max(5,Math.round(c*Math.min(1,T.rf*(1+.9*lv))*rnd(.8,1.1)));S.res[k]=Math.min(Math.max(c,S.res[k]||0),(S.res[k]||0)+a);out.push({ic:ICON[k],tx:fmt(a),r:ti})});
- {const d=Math.round(ri(T.ds[0],T.ds[1])*K)+(lv?ri(lv,lv*(2+ti)):0);if(d){S.res.diamond=(S.res.diamond||0)+d;out.push({ic:'💎',tx:d,r:Math.max(ti,2)})}}
- T.ar.forEach(([k,a,b,p])=>{if(Math.random()<Math.min(1,p+.25*lv)){const n=Math.round(ri(a,b)*K);S.army[k]=(S.army[k]||0)+n;out.push({ic:({inf:'🗡️',arc:'🏹',cav:'🐎',sie:'🏰'})[k],tx:n+' '+({inf:'infantry',arc:'archers',cav:'cavalry',sie:'siege'})[k],r:ti})}});
- if(Math.random()<T.gm[0]+.3*lv){const g=Math.round(ri(Math.max(1,T.gm[1]),Math.max(3,T.gm[2]))*(lv?K*.8:1));addGems(g,true);out.push({ic:GI,tx:g+' gems',r:Math.max(ti,3),big:1})}
+ /* update 18.11: chest loot goes over the storage limit (it used to be cut off, so opening many chests gave far less than shown)
+    and every reward has a floor that grows with the chest and the kingdom */
+ const FLR={wood:40,stone:40,silver:8,gold:3},cf=Math.max(1,Math.sqrt(Math.max(1,S.inc||1)/5));
+ ks.forEach(k=>{const a=Math.max(Math.round(FLR[k]*(1+ti*1.6)*(1+lv)*cf),Math.round(c*Math.min(1,T.rf*(1+.9*lv))*rnd(.8,1.1)));S.res[k]=(S.res[k]||0)+a;out.push({ic:ICON[k],tx:fmt(a),r:ti,k,n:a})});
+ {const d=Math.round(ri(T.ds[0],T.ds[1])*K)+(lv?ri(lv,lv*(2+ti)):0);if(d){S.res.diamond=(S.res.diamond||0)+d;out.push({ic:'💎',tx:d,r:Math.max(ti,2),k:'diamond',n:d})}}
+ T.ar.forEach(([k,a,b,p])=>{if(Math.random()<Math.min(1,p+.25*lv)){const n=Math.max(1,Math.round(ri(a,b)*K));S.army[k]=(S.army[k]||0)+n;out.push({ic:({inf:'🗡️',arc:'🏹',cav:'🐎',sie:'🏰'})[k],tx:n+' '+({inf:'infantry',arc:'archers',cav:'cavalry',sie:'siege'})[k],r:ti,k,n,u:1})}});
+ if(Math.random()<T.gm[0]+.3*lv){const g=Math.max(1,Math.round(ri(Math.max(1,T.gm[1]),Math.max(3,T.gm[2]))*(lv?K*.8:1)));addGems(g,true);out.push({ic:GI,tx:g+' gems',r:Math.max(ti,3),big:1,k:'gems',n:g})}
  if(Math.random()<T.co[0]+.18*lv){const mx=Math.min(3,Math.floor(T.co[1])+(lv==2?1:0)),lo=Math.max(0,mx-1),pool=CAT.filter(x=>!own(x.id)&&x.r<=mx&&x.r>=lo);
   if(pool.length){const x=pool[ri(0,pool.length-1)];M.cos.own[x.id]=1;SV();out.push({ic:x.t=='rc'?`<i class="pf" style="--rc:${x.v}">&nbsp;</i>`:x.t=='pf'?x.v:x.t=='au'?'✨':x.v,tx:x.n+' · '+CRN[x.r],r:x.r+2,big:1})}
-  else{const g=ri(3,8)*(1+lv);addGems(g,true);out.push({ic:GI,tx:g+' gems',r:3})}}
- out.lv=lv;S.army=S.army;hud();save();return out}
+  else{const g=ri(3,8)*(1+lv);addGems(g,true);out.push({ic:GI,tx:g+' gems',r:3,k:'gems',n:g})}}
+ out.lv=lv;out.ti=ti;S.army=S.army;if(!roll.quiet){hud();save()}return out}
 /* ---------- chest drawing ---------- */
 function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
 function drawChest(c,ti,X,Y,s,lid,tm,gc){const P=TR[ti].pal,LC=gc||P[4],h=s/2,bh=s*.5,trim=ti==5?`hsl(${(tm*90)%360},95%,66%)`:P[3];
@@ -2995,7 +3096,7 @@ function oLoop(now){if(!O)return;const W=innerWidth,H=innerHeight,tm=(now-O.t0)/
  oraf=requestAnimationFrame(oLoop)}
 window.gxClose=function(){O=null;cancelAnimationFrame(oraf);const e=$$('cho');if(e)e.style.display='none';hid();hud();if($$('tre')&&$$('tre').style.display=='flex')treR()};window.openCh=openCh;
 /* ---------- missions / achievements drop chests ---------- */
-const _mc=misClaim;misClaim=function(id,side){const b=S.st.missions||0;_mc(id,side);if((S.st.missions||0)>b){M.mc++;let t=wpick(side?[50,38,11,1]:[70,22,7,1]);chestAdd(t,1);setTimeout(()=>toast('🎁 You found a '+TR[t].n+'!'),900);if(typeof renderMis=='function')renderMis()}};
+const _mc=misClaim;misClaim=function(id,side){const b=S.st.missions||0;_mc(id,side);if((S.st.missions||0)>b){M.mc++;let t=wpick(side?[50,38,11,1]:[70,22,7,1]);chestAdd(t,1);if(typeof renderMis=='function')renderMis()}};
 /* ---------- gem quests ---------- */
 const GQ=[['Land Baron','Gain 1,500 tiles in total','gained',1500,15,0],['Master Builder','Construct 1,200 buildings','built',1200,20,2],['Grand Merchant','Make 1,500 trades','trades',1500,25,0],['Warlord','Win 400 battles','won',400,40,3],['Iron Wall','Repel 300 attacks','repelled',300,40,0],['Army of Legends','Train 3,000 units','trained',3000,50,4],['Quest Master','Complete 250 missions','missions',250,60,3],['Dedicated Ruler','Play on 14 different days','days',14,80,4],['Eternal Crown','Play on 40 different days','days',40,250,5]];
 const gqv=k=>k=='days'?M.days.length:S?astat(k):(META.base[k]||0);
@@ -3013,7 +3114,7 @@ Object.assign(window,{gxBuy:buyCh,gxCos:buyCos,gxEq:equip,gxGq:gqClaim,gxOff:off
 let TT='ch';
 function tre(){let e=$$('tre');if(e)return e;e=document.createElement('div');e.id='tre';document.body.appendChild(e);return e}
 function treR(){const e=tre();let b='';
- if(TT=='ch')b=`<div class="mu" style="margin:6px 0">Earn chests from missions and achievements, or buy them with gems. Higher chests hold far better prizes.</div><div class="tg">`+TR.map((t,i)=>`<div class="tc" style="--rc:${RCOL[i]}"><img src="${chestURL(i)}" alt=""><b style="color:${RCOL[i]}">${t.n}</b><small class="mu">${t.r}</small><small class="mu" style="min-height:48px;font-size:11px">${t.info}</small><div class="odds" title="Prize levels: normal, great (×${PL[1].k}), jackpot (×${PL[2].k})">${LW[i].map((w,j)=>`<i style="--c:${PL[j].col}">${w}%</i>`).join('')}</div><b>x${M.chests[i]|0}</b><button ${M.chests[i]>0?'':'disabled'} onclick="openCh(${i})">Open</button>${t.p?`<button class="buy" ${M.gems>=t.p?'':'disabled'} onclick="gxBuy(${i})">Buy ${GI} ${t.p}</button>`:'<small class="mu">Mission reward only</small>'}</div>`).join('')+'</div>';
+ if(TT=='ch')b=`<div class="mu" style="margin:6px 0">Earn chests from missions and achievements, or buy them with gems. Higher chests hold far better prizes.</div>${Object.values(M.chests).reduce((a,b)=>a+(b>0?b:0),0)>1?`<div class="gxm gxmall"><span>Open many at once:</span>${[5,15,30].map(n=>`<button onclick="gxBulk(-1,${n})">×${n}</button>`).join('')}<button onclick="gxBulk(-1,1e9)">All</button></div>`:''}<div class="tg">`+TR.map((t,i)=>`<div class="tc" style="--rc:${RCOL[i]}"><img src="${chestURL(i)}" alt=""><b style="color:${RCOL[i]}">${t.n}</b><small class="mu">${t.r}</small><small class="mu" style="min-height:48px;font-size:11px">${t.info}</small><div class="odds" title="Prize levels: normal, great (×${PL[1].k}), jackpot (×${PL[2].k})">${LW[i].map((w,j)=>`<i style="--c:${PL[j].col}">${w}%</i>`).join('')}</div><b>x${M.chests[i]|0}</b><button ${M.chests[i]>0?'':'disabled'} onclick="openCh(${i})">Open</button>${(M.chests[i]|0)>1?`<div class="gxm">${[5,15,30].filter(n=>n<(M.chests[i]|0)).map(n=>`<button onclick="gxBulk(${i},${n})">×${n}</button>`).join('')}<button onclick="gxBulk(${i},${M.chests[i]|0})">All ${M.chests[i]|0}</button></div>`:''}${t.p?`<button class="buy" ${M.gems>=t.p?'':'disabled'} onclick="gxBuy(${i})">Buy ${GI} ${t.p}</button>`:'<small class="mu">Mission reward only</small>'}</div>`).join('')+'</div>';
  else if(TT=='cos')b=Object.keys(CT).map(t=>`<b style="display:block;margin:10px 0 4px">${CT[t]}</b><div class="tg">`+CAT.filter(c=>c.t==t).map(c=>{const o=own(c.id),on=eq(t)===c.i,col=t=='rc'?c.v:CRC[c.r];return`<div class="tc ${on?'eq':''}" style="--rc:${CRC[c.r]}">${t=='pf'?pfHTML(c.i,1):t=='rc'?`<span class="pf pfb" style="--rc:${c.v}">&nbsp;</span>`:t=='nf'?`<div class="pfb" style="width:auto;height:34px;font-size:22px;font-weight:800"><span class="nfx nfx${c.i}">Nickname</span></div>`:t=='mf'?`<div class="mfx${c.i}" style="border-radius:12px;padding:6px;margin:4px 0;background:#16293d;font-size:12px">Hello 👋</div>`:`<div class="pfb" style="font-size:26px">✨</div>`}<b>${c.n}</b><small style="color:${CRC[c.r]}">${CRN[c.r]}</small>${o?`<button onclick="gxEq('${c.id}')">${on?'Unequip':'Equip'}</button>`:`<button class="buy" ${M.gems>=CP[c.r]?'':'disabled'} onclick="gxCos('${c.id}')">${GI} ${CP[c.r]}</button>`}</div>`}).join('')+'</div>').join('');
  else if(TT=='gq')b=`<div class="mu" style="margin:6px 0">Long-term goals that take days. Progress carries over between games and works offline.</div>`+GQ.map((q,i)=>{const v=Math.min(q[3],gqv(q[2])),d=!!M.gq[i],rd=!d&&v>=q[3];return`<div class="mi ${rd?'ready':''}" style="${d?'opacity:.6':''}"><div class="mh"><span>${GI}</span><b>${q[0]}</b><em>${d?'Claimed':rd?'Ready!':'Active'}</em></div><div class="mu">${q[1]}</div><div class="bar"><i style="width:${v/q[3]*100}%;background:linear-gradient(90deg,#7a2be0,#e0a3ff)"></i></div><div class="mf"><span>${fmt(v)}/${fmt(q[3])}</span><span>${GI} ${q[4]}${q[5]!=null?' + '+TR[q[5]].n:''}</span></div>${rd?`<button style="width:100%;text-align:center;margin-top:6px" onclick="gxGq(${i})">Claim</button>`:''}</div>`}).join('');
  else b=`<div class="mu" style="margin:6px 0">Spend gems on advantages for your current island. Works on online islands too.</div>`+OFF.map((o,i)=>`<div class="mr"><div><b>${o[0]} ${o[1]}</b><div class="mu">${i==0?'4x a daily chest of coins':i==1?'Half your storage of each material':i==2?'Rare diamonds':'A quick army boost'}</div></div><button class="buy" ${M.gems>=o[3]?'':'disabled'} onclick="gxOff(${i})">${GI} ${o[3]}</button></div>`).join('');
@@ -3097,7 +3198,7 @@ const _hudT=hud;hud=function(){_hudT();const h=$$('hud');if(!h||!S)return;
  const fx=h.querySelector('.fxr');if(fx){const d=document.createElement('span');d.className='gx-dif';d.textContent='🎚️ '+DF().n;fx.insertBefore(d,fx.firstChild);
   fx.querySelectorAll('span').forEach(sp=>{const t=sp.textContent;if(t.startsWith('⚔️'))sp.onclick=()=>openSheet('army');else if(t.startsWith('🎓'))sp.onclick=()=>openDev();else if(!sp.classList.contains('gx-dif'))sp.onclick=()=>openSheet('chron')})}};
 window.gxSrc=srcGo;
-window.__gx={M,TR,CAT,roll:ti=>roll(ti),addGems,GQ,chestAdd};
+window.__gx={M,TR,CAT,PL,RCOL,roll:(ti,q)=>{roll.quiet=!!q;try{return roll(ti)}finally{roll.quiet=false}},addGems,GQ,chestAdd,chestURL:ti=>chestURL(ti),drawChest:(...a)=>drawChest(...a),wpick:w=>wpick(w),LW};
 setTimeout(()=>{try{hud()}catch(e){}},50);
 })();
 </script>
@@ -3250,7 +3351,7 @@ addEventListener('load',()=>{const c=document.getElementById('c');if(!c)return;c
       ${bar(techs/techTot,'#b277ff')}
       <h4 style="margin-top:10px">📊 Score</h4>
       ${sc?row('Total','⭐ '+sc.s+` <small style="color:#9fc3e0">(×${sc.dm.toFixed(2)} ${DF().n})</small>`):''}
-      ${sc?row('Defence',Math.round(sc.p[5])+'%'):''}
+      ${sc&&sc.pts?(()=>{const o=sc.pts.map((v,i)=>i).sort((a,b)=>sc.pts[b]-sc.pts[a]);return row('Biggest part',SC_W[o[0]][0]+' '+SC_W[o[0]][1])+row('Smallest part',SC_W[o[o.length-1]][0]+' '+SC_W[o[o.length-1]][1])})():''}
     </div>
     <div class="ovcard">
       <h4>⚔️ Military</h4>
@@ -3311,7 +3412,7 @@ const K=KEY,BK=[K+'-backup',K+'-bk2',K+'-bk3'],$$=id=>document.getElementById(id
 /* Deterministic 53-bit fingerprint of the save text. It is a corruption check, not security:
    the point is to notice a truncated or scrambled save before it can replace a good one. */
 const SUM=s=>{let h1=0x811c9dc5,h2=0x01000193;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,16777619)>>>0;h2=Math.imul(h2+c,2246822519)>>>0}return h1.toString(36)+h2.toString(36)};
-const okSave=raw=>{try{const s=JSON.parse(raw);if(!s||s.v!=2||!(s.n==56||s.n==96||s.n==128)||!Array.isArray(s.tiles)||s.tiles.length!=s.n*s.n)return null;
+const okSave=raw=>{try{const s=JSON.parse(raw);if(!s||s.v!=2||![56,96,128,HN0,NL_CN].includes(s.n))return null;if(s.tz){if(typeof s.tz.t!='string'||s.tz.t.length!=s.n*s.n*2)return null}else if(!Array.isArray(s.tiles)||s.tiles.length!=s.n*s.n)return null;
   if(s.fp&&s.fp!==SUM(raw.replace(/,"fp":"[0-9a-z]*"\}$/,'}')))return null;   // truncated/edited copy: treat as invalid, never load it
   return s}catch(e){return null}};
 const looks=r=>!!r&&r.length>500&&r[0]=='{'&&r[r.length-1]=='}'&&r.indexOf('"v":2')>-1;
@@ -3511,7 +3612,7 @@ const MST=[
  {k:'gw',ic:'🏛️',n:'Builder of wonders',lab:'Great Work stages',v:gwTotal,g:l=>3+4*l,end:l=>3+4*l>GW.reduce((n,g)=>n+gwMax(g),0)},
  {k:'trade',ic:'⚖️',n:'Trade empire',lab:'Trades',v:()=>S.st.trades||0,g:l=>Math.round(40*Math.pow(1.7,l))}];
 const SOB=[
- {id:'half',ic:'🌍',n:'Half the island',d:'Own half of all the land on the island.',v:()=>owned(1),g:()=>Math.ceil(landInfo().land*.5),sec:900,sc:300},
+ {id:'half',ic:'🌍',n:'A great realm',d:'Own 500 tiles (or half of the island, if that is less). Land gets pricier with every tile, so this takes a long time.',v:()=>owned(1),g:()=>Math.min(500,Math.ceil(landInfo().land*.5)),sec:900,sc:300},
  {id:'veins',ic:'💎',n:'Lord of the veins',d:'Hold every silver, gold and diamond vein on the island at the same time.',v:ownVeins,g:()=>Math.max(1,landInfo().veins),sec:900,sc:300},
  {id:'capital',ic:'🏰',n:'Fall of a capital',d:'Capture a rival city of level 5 or higher.',v:()=>S.st.capt||0,g:()=>1,sec:600,sc:200},
  {id:'unify',ic:'👑',n:'Unifier',d:'Defeat every rival kingdom on the island.',v:()=>(S.st.def||[]).length,g:()=>4,sec:1800,sc:600,t:'Unifier'},
@@ -3592,22 +3693,39 @@ const UK=['inf','arc','cav','sie'];
 const quickPow=c=>{let v=0;for(const u of UK)v+=(c[u]||0)*(UN[u].atk*.6+UN[u].def*.6);return v};
 let COAL=false;
 function aiUnit(sty,q){const P=tally();let top='inf',tm=-1;for(const u of UK)if((P[u]||0)>tm){tm=P[u]||0;top=u}
-  if(tm>3&&Math.random()<q*.6)return{inf:'arc',arc:'cav',cav:'inf',sie:'cav'}[top];
+  if(tm>3&&Math.random()<q*(q>=.85?.85:.6))return{inf:'arc',arc:'cav',cav:'inf',sie:'cav'}[top];
   let r=Math.random(),w=sty.army;for(let j=0;j<4;j++){r-=w[j];if(r<=0)return UK[j]}return'inf'}
-function aiBuild(k,list,a,sty,q){const m=DF().cost*.6,n=list.length,ts=list.map(i=>S.tiles[i]),opt=[];let want=null;
-  const free=f=>list.filter(i=>{const t=S.tiles[i];return!t.b&&t.t!='w'&&f(t)}),pick=x=>x[rnd(0,x.length)|0];
-  const add=(c,fn,w)=>{c=Math.round(c*m);if(a.c>=c)opt.push([c,fn,w]);else if(!want||w>want[2])want=[c,fn,w]};
+/* update 18.11: income each option adds per second (the same formulas the rival's economy uses) */
+const mineG=(t,l0,l1)=>{const r=MR[t.t];return r?RATE[r]*BASE[r]*.4*(fx.mine(l1)-(l0?fx.mine(l0):0)):0};
+const VEIN={D:8,G:5,S:3.5,m:1.6,f:1.2};
+function aiNote(k,txt,lesson){const m=mem(k);m.log=Array.isArray(m.log)?m.log:[];if(m.log[0]&&m.log[0].s===txt)return;m.log.unshift({t:Math.round(S.time),s:txt});if(m.log.length>6)m.log.length=6;
+  if(lesson){S.aiL=Array.isArray(S.aiL)?S.aiL:[];if(!S.aiL.some(x=>x.s===lesson)){S.aiL.unshift({k,s:lesson,t:Math.round(S.time)});if(S.aiL.length>8)S.aiL.length=8}}}
+function aiBuild(k,list,a,sty,q,mode){const m=DF().cost*.6,n=list.length,ts=list.map(i=>S.tiles[i]),opt=[];let want=null;
+  const free=f=>list.filter(i=>{const t=S.tiles[i];return!t.b&&t.t!='w'&&f(t)}),pick=x=>x[rnd(0,x.length)|0],smart=q>=.7,def=mode=='defend'||mode=='coalition';
+  const add=(c,fn,w,gain,d)=>{c=Math.round(c*m);if(def&&/fort|watch/i.test(d||''))w*=2;const o=[c,fn,w,gain||0,d||''];if(a.c>=c)opt.push(o);else if(!want||w>want[2])want=o};
   const lvCap=4+n/6+q*3,cities=ts.filter(t=>t.b==1);
-  ts.forEach(t=>{const l=lv(t);if(t.b&&t.b<4&&l<MAXL[t.b]&&l<lvCap)add(UPC[t.b](t,l).coins,()=>{t.l=l+1},t.b==1?sty.b.city:t.b==3?sty.b.fort:sty.b.up);
-    else if(t.b>=5&&BLD[t.b]&&l<Math.min(BLD[t.b].max,3+n/15))add(bup(t.b,l).coins,()=>{t.l=l+1},sty.b[t.b]||1)});
+  ts.forEach(t=>{const l=lv(t);if(t.b&&t.b<4&&l<MAXL[t.b]&&l<lvCap)add(UPC[t.b](t,l).coins,()=>{t.l=l+1},t.b==1?sty.b.city:t.b==3?sty.b.fort:sty.b.up,t.b==1?fx.inc(l+1)-fx.inc(l):t.b==2?mineG(t,l,l+1):0,t.b==1?'upgrade a city to level '+(l+1):t.b==2?'upgrade a '+(NAME[t.t]||'')+' mine to level '+(l+1):'raise a fort to level '+(l+1));
+    else if(t.b>=5&&BLD[t.b]&&l<Math.min(BLD[t.b].max,3+n/15))add(bup(t.b,l).coins,()=>{t.l=l+1},sty.b[t.b]||1,t.b==5?.9*(Math.pow(l+1,.85)-Math.pow(l,.85)):0,'upgrade the '+(BN[t.b]||'building'))});
   const g=free(t=>t.t=='g');
-  if(g.length){if(cities.length<6&&n>=12*cities.length+6){const i=pick(g);add(120*Math.pow(1.5,cities.length),()=>{const t=S.tiles[i];t.b=1;t.l=1},sty.b.city+2)}
-    for(const b of [5,6,11])if(ts.filter(t=>t.b==b).length<Math.min(BLD[b].lim,1+n/12|0)){const i=pick(g);add(BLD[b].cost.coins,()=>{const t=S.tiles[i];t.b=b;t.l=1;t.q=1},sty.b[b])}
-    if(ts.filter(t=>t.b==3).length<1+n/(sty===STY.warden?9:14)){const i=pick(g);add(FC.coins,()=>{const t=S.tiles[i];t.b=3;t.l=1},sty.b.fort)}}
-  const rs=free(t=>t.t!='g'&&MR[t.t]);if(rs.length&&ts.filter(t=>t.b==2).length<1+n/9){const i=pick(rs);add(30*MM[S.tiles[i].t],()=>{const t=S.tiles[i];t.b=2;t.l=1},sty.b.mine)}
-  /* a smart rival saves for the project it wants most instead of spending on the first affordable thing */
-  if(want&&opt.length&&Math.random()<q*.5&&want[2]>Math.max(...opt.map(o=>o[2])))return;
-  if(!opt.length)return;let r=Math.random()*opt.reduce((s,o)=>s+o[2],0),p=opt[0];for(const o of opt){if((r-=o[2])<0){p=o;break}}a.c-=p[0];p[1]()}
+  if(g.length){if(cities.length<6&&n>=12*cities.length+6){const i=pick(g);add(120*Math.pow(1.5,cities.length),()=>{const t=S.tiles[i];t.b=1;t.l=1},sty.b.city+2,fx.inc(1)+.15,'found a new city')}
+    for(const b of [5,6,11])if(ts.filter(t=>t.b==b).length<Math.min(BLD[b].lim,1+n/12|0)){const i=pick(g);add(BLD[b].cost.coins,()=>{const t=S.tiles[i];t.b=b;t.l=1;t.q=1},sty.b[b],b==5?.9:0,b==11?'build a watchtower':'build a '+BN[b])}
+    if(ts.filter(t=>t.b==3).length<1+n/(sty===STY.warden?9:14)){const i=pick(g);add(FC.coins,()=>{const t=S.tiles[i];t.b=3;t.l=1},sty.b.fort,0,'build a fort')}}
+  /* mines: a smart rival opens the richest vein it owns first, and runs more mines */
+  const rs=free(t=>t.t!='g'&&MR[t.t]);if(rs.length&&ts.filter(t=>t.b==2).length<1+n/(smart?6:9)){const i=smart?rs.reduce((b,j)=>(VEIN[S.tiles[j].t]||0)>(VEIN[S.tiles[b].t]||0)?j:b,rs[0]):pick(rs),tt=S.tiles[i];add(30*MM[tt.t],()=>{const t=S.tiles[i];t.b=2;t.l=1},sty.b.mine,mineG(tt,0,1),'open a mine on a '+(NAME[tt.t]||'vein').toLowerCase())}
+  if(!opt.length){if(want&&smart)mem(k).plan='Saving 🪙'+compactAmount(want[0])+' to '+want[4];return}
+  if(!smart){/* a smart rival saves for the project it wants most instead of spending on the first affordable thing */
+    if(want&&Math.random()<q*.5&&want[2]>Math.max(...opt.map(o=>o[2])))return;
+    let r=Math.random()*opt.reduce((s,o)=>s+o[2],0),p=opt[0];for(const o of opt){if((r-=o[2])<0){p=o;break}}a.c-=p[0];p[1]();return}
+  /* smart: score = temperament + return on investment (income per coin), the way a strong player plans */
+  const all=want?opt.concat([want]):opt,best=Math.max(1e-9,...all.map(o=>o[3]/Math.max(1,o[0]))),wm=all.reduce((s,o)=>s+o[2],0)/all.length||1;
+  const sc=o=>o[2]/wm*(1-q*.55)+q*2.2*(o[3]/Math.max(1,o[0]))/best+Math.random()*(1-q)*.8;
+  let p=opt[0];for(const o of opt)if(sc(o)>sc(p))p=o;
+  if(want&&sc(want)>sc(p)*1.25&&a.c>=want[0]*.45){mem(k).plan='Saving 🪙'+compactAmount(want[0])+' to '+want[4]+(want[3]>0?' (+'+want[3].toFixed(2)+'/s)':'');return}
+  a.c-=p[0];p[1]();const roi=p[3]>0?p[0]/(p[3]):0;
+  if(p[3]>0)aiNote(k,(p[4][0].toUpperCase()+p[4].slice(1))+': +'+p[3].toFixed(2)+'🪙/s for 🪙'+compactAmount(p[0])+(roi?' (pays back in '+Math.round(roi)+'s)':''),
+    /mine/.test(p[4])?'Rich veins first: a mine on gold or diamonds repays itself many times faster than a new city. Look for 🥇 and 💎 tiles before you spread out.':
+    /city/.test(p[4])?'Compare upgrades by income gained per coin: the cheapest +income/s is the best buy, not the biggest building.':null);
+  else if(def)aiNote(k,(p[4][0].toUpperCase()+p[4].slice(1))+' — it expects an attack',/fort|watch/.test(p[4])?'Under threat, rivals fortify the border tiles you can reach. Strongholds and watchtowers protect everything within 2 tiles.':null)}
 function tileValue(t){return(t.b==1?3+t.l*.6:t.b==2?2+(MM[t.t]||1)*.6:t.b==5||t.b==7||t.b==9||t.b==12?3:t.b==3?1.5:t.b?1.5:0)+('SGD'.includes(t.t)?1.5:0)+.3}
 aiTick=function(){if(!S||S.on)return;ens();try{window.clAIStyle&&clAIStyle(2)}catch(e){}
   const d=DF(),di=S.diff==null?1:S.diff,q=QUAL[di]||.5,own={2:[],3:[],4:[],5:[]},border={2:new Map(),3:new Map(),4:new Map(),5:new Map()},inc={2:0,3:0,4:0,5:0};let pl=0,tot=0;
@@ -3616,7 +3734,10 @@ aiTick=function(){if(!S||S.on)return;ens();try{window.clAIStyle&&clAIStyle(2)}ca
     const x=i%N,y=(i/N)|0;for(const [p,qq] of D4){if(!ok(x+p,y+qq))continue;const j=(y+qq)*N+x+p,u=S.tiles[j].o;if(u&&u!=o){let mp=border[o].get(u);if(!mp)border[o].set(u,mp=[]);if(mp.length<40)mp.push(j)}}}
   const alive=[2,3,4,5].filter(k=>own[k].length),coal=alive.length>=2&&tot>0&&pl/tot>.4;
   if(coal!==COAL){COAL=coal;if(coal){chron('⚔️','The rival kingdoms have joined a coalition against you');toast('⚔️ Your rivals have formed a coalition against you!')}else chron('🕊️','The coalition against you has broken up')}
-  const pPow=quickPow(tally());
+  const pPow=quickPow(tally()),pReady=(()=>{try{return quickPow(readyComp())}catch(e){return pPow}})(),away=pPow>0&&pReady<pPow*.45;
+  /* a runaway rival becomes everyone's target (like players do), unless you are the biggest */
+  const sizes=[2,3,4,5].map(k=>own[k].length),bigK=[2,3,4,5][sizes.indexOf(Math.max(...sizes))],med=sizes.slice().sort((x,y)=>x-y)[1]||0,runaway=q>=.85&&own[bigK].length>Math.max(30,med*1.7)&&own[bigK].length>pl?bigK:0;
+  let focus=null;
   for(const k of alive){const list=own[k],a=S.ai[k]||(S.ai[k]={c:0,inf:0,arc:0,cav:0,sie:0});if(!(a.c>=0))a.c=0;const m=mem(k),st=(window.clAIStyle&&clAIStyle(k))||'conqueror',sty=STY[st]||STY.conqueror;
     m.g*=.993;m.f*=.995;m.t*=.998;for(const j in m.war)m.war[j]*=.99;
     /* income: from its real buildings, plus "ambition" when you outgrow the island (bounded, more on higher difficulty) */
@@ -3628,11 +3749,19 @@ aiTick=function(){if(!S||S.on)return;ens();try{window.clAIStyle&&clAIStyle(2)}ca
     const target=Math.round(Math.max(sty.tgt+list.length*sty.per,race)*(m.mode=='defend'?1.35:1)*(.85+.3*q));
     /* spending: army first when below target and threatened, otherwise by temperament */
     if(sum(a)<target&&(m.mode!='normal'||Math.random()<sty.share)){const u=aiUnit(sty,q),v=uval(u)*(1-.15*q);if(a.c>=v){a.c-=v;a[u]=(a[u]||0)+1}}
-    else if(Math.random()<.75)aiBuild(k,list,a,sty,q);
+    else if(Math.random()<.75)aiBuild(k,list,a,sty,q,m.mode);
+    if(sum(a)<target&&m.mode!='normal'&&q>=.7){const P=tally();let top='inf',tm=-1;for(const u of UK)if((P[u]||0)>tm){tm=P[u]||0;top=u}if(tm>3)m.plan='Training '+({inf:'archers',arc:'cavalry',cav:'infantry',sie:'cavalry'})[top]+' to counter your '+({inf:'infantry',arc:'archers',cav:'cavalry',sie:'siege engines'})[top]}
     /* expansion into free land (wardens and merchants grow slower but steadier) */
     /* rivals pay for land like you do (a little cheaper), so expansion competes with armies and buildings */
-    const lc=(12+list.length*1.2)*d.cost*.6;
-    if(list.length<220&&a.c>=lc&&Math.random()<.5*d.ex*(st=='conqueror'?1.2:st=='opportunist'?1.1:.8)){const i=list[rnd(0,list.length)|0],x=i%N,y=(i/N)|0,o=D4.map(([p,qq])=>[x+p,y+qq]).filter(([p,qq])=>ok(p,qq)&&!T(p,qq).o&&(T(p,qq).t!='w'||T(p,qq).r));if(o.length){const [p,qq]=o[rnd(0,o.length)|0];T(p,qq).o=k;a.c-=lc}}
+    const lc=landPrice(list.length)*d.cost*.6;
+    const lim=Math.round(220*Math.sqrt(N*N/3136)/1.6);   /* the bigger map leaves room, but land is just as costly for rivals */
+    for(let c=0,nc=q>=.85&&a.c>=lc*4?2:1;c<nc;c++){const lc2=landPrice(list.length+c)*d.cost*.6;if(!(list.length<lim&&a.c>=lc2&&Math.random()<.5*d.ex*(st=='conqueror'?1.2:st=='opportunist'?1.1:.8)))break;
+      let best=null,bs=-1e9;const samp=q>=.5?Math.min(list.length,8+Math.round(q*32)):1;
+      for(let s=0;s<samp;s++){const i=list[rnd(0,list.length)|0],x=i%N,y=(i/N)|0;
+        for(const [p,qq] of D4){const X=x+p,Y=y+qq;if(!ok(X,Y))continue;const t=T(X,Y);if(t.o||(t.t=='w'&&!t.r))continue;
+          let v=q>=.5?(VEIN[t.t]||1):1;for(const [u,w] of D4){if(!ok(X+u,Y+w))continue;const z=T(X+u,Y+w);if(z.o==k)v+=.7*q;else if(z.o==1)v+=st=='conqueror'?.5:-.9*q;else if(z.o>1)v-=.4*q}
+          v+=Math.random()*(1.3-q)*2;if(v>bs){bs=v;best=[X,Y,t]}}}
+      if(!best)break;best[2].o=k;a.c-=lc2;if(q>=.7&&(VEIN[best[2].t]||0)>=3.5)aiNote(k,'Claimed a '+NAME[best[2].t].toLowerCase()+' at ('+best[0]+','+best[1]+')','Rivals on hard difficulty expand toward silver, gold and diamond veins first, and keep their borders compact so fewer tiles are exposed.')}
     /* war decision */
     if(S.time<m.next||sum(a)<3)continue;
     const cands=[];for(const [j,tl] of border[k]){if(j<1||j>5||(m.cool[j]||0)>S.time)continue;
@@ -3642,6 +3771,8 @@ aiTick=function(){if(!S||S.on)return;ens();try{window.clAIStyle&&clAIStyle(2)}ca
       const jp=j==1?pPow:quickPow(S.ai[j]||{}),weak=myPow/(myPow+jp+1);
       let hos=j==1?(m.g/50+(coal?1:0)-m.t/60-m.f/120):((m.war[j]||0)/40);
       if(st=='conqueror')hos+=.6;else if(st=='opportunist')hos+=weak*1.4;else if(st=='merchant')hos+=-.3;else if(st=='warden')hos+=(j==1&&m.lost.length?.8:-.4);
+      if(runaway&&j==runaway&&k!=runaway)hos+=.9;              /* everyone against the runaway */
+      if(j==1&&away&&q>=.7)hos+=.7*q;                           /* your army is away: strike now */
       if(j==1&&m.mode=='defend')hos-=1;
       const val=tl.slice(0,12).reduce((s,i)=>s+tileValue(S.tiles[i]),0)/Math.min(12,tl.length);
       cands.push({j,tl,sc:hos+weak*1.2+val*.15+Math.random()*(1.2-q)})}
@@ -3650,15 +3781,18 @@ aiTick=function(){if(!S||S.on)return;ens();try{window.clAIStyle&&clAIStyle(2)}ca
     if(c.sc<.15&&Math.random()<q){m.next=S.time+sty.cd*.6;continue}
     /* pick the tile: value, weakness, and land they lost to you (they want it back) */
     const tiles=c.tl.length>24?c.tl.slice().sort(()=>Math.random()-.5).slice(0,24):c.tl;let best=null,bs=-1e9;
-    for(const i of tiles){const t=S.tiles[i],x=i%N,y=(i/N)|0,dv=def(x,y),retake=m.lost.includes(i)?2.5:0,offline=t.off>S.time?1.5:0;
-      const sc=tileValue(t)*(st=='merchant'?1.5:1)+retake+(st=='opportunist'?offline*2:offline)-dv*(st=='conqueror'?.012:.02)+Math.random()*(1.5-q);
+    for(const i of tiles){const t=S.tiles[i],x=i%N,y=(i/N)|0,dv=def(x,y),retake=m.lost.includes(i)?2.5:0,offline=t.off>S.time?1.5:0,fd=focus&&c.j==1&&coal?-Math.hypot(x-focus[0],y-focus[1])*.12*q:0,gar=q>=.85&&c.j==1?-Math.min(3,sum(S.gar[i]||{})*.05):0;
+      const sc=tileValue(t)*(st=='merchant'?1.5:1)+retake+(st=='opportunist'?offline*2:offline)-dv*(st=='conqueror'?.012:.02)*(q>=.85?1.6:1)+fd+gar+Math.random()*(1.5-q);
       if(sc>bs){bs=sc;best=i}}
     if(best==null||S.sieges.some(g=>g.idx==best)){m.next=S.time+10;continue}
     const x=best%N,y=(best/N)|0,t=T(x,y),fort=t.b==1||t.b==3||t.w,comp={},send=sty.send*(m.mode=='defend'?.7:1);for(const u of UK)comp[u]=Math.floor((a[u]||0)*send);
     if(sum(comp)<2){m.next=S.time+sty.cd;continue}
     const dc=compOf(c.j,best),A=strength(comp,dc,true,x,y,'frontal')*1.2,D=strength(dc,comp,false,x,y,'')+fortV(x,y)*(window.guardX?guardX(c.j):1),p=winP(A,D);
-    const thr=sty.thr-(m.mode=='revenge'||m.mode=='coalition'?.07:0)+(Math.random()-.5)*(1-q)*.5;
-    if(p<thr){m.next=S.time+sty.cd*.5;continue}
+    const thr=sty.thr-(m.mode=='revenge'||m.mode=='coalition'?.07:0)-(c.j==1&&away&&q>=.7?.08:0)+(Math.random()-.5)*(1-q)*.5;
+    if(p<thr){m.next=S.time+sty.cd*.5;if(q>=.7&&c.j==1)m.plan='Waiting for a better chance against you ('+Math.round(p*100)+'% now, it wants '+Math.round(thr*100)+'%)';continue}
+    if(coal&&c.j==1&&!focus)focus=[x,y];
+    if(q>=.7)aiNote(k,(c.j==1?'Attacked you':'Attacked '+OWN[c.j].n)+' at ('+x+','+y+') with '+sum(comp)+' units, '+Math.round(p*100)+'% to win'+(c.j==1&&away?' while your army was away':''),
+      c.j==1&&away?'Rivals watch your ready army. When most of it is away (sieges, sea landings), they strike — keep a reserve or garrisons at home.':t.b==1||t.b==3?'Rivals use siege engines against cities and strongholds: walls and garrisons there decide the battle.':'Rivals only attack when the odds are good. Garrisons on border tiles make them wait.');
     const tac=fort&&comp.sie?'siege':p>.8?'frontal':'cautious';for(const u of UK)a[u]-=comp[u];
     m.next=S.time+sty.cd*(1+m.fails*.5)/Math.sqrt(d.ai);
     if(tac=='siege')startSiege(k,comp,best);else resolve(k,comp,best,tac)}};
@@ -3668,8 +3802,10 @@ const _aiAtk6=aiAttack;aiAttack=function(k,mine,d){if(S&&S.on)return _aiAtk6(k,m
 /* ---------- War room: how each rival sees you ---------- */
 const _vWar6=vWar;vWar=function(){const r=_vWar6();if(S.on)return r;let h=`<div class="mi"><b>🧠 Rival kingdoms</b><div class="mu">Each rival has a temperament and remembers what you did. Attacking one makes it hostile; tribute and pacts calm it down. ${COAL?'<b class="bad">They are united in a coalition against you because you hold over 40% of the land.</b>':'If you hold over 40% of the land, the rivals unite against you.'}</div>`;
   for(let k=2;k<6;k++){if(!S.tiles.some(t=>t.o===k))continue;const m=mem(k),at=attitude(m),st=(window.clAIStyle&&clAIStyle(k))||'?',a=S.ai[k]||{},mode={defend:'fortifying its borders',coalition:'in the coalition against you',revenge:'planning revenge on you',normal:'growing its realm'}[m.mode||'normal'];
-    h+=`<div class="mf"><span><b style="color:${OWN[k].c}">${OWN[k].n}</b> · ${st[0].toUpperCase()+st.slice(1)}<br><small class="mu">${mode} · army about ${Math.round(sum(a)/5)*5||sum(a)} · income ${(a.inc||0).toFixed(1)}/s</small></span><span class="v6-pill ${at[1]}">${at[0]}</span></div>`}
-  r[1]+=h+'</div>';return r};
+    h+=`<div class="mf"><span><b style="color:${OWN[k].c}">${OWN[k].n}</b> · ${st[0].toUpperCase()+st.slice(1)}<br><small class="mu">${mode} · army about ${Math.round(sum(a)/5)*5||sum(a)} · income ${(a.inc||0).toFixed(1)}/s</small>${m.plan?`<br><small>🧠 ${escH(m.plan)}</small>`:''}${(m.log||[]).length?`<br><small class="mu">${m.log.slice(0,3).map(e=>'• '+escH(e.s)).join('<br>')}</small>`:''}</span><span class="v6-pill ${at[1]}">${at[0]}</span></div>`}
+  r[1]+=h+'</div>';
+  if((S.aiL||[]).length)r[1]+=`<div class="mi"><b>🎓 Learn from your rivals</b><div class="mu">What the strongest rivals did recently, and why it works. ${(S.diff|0)<2?'On Medium and harder difficulties rivals plan like strong players.':''}</div>${S.aiL.slice(0,5).map(x=>`<div class="mf"><span>💡 ${escH(x.s)} <small class="mu">— ${OWN[x.k]?OWN[x.k].n:'a rival'}</small></span></div>`).join('')}</div>`;
+  return r};
 
 /* ---------- the game tick: smoothed income, trade-pact deliveries, online siege pause ---------- */
 let tk=0;const _tick6=tick;
@@ -4747,7 +4883,7 @@ function goalData(){const g=V6(),rd=[],act=[],done=[];if(!g)return{rd,act,done};
  for(const m of g.MST){const l=g.mstLv(m.k),fin=g.mstDone(m),v=m.v(),gg=fin?v:m.g(l),it={t:'mst',m,l,v,g:gg};if(fin)done.push(it);else if(g.mstReady(m))rd.push(it);else act.push(it)}
  act.sort((a,b)=>b.v/Math.max(1,b.g)-a.v/Math.max(1,a.g));return{rd,act,done}}
 const mstChest=l=>l<2?1:l<5?2:3;
-function chestGive(t){const g=GX();if(!g)return;g.chestAdd(t,1);setTimeout(()=>toast('📦 '+g.TR[t].n+' added — open it in the Treasury (Menu)'),900)}
+function chestGive(t){const g=GX();if(!g)return;g.chestAdd(t,1);if(!window.chestGot)setTimeout(()=>toast('📦 '+g.TR[t].n+' added — open it in the Treasury (Menu)'),900)}
 const chestName=t=>{const g=GX();return g?g.TR[t].n:'Chest'};
 {const _ms=window.mstClaim;window.mstClaim=function(k){const g=V6(),l0=g.mstLv(k);_ms(k);if(g.mstLv(k)>l0){chestGive(mstChest(l0));try{X7.pts(4,'ms')}catch(e){}}qRender(false);qBadges(true)};
  const _so=window.sobClaim;window.sobClaim=function(id){const had=!!(S.sob&&S.sob[id]);_so(id);if(!had&&S.sob&&S.sob[id]){chestGive(3);try{X7.pts(6,'ms')}catch(e){}}qRender(false);qBadges(true)}}
@@ -4797,13 +4933,16 @@ const dqProg=t=>Math.max(0,DCTR[t.k]()-t.b);
 const dqTaskRw=()=>({c:secs(150),res:{wood:frac(.05),stone:frac(.05)}});
 const streakNext=d=>d.gift===today()?d.streak:(d.gift===yesterday()?d.streak+1:1);
 const dqBonusRw=d=>{const s=streakNext(d);return{c:secs(300),res:{silver:frac(.03)},ch:s>=7?2:s>=3?1:0}};
-const GIFT=[{c:90,ic:'🪙'},{c:150,r:.05,ic:'🪵'},{c:120,ch:0,ic:'📦'},{c:240,r:.07,m:1,ic:'🥈'},{c:180,ch:1,gm:2,ic:'📦'},{c:360,r:.09,m:1,ic:'🥇'},{c:480,r:.1,m:1,ch:2,gm:5,ic:'👑'}];
-function giftRw(day){const i=(day-1)%7,wk=Math.floor((day-1)/7),k=1+.25*Math.min(wk,4),G=GIFT[i],o={c:Math.round(secs(G.c)*k),res:{},ch:G.ch,gm:G.gm?G.gm+wk:0};
+/* update 18.11: bigger daily gifts - a chest on most days, gems from day 3, and the weekly multiplier keeps growing */
+const GIFT=[{c:240,ch:0,ic:'🪙'},{c:360,r:.08,gm:1,ic:'🪵'},{c:420,ch:1,gm:2,ic:'📦'},{c:600,r:.1,m:1,gm:3,ic:'🥈'},{c:720,ch:2,gm:5,ic:'📦'},{c:900,r:.14,m:1,ch:1,gm:6,ic:'🥇'},{c:1500,r:.18,m:1,ch:3,gm:15,ic:'👑'}];
+function giftRw(day){const i=(day-1)%7,wk=Math.floor((day-1)/7),k=1+.35*Math.min(wk,6),G=GIFT[i],o={c:Math.round(secs(G.c)*k),res:{},ch:G.ch,gm:G.gm?G.gm+2*Math.min(wk,6):0};
  if(G.r){o.res.wood=Math.round(frac(G.r)*k);o.res.stone=Math.round(frac(G.r)*k)}if(G.m){o.res.silver=Math.round(frac(G.r*.4)*k);if(i>=5)o.res.gold=Math.round(frac(G.r*.2)*k)}
- if(i===6&&wk>=1)o.ch=3;return o}
+ if(i===6&&wk>=3)o.ch=4;if(i===4&&wk>=2)o.ch=3;return o}
+/* the daily pop-up (end of the file) reads the streak through this */
+window.qDailyInfo=()=>{const d=dq();return{d,today:today(),yest:yesterday(),next:streakNext(d),got:d.gift===today(),rw:giftRw,txt:rwTxt,chips:rwChips,ic:i=>GIFT[(i-1)%7].ic,left:hms(toMidnight())}};
 const rwTxt=o=>[o.c?`🪙${fm(o.c)}`:'',...Object.keys(o.res||{}).filter(k=>o.res[k]>0).map(k=>`${ICON[k]}${fm(o.res[k])}`),o.ch!=null?`📦 ${chestName(o.ch)}`:'',o.gm?`${GI}${o.gm}`:''].filter(Boolean);
 const rwChips=o=>`<div class="q-rw">${rwTxt(o).map(t=>`<span class="${t.startsWith('📦')?'ch':''}">${t}</span>`).join('')}</div>`;
-function grantQ(o){S.coins+=o.c||0;for(const k of RES)if(o.res&&o.res[k])S.res[k]=Math.max(S.res[k],Math.min(cap(),S.res[k]+o.res[k]));
+function grantQ(o){S.coins+=o.c||0;for(const k of RES)if(o.res&&o.res[k])S.res[k]=(S.res[k]||0)+o.res[k];
  if(o.ch!=null)chestGive(o.ch);if(o.gm){const g=GX();if(g)g.addGems(o.gm,true)}}
 window.qGift=function(){const d=dq(),td=today();if(d.gift===td)return;d.streak=streakNext(d);d.gift=td;d.best=Math.max(d.best||0,d.streak);const o=giftRw(d.streak);grantQ(o);
  try{sfx('win')}catch(e){}buzz();try{chron('🎁','Daily gift — day '+d.streak+' of the streak')}catch(e){}save();hud();toast(`🔥 Day ${d.streak} gift: `+rwTxt(o).join(' ').replace(/<[^>]+>/g,'💠'));qRender(false);qBadges(true)};
@@ -4966,6 +5105,301 @@ cv.addEventListener('contextrestored',recover);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&typeof cx.isContextLost==='function'&&cx.isContextLost())recover()});
 /* memory pressure from the rest of the page: drop off-screen chunks while hidden */
 document.addEventListener('visibilitychange',()=>{if(document.hidden)try{SPR.clear()}catch(e){}});
+})();
+</script>
+<style id="u1811-css">
+/* ===== update 18.11 ===== */
+.gxm{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:4px}.gxm button{min-height:30px;padding:2px 9px;font-size:12px;flex:none}
+.gxmall{align-items:center;margin:0 0 8px;background:#16293d;border:1px solid #3a638a;border-radius:12px;padding:6px 8px}.gxmall span{font-weight:700;font-size:13px;margin-right:4px}
+.u-ov{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:#020a14d9;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.u-card{width:min(560px,100%);max-height:100%;overflow:auto;background:linear-gradient(180deg,#14304d,#0d1f33);border:2px solid #3a638a;border-radius:22px;padding:16px;box-shadow:0 20px 60px #000c;animation:uIn .35s cubic-bezier(.2,1.4,.4,1)}
+@keyframes uIn{from{transform:scale(.7);opacity:0}}
+.u-card h2{margin:0 0 4px;font-size:22px;text-align:center}.u-card .sub{text-align:center;color:#9fc3e0;font-size:13px;margin-bottom:10px}
+.u-btns{display:flex;gap:8px;margin-top:12px}.u-btns button{flex:1;text-align:center;min-height:46px;font-weight:800}
+/* daily gift pop-up */
+.dp-week{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:8px 0}
+.dp-day{background:#0b1620;border:1px solid #2b4a68;border-radius:12px;padding:6px 2px;text-align:center;font-size:11px;color:#9fc3e0;display:flex;flex-direction:column;gap:2px;align-items:center;min-width:0}
+.dp-day b{font-size:20px}.dp-day small{font-size:9.5px;line-height:1.15;color:#cfe3f5;word-break:break-word}
+.dp-day.got{opacity:.55}.dp-day.got b{color:#7bd88f}
+.dp-day.now{border:2px solid #ffd23f;background:#2b2a12;color:#ffe9a0;box-shadow:0 0 18px #ffd23f66;animation:dpP 1.4s ease-in-out infinite}
+@keyframes dpP{50%{transform:translateY(-3px)}}
+.dp-next{display:flex;flex-direction:column;gap:4px;margin-top:8px}.dp-next div{display:flex;justify-content:space-between;gap:8px;background:#0b1620;border-radius:10px;padding:5px 9px;font-size:13px}
+/* chest you just got */
+#gxgot .u-card{text-align:center;width:min(380px,100%)}#gxgot img{width:150px;height:150px;animation:gBo 1.2s ease-in-out infinite}
+@keyframes gBo{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-10px) rotate(2deg)}}
+.gx-fly{position:fixed;z-index:80;pointer-events:none;transition:transform .75s cubic-bezier(.5,-.3,.7,1),opacity .75s ease-in}
+.u-pulse{animation:uPu .6s ease 2}@keyframes uPu{50%{transform:scale(1.25);filter:brightness(1.6)}}
+/* opening many chests */
+#gxbulk{flex-direction:column;gap:10px;justify-content:flex-start;overflow:auto;background:#020a14f5;z-index:70}#gxgot,#dpop{background:#020a14ee;z-index:65}#gxbulk.done .bk-stage,#gxbulk.done .bk-tal{display:none}
+#gxbulk .bk-h{display:flex;align-items:center;gap:8px;width:min(620px,100%)}#gxbulk .bk-h b{font-size:18px;flex:1}
+.bk-phase{font-size:24px;font-weight:900;letter-spacing:1px;color:var(--pc,#38ff8c);text-shadow:0 0 18px var(--pc,#38ff8c);text-align:center;min-height:32px}
+.bk-phase.flash{animation:bkF .5s ease}@keyframes bkF{0%{transform:scale(1.6);opacity:.2}}
+.bk-stage{position:relative;width:170px;height:170px;display:flex;align-items:center;justify-content:center}
+.bk-stage:before{content:'';position:absolute;inset:6px;border-radius:50%;background:radial-gradient(circle,var(--pc,#38ff8c) 0%,transparent 68%);opacity:.55}
+.bk-stage img{width:150px;height:150px;position:relative}.bk-stage img.pop{animation:bkP var(--d,.3s) ease-out}
+@keyframes bkP{0%{transform:scale(.5) translateY(30px);opacity:.3}55%{transform:scale(1.12)}100%{transform:scale(1)}}
+.bk-n{position:absolute;bottom:-4px;left:0;right:0;text-align:center;font-weight:800;font-size:13px;color:#cfe3f5}
+.bk-tal{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;width:min(620px,100%)}
+.bk-c{position:relative;background:#0b1620;border:1px solid #2b4a68;border-radius:12px;padding:7px 10px;display:flex;align-items:center;gap:8px;font-weight:800;font-size:17px;font-variant-numeric:tabular-nums}
+.bk-c span{font-size:20px}.bk-c.hit{border-color:var(--pc,#38ff8c);box-shadow:0 0 12px var(--pc,#38ff8c)}
+.bk-pl{position:absolute;right:8px;top:-10px;font-size:12px;color:var(--pc,#38ff8c);animation:bkU .7s ease-out forwards;pointer-events:none}
+@keyframes bkU{to{transform:translateY(-16px);opacity:0}}
+.bk-lv{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.bk-lv i{font-style:normal;border-radius:10px;padding:3px 10px;font-weight:800;font-size:13px;background:#0b1620;border:1px solid var(--c);color:var(--c)}
+.bk-sum{width:min(620px,100%);display:flex;flex-direction:column;gap:8px;align-items:stretch}
+/* chat */
+.cx-rx{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;align-items:center}
+.cx-rx button{min-height:24px;padding:0 7px;border-radius:12px;font-size:13px;background:#0b1620;border:1px solid #2b4a68;flex:none;line-height:22px;text-align:center}
+.cx-rx button.me{border-color:#ffd23f;background:#2b2a12}.cx-rx .cx-add{opacity:.55}.cx-rx .cx-add:hover{opacity:1}
+.chat-new{align-self:stretch;display:flex;align-items:center;gap:8px;color:#ff8a5a;font-size:12px;font-weight:800;margin:4px 0}
+.chat-new:before,.chat-new:after{content:'';flex:1;height:1px;background:#ff8a5a88}
+/* visiting islands */
+#visit{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;background:#04101cf7}
+#visit .vh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}#visit .vh b{font-size:18px}
+#visit .vw{position:relative;flex:1;min-height:200px;border:2px solid #3a638a;border-radius:16px;overflow:hidden;background:#04121f;touch-action:none}
+#visit canvas{width:100%;height:100%;display:block}
+#visit .vz{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px}#visit .vz button{width:42px;min-height:42px;padding:0;text-align:center;font-size:20px}
+#visit .vi{display:flex;gap:6px;overflow-x:auto;font-size:12px}#visit .vi span{flex:none;background:#0b1620;border:1px solid #2b4a68;border-radius:10px;padding:4px 8px}
+#visit .vtip{position:absolute;left:8px;top:8px;background:#000b;border-radius:10px;padding:4px 9px;font-size:12px;pointer-events:none;max-width:70%}
+.vis-b{min-height:26px!important;padding:0 8px!important;font-size:12px!important;margin-left:4px}
+</style>
+<script>
+/* ===== Crownlands update 18.11 (loaded last) =====
+   1. map: an overview renderer for far zoom (the islands are 5x / 10x bigger), upgrade cost balance
+   2. visiting other players' offline islands (snapshot upload + read-only viewer)
+   3. chat: emoji reactions and a "new messages" line per player
+   4. a boost for players who join a running online island late
+   5. the daily gift pops up in the middle of the screen each new day (it stays in Missions too)
+   6. chests: pop-up when you get one (open now / collect), and opening 5 / 15 / 30 / all at once */
+(function(){
+'use strict';
+const $u=id=>document.getElementById(id),esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]),fm=n=>compactAmount(Math.round(n||0));
+const vis=id=>{const e=$u(id);return!!e&&e.style.display!='none'&&getComputedStyle(e).display!='none'&&e.offsetHeight>0};
+const sfxS=k=>{try{sfx(k)}catch(e){}},ovOpen=()=>[...document.querySelectorAll('.u-ov')].some(e=>e.style.display!='none');
+
+/* a player action always sees the exact map (the per-tick cache is off while it runs) */
+const _act1811=act;act=function(...a){return tcacheOff(()=>_act1811.apply(this,a))};
+/* ---------- 1a. upgrade costs follow the bigger chest rewards (see upBal) ---------- */
+for(const k of [1,2,3]){const f=UPC[k];if(f&&!f.__b){const w=(t,l)=>upBal(f(t,l),l);w.__b=1;UPC[k]=w}}
+
+/* ---------- 1b. far zoom: one pixel per tile, refreshed a few times a second ----------
+   Below ~13 px per tile the detailed renderer would paint tens of thousands of tiles per frame. The overview shows
+   terrain, every realm's land and borders, cities and realm names, and stays smooth at any map size. */
+const FAR={c:null,n:0,at:0,ref:null,cities:[],names:[]},RGB={};
+const rgb=h=>{let v=RGB[h];if(v)return v;let s=String(h||'#fff').replace('#','');if(s.length==3)s=s.replace(/./g,'$&$&');v=[parseInt(s.slice(0,2),16)||0,parseInt(s.slice(2,4),16)||0,parseInt(s.slice(4,6),16)||0];RGB[h]=v;return v};
+const TCOL={g:[92,156,70],f:[38,98,52],m:[118,110,104],S:[196,206,216],G:[230,186,52],D:[92,226,240]},DES=[214,190,134];
+function farBuild(){const n=N,tl=S.tiles;if(!FAR.c||FAR.n!==n){FAR.c=mkc(n,n);FAR.n=n}const g=FAR.c.getContext('2d'),im=g.createImageData(n,n),d=im.data,acc={};FAR.cities=[];
+  for(let i=0;i<n*n;i++){const t=tl[i];let r,gg,b;
+    if(t.t=='w'&&!t.o){const w=Math.min(WD[i]||0,8);if(t.r){r=70;gg=160;b=210}else{r=22-w*2;gg=112-w*9;b=168-w*7}}
+    else{const c=t.z&&(t.t=='g'||t.t=='f')?DES:(TCOL[t.t]||TCOL.g),k=.8+Math.min(.5,Math.max(0,(t.e||.5)))*.3;r=c[0]*k;gg=c[1]*k;b=c[2]*k}
+    if(t.o){const oc=rgb(OWN[t.o]?OWN[t.o].c:'#fff'),a=t.b?.9:.5;r=r*(1-a)+oc[0]*a;gg=gg*(1-a)+oc[1]*a;b=b*(1-a)+oc[2]*a;
+      const A=acc[t.o]||(acc[t.o]={x:0,y:0,n:0});A.x+=i%n;A.y+=(i/n)|0;A.n++;if(t.b==1)FAR.cities.push(i);
+      const x=i%n,y=(i/n)|0;if(x==0||y==0||x==n-1||y==n-1||tl[i-1].o!==t.o||tl[i+1].o!==t.o||tl[i-n].o!==t.o||tl[i+n].o!==t.o){r=Math.min(255,oc[0]*.75+70);gg=Math.min(255,oc[1]*.75+70);b=Math.min(255,oc[2]*.75+70)}}
+    const p=i*4;d[p]=r;d[p+1]=gg;d[p+2]=b;d[p+3]=255}
+  g.putImageData(im,0,0);FAR.names=Object.keys(acc).map(k=>({k:+k,x:acc[k].x/acc[k].n,y:acc[k].y/acc[k].n,n:acc[k].n}));FAR.at=performance.now();FAR.ref=tl}
+function drawFar(){const ts=T0*zoom,cm=S.cam,M=N*ts,pd=ts*4;
+  if(M<=W)cm.x=(M-W)/2;else cm.x=Math.max(-pd,Math.min(M-W+pd,cm.x));if(M<=H)cm.y=(M-H)/2;else cm.y=Math.max(-pd,Math.min(M-H+pd,cm.y));
+  const now=performance.now(),moving=now-GXM<220||now-GXZ<220;
+  if(FAR.ref!==S.tiles||FAR.n!==N||now-FAR.at>(moving?1600:500))farBuild();
+  cx.fillStyle='#04121f';cx.fillRect(0,0,W,H);cx.imageSmoothingEnabled=false;cx.drawImage(FAR.c,-cm.x,-cm.y,M,M);cx.imageSmoothingEnabled=true;
+  const r=Math.max(1.8,Math.min(ts*.6,6));
+  for(const i of FAR.cities){const t=S.tiles[i];if(!t||t.b!==1)continue;const x=(i%N+.5)*ts-cm.x,y=(((i/N)|0)+.5)*ts-cm.y;if(x<-9||y<-9||x>W+9||y>H+9)continue;
+    cx.fillStyle=OWN[t.o]?OWN[t.o].c:'#fff';cx.beginPath();cx.arc(x,y,r+(t.l>=10?1:0),0,7);cx.fill();cx.lineWidth=1.2;cx.strokeStyle='#fff';cx.stroke()}
+  cx.font='bold 12px system-ui,sans-serif';cx.textAlign='center';cx.textBaseline='middle';
+  for(const q of FAR.names){if(q.n<5)continue;const x=(q.x+.5)*ts-cm.x,y=(q.y+.5)*ts-cm.y-r-9;if(x<-60||y<-20||x>W+60||y>H+20)continue;const nm=q.k==1?'You':OWN[q.k]?OWN[q.k].n:'';if(!nm)continue;cx.lineWidth=3;cx.strokeStyle='#000b';cx.strokeText(nm,x,y);cx.fillStyle=q.k==1?'#ffe9a0':'#fff';cx.fillText(nm,x,y)}
+  if(HL&&performance.now()<HL.t){const k=(now%900)/900,x=(HL.x+.5)*ts-cm.x,y=(HL.y+.5)*ts-cm.y;cx.strokeStyle='#ffcf4a';cx.lineWidth=3;cx.globalAlpha=1-k;cx.beginPath();cx.arc(x,y,6+k*24,0,7);cx.stroke();cx.globalAlpha=1}
+  if(S.sel){const [x,y]=S.sel;cx.strokeStyle='#fff';cx.lineWidth=2;cx.strokeRect(x*ts-cm.x-2,y*ts-cm.y-2,ts+4,ts+4)}
+  cx.font='12px system-ui,sans-serif';cx.textAlign='left';cx.fillStyle='#ffffffaa';cx.fillText('Overview · zoom in to build',10,H-12)}
+const _drF=draw;draw=function(){if(S&&S.tiles&&T0*zoom<13&&!(typeof VYON!='undefined'&&VYON)){try{if(typeof VYU=='function'&&VYU)VYU()}catch(e){}return drawFar()}return _drF()};
+/* start a fresh game a little zoomed out, so the bigger island is visible */
+setTimeout(()=>{try{if(S&&!S.on&&S.time<5&&zoom>=1)zoomBy(.8)}catch(e){}},400);
+
+/* ---------- 1c. the island grew: tell the player once ---------- */
+setTimeout(()=>{try{if(S&&S.grewAt){const age=Date.now()-S.grewAt;delete S.grewAt;if(age<3e5){chron('🗺️','The island grew: your realm now sits in the middle of a land five times larger (the New Land ten times)');
+  notice('🗺️ Your island grew!',`<div class="mu" style="text-align:center">The island is now <b>5× bigger</b> (the New Land <b>10×</b>). Your realm, buildings and armies are exactly where they were — in the middle — and the old sea around it is new land to claim.<br><br>Land is now much <b>pricier</b> as a kingdom grows, so choose your tiles well. Pinch or use − to zoom far out and see the whole island.</div>`)}}}catch(e){console.error(e)}},2600);
+function notice(title,body,btns){const el=document.createElement('div');el.className='u-ov';el.innerHTML=`<div class="u-card"><h2>${title}</h2>${body}<div class="u-btns">${btns||'<button class="buy" data-x>Got it</button>'}</div></div>`;document.body.appendChild(el);
+  el.addEventListener('click',e=>{if(e.target===el||e.target.hasAttribute('data-x'))el.remove()});return el}
+
+/* ---------- 2. visiting other players' islands ---------- */
+const NET={wait:{}};
+/* a message to the server: through the live island connection when online, otherwise a short second connection */
+function srvCall(msgs,want,cb){const c=MPX.srv();if(!c.key||!/^wss?:\/\/.{3,}/.test(c.url||''))return cb&&cb(null,'Log in through Menu → Online play to visit islands.');
+  if(S&&S.on&&MPX.open()){if(want)NET.wait[want]=cb;msgs.forEach(m=>MPX.send(m));if(!want)cb&&cb(true);else setTimeout(()=>{if(NET.wait[want]===cb){NET.wait[want]=null;cb(null,'The server did not answer')}},12000);return}
+  let ws,done=false;try{ws=new WebSocket(c.url)}catch(e){return cb&&cb(null,'Cannot reach the server')}
+  const fin=(v,e)=>{if(done)return;done=true;clearTimeout(to);try{ws.close()}catch(x){}cb&&cb(v,e)},to=setTimeout(()=>fin(null,'The server did not answer'),12000);
+  ws.onopen=()=>ws.send(JSON.stringify({t:'resume',k:c.key,lb:1,pv:2}));ws.onerror=()=>fin(null,'Cannot reach the server');
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}if(m.t=='auth'){if(!m.ok)return fin(null,'Log in again through Online play');msgs.forEach(q=>ws.send(JSON.stringify(q)));if(!want)setTimeout(()=>fin(true),500)}else if(want&&m.t==want)fin(m)}}
+/* what other players see of your offline island: terrain, realms and buildings (no resources, no armies) */
+function snapOf(){const one=(tl,n)=>{const a=new Array(n*n),x=[];for(let i=0;i<n*n;i++){const t=tl[i];let ti=TTC.indexOf(t.t);if(ti<0)ti=0;a[i]=String.fromCharCode(48+ti*4+(t.r?1:0)+(t.z?2:0));if(t.o||t.b)x.push([i,t.o|0,t.b|0,t.l|0])}return{n,t:a.join(''),x}};
+  const h=S.realm=='c'?S.rl&&S.rl.h:S,c=S.realm=='c'?S:S.rl&&S.rl.c,o={};if(!h||!h.tiles)return null;o.h=one(h.tiles,h.n||sideOf(h));if(c&&c.tiles)o.c=one(c.tiles,c.n||sideOf(c));
+  const nm=S.realm=='c'?(NL_HOME||OWN).map(q=>q.n):OWN.map(q=>q.n);o.nm=nm.slice(0,10);o.cn=OWN.slice(0,10).map(q=>q.n);o.col=OWN.slice(0,10).map(q=>q.c);o.d=S.diff|0;o.ti=S.title||'';return o}
+let snapAt=0,snapSig='';
+function snapMaybe(){try{if(!S||S.on||!MPX.srv().key)return;const now=Date.now();if(now-snapAt<5*60e3)return;
+  let sig=S.realm+'|'+S.tiles.length;for(const t of S.tiles)if(t.o)sig=sig.length>4000?sig:sig+(t.o+t.b*10+(t.l|0)*100)+',';sig=sig.length+':'+sig.slice(-300);if(sig===snapSig&&now-snapAt<30*60e3)return;
+  const d=snapOf();if(!d)return;snapAt=now;snapSig=sig;srvCall([{t:'gsnap',d}],null,()=>{})}catch(e){console.error(e)}}
+setTimeout(snapMaybe,25e3);setInterval(snapMaybe,60e3);window.gxShareIsland=()=>{snapAt=0;snapSig='';snapMaybe()};
+const BIC={1:'🏰',2:'⛏️',3:'🛡️',4:'⚓',5:'🏪',6:'⚔️',7:'🎓',9:'👑',10:'🔧',11:'🗼',12:'🗿'};
+let VIS=null;
+function vEl(){let e=$u('visit');if(e)return e;e=document.createElement('div');e.id='visit';e.className='u-ov';e.style.display='none';document.body.appendChild(e);return e}
+window.visitIsland=function(id,name){const e=vEl();e.style.display='flex';e.innerHTML=`<div class="vh"><b>🏝️ ${esc(name||id)}</b><span class="mu">loading the island…</span><button style="margin-left:auto" onclick="visitClose()">✕ Close</button></div>`;
+  srvCall([{t:'visit',id}],'isle',(m,err)=>{if(!VIS&&e.style.display=='none')return;if(!m||m.no){e.innerHTML=`<div class="vh"><b>🏝️ ${esc(name||id)}</b><button style="margin-left:auto" onclick="visitClose()">✕ Close</button></div><div class="u-card" style="align-self:center"><div class="mu" style="text-align:center">${esc(err||'This island has not been shared yet. It appears after its ruler plays offline while logged in.')}</div></div>`;return}
+    VIS={m,r:'h',z:0,cx:0,cy:0,img:{}};vBuild()})};
+window.visitClose=function(){VIS=null;const e=$u('visit');if(e){e.style.display='none';e.innerHTML=''}};
+function vImg(r){const m=VIS.m,R=m.d[r];if(!R)return null;if(VIS.img[r])return VIS.img[r];const n=R.n,c=mkc(n,n),g=c.getContext('2d'),im=g.createImageData(n,n),d=im.data,own=new Uint8Array(n*n),bl=new Map(),cols=m.d.col||OWN.map(q=>q.c);
+  for(const a of R.x||[]){own[a[0]]=a[1];if(a[2])bl.set(a[0],a)}
+  for(let i=0;i<n*n;i++){const c1=R.t.charCodeAt(i)-48,tt=TTC[c1>>2]||'g',o=own[i];let col;
+    if(tt=='w'&&!o)col=c1&1?[70,160,210]:[22,100,160];else col=(c1&2)&&(tt=='g'||tt=='f')?DES:(TCOL[tt]||TCOL.g);
+    let [r0,g0,b0]=col;if(o){const oc=rgb(cols[o]||'#fff'),a=bl.has(i)?.9:.5;r0=r0*(1-a)+oc[0]*a;g0=g0*(1-a)+oc[1]*a;b0=b0*(1-a)+oc[2]*a;
+      const x=i%n,y=(i/n)|0;if(x==0||y==0||x==n-1||y==n-1||own[i-1]!==o||own[i+1]!==o||own[i-n]!==o||own[i+n]!==o){r0=Math.min(255,oc[0]*.75+70);g0=Math.min(255,oc[1]*.75+70);b0=Math.min(255,oc[2]*.75+70)}}
+    const p=i*4;d[p]=r0;d[p+1]=g0;d[p+2]=b0;d[p+3]=255}
+  g.putImageData(im,0,0);const st={},blds=[...bl.values()];for(const a of R.x||[]){const k=a[1];if(!k)continue;const q=st[k]||(st[k]={t:0,c:0,b:0,top:0});q.t++;if(a[2]==1){q.c++;q.top=Math.max(q.top,a[3])}if(a[2])q.b++}
+  return VIS.img[r]={c,n,blds,st,cols}}
+function vBuild(){const e=vEl(),m=VIS.m,d=m.d,ago=m.at?Math.max(0,Math.round((Date.now()-m.at)/6e4)):null,names=(VIS.r=='c'?d.cn:d.nm)||[];
+  const I=vImg(VIS.r);if(!I)return;const me=I.st[1]||{t:0,c:0,b:0,top:0};
+  const parts=Array.isArray(m.p)&&m.p.length==SC_W.length?(()=>{const dm=[.85,1,1.1,1.2,1.3][d.d|0]||1,P=m.p.map((v,i)=>SC_W[i][2]*v/10*dm),tot=P.reduce((a,b)=>a+b,0)||1,o=P.map((v,i)=>i).sort((a,b)=>P[b]-P[a]);return o.slice(0,4).map(i=>`<span>${SC_W[i][0]} ${SC_W[i][1]} ${Math.round(P[i]/tot*100)}%</span>`).join('')})():'';
+  e.innerHTML=`<div class="vh"><b>🏝️ ${esc(m.n||m.id)}${d.ti?` <small class="mu">· ${esc(d.ti)}</small>`:''}</b><span class="mu">⭐ ${fm(m.sc)} · ${(DIFFS[d.d|0]||DIFFS[1]).n}${ago!=null?' · updated '+(ago<1?'just now':ago<60?ago+' min ago':Math.round(ago/60)+' h ago'):''}</span>
+   ${d.c?`<span style="display:flex;gap:4px"><button class="${VIS.r=='h'?'on':''}" onclick="visitRealm('h')">🏠 Home</button><button class="${VIS.r=='c'?'on':''}" onclick="visitRealm('c')">🏝️ New Land</button></span>`:''}<button style="margin-left:auto" onclick="visitClose()">✕ Close</button></div>
+   <div class="vi"><span>🗺️ ${me.t} tiles</span><span>🏰 ${me.c} cities (best level ${me.top})</span><span>🏗️ ${me.b} buildings</span>${parts}</div>
+   <div class="vi">${Object.keys(I.st).map(k=>`<span><b style="color:${esc(I.cols[k]||'#fff')}">■</b> ${esc(k==1?(m.n||'Ruler'):(names[k]||'Realm '+k))} · ${I.st[k].t} tiles</span>`).join('')}</div>
+   <div class="vw"><canvas id="vcv"></canvas><div class="vtip" id="vtip">Drag to look around · pinch or wheel to zoom</div><div class="vz"><button onclick="visitZoom(1.4)">+</button><button onclick="visitZoom(1/1.4)">−</button><button onclick="visitZoom(0)">⤢</button></div></div>`;
+  const cv2=$u('vcv'),wr=cv2.parentNode;const fit=()=>{const r=wr.getBoundingClientRect(),dp=Math.min(2,devicePixelRatio||1);cv2.width=r.width*dp;cv2.height=r.height*dp;VIS.W=r.width;VIS.H=r.height;VIS.dp=dp};fit();
+  VIS.z=Math.min(VIS.W,VIS.H)/I.n*.95;VIS.cx=I.n/2;VIS.cy=I.n/2;vDraw();
+  const P=new Map();let d0=0,z0=0;
+  cv2.onpointerdown=ev=>{cv2.setPointerCapture(ev.pointerId);P.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});if(P.size==2){const [a,b]=[...P.values()];d0=Math.hypot(a.x-b.x,a.y-b.y);z0=VIS.z}};
+  cv2.onpointermove=ev=>{if(!P.has(ev.pointerId))return;const o=P.get(ev.pointerId);P.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+    if(P.size==2){const [a,b]=[...P.values()];VIS.z=Math.max(.5,Math.min(48,z0*Math.hypot(a.x-b.x,a.y-b.y)/Math.max(1,d0)))}else{VIS.cx-=(ev.clientX-o.x)/VIS.z;VIS.cy-=(ev.clientY-o.y)/VIS.z}vDraw()};
+  const up=ev=>{const o=P.get(ev.pointerId);P.delete(ev.pointerId);if(o&&!P.size)vTip(ev)};cv2.onpointerup=up;cv2.onpointercancel=up;
+  cv2.onwheel=ev=>{ev.preventDefault();VIS.z=Math.max(.5,Math.min(48,VIS.z*(ev.deltaY<0?1.15:1/1.15)));vDraw()};
+  VIS.fit=fit}
+function vTip(ev){const I=VIS&&vImg(VIS.r);if(!I)return;const r=$u('vcv').getBoundingClientRect(),x=Math.floor(VIS.cx+(ev.clientX-r.left-VIS.W/2)/VIS.z),y=Math.floor(VIS.cy+(ev.clientY-r.top-VIS.H/2)/VIS.z);if(x<0||y<0||x>=I.n||y>=I.n)return;
+  const R=VIS.m.d[VIS.r],i=y*I.n+x,c1=R.t.charCodeAt(i)-48,a=(R.x||[]).find(q=>q[0]===i),names=(VIS.r=='c'?VIS.m.d.cn:VIS.m.d.nm)||[];
+  $u('vtip').textContent=`(${x},${y}) ${NAME[TTC[c1>>2]]||''}${a&&a[1]?' · '+(a[1]==1?(VIS.m.n||'Ruler'):(names[a[1]]||'Realm')):''}${a&&a[2]?' · '+(BN[a[2]]||'Building')+' level '+(a[3]||1):''}`}
+window.visitRealm=function(r){if(!VIS)return;VIS.r=r;vBuild()};
+window.visitZoom=function(f){if(!VIS)return;const I=vImg(VIS.r);if(!f){VIS.z=Math.min(VIS.W,VIS.H)/I.n*.95;VIS.cx=I.n/2;VIS.cy=I.n/2}else VIS.z=Math.max(.5,Math.min(48,VIS.z*f));vDraw()};
+function vDraw(){const cv2=$u('vcv');if(!cv2||!VIS)return;const I=vImg(VIS.r),g=cv2.getContext('2d'),z=VIS.z,W2=VIS.W,H2=VIS.H;g.setTransform(VIS.dp,0,0,VIS.dp,0,0);
+  VIS.cx=Math.max(0,Math.min(I.n,VIS.cx));VIS.cy=Math.max(0,Math.min(I.n,VIS.cy));const ox=W2/2-VIS.cx*z,oy=H2/2-VIS.cy*z;
+  g.fillStyle='#04121f';g.fillRect(0,0,W2,H2);g.imageSmoothingEnabled=false;g.drawImage(I.c,ox,oy,I.n*z,I.n*z);g.imageSmoothingEnabled=true;
+  const big=z>=14;g.textAlign='center';g.textBaseline='middle';
+  for(const a of I.blds){const x=ox+(a[0]%I.n+.5)*z,y=oy+(((a[0]/I.n)|0)+.5)*z;if(x<-z||y<-z||x>W2+z||y>H2+z)continue;
+    if(big){g.font=`${Math.round(z*.62)}px sans-serif`;g.fillText(BIC[a[2]]||'🏠',x,y);if(z>=22&&a[3]>1){g.font=`bold ${Math.round(z*.3)}px sans-serif`;g.fillStyle='#000a';g.fillRect(x+z*.12,y+z*.12,z*.38,z*.3);g.fillStyle='#fff';g.fillText(a[3],x+z*.31,y+z*.28)}}
+    else if(a[2]==1){g.fillStyle=I.cols[a[1]]||'#fff';g.beginPath();g.arc(x,y,Math.max(1.8,Math.min(z*.6,6)),0,7);g.fill();g.strokeStyle='#fff';g.lineWidth=1;g.stroke()}}}
+addEventListener('resize',()=>{if(VIS&&VIS.fit){VIS.fit();vDraw()}});
+const _vm1811=vMenu;vMenu=function(){const r=_vm1811();try{r[1]+=mb('🔭','Visit islands','See other rulers\' islands from the world ranking',"rkTab='world';openSheet('rank');try{lbRefresh()}catch(e){}")}catch(e){}return r};
+
+/* ---------- 3. chat: reactions and the "new messages" line ---------- */
+const RX=['👍','👎','❤️','😢','🙏'];
+const rkey=()=>'cl-chat-read:'+(window.ONL?ONL.code+':'+ONL.slot:'');
+const getRead=()=>{try{return+localStorage.getItem(rkey())||0}catch(e){return 0}},setRead=v=>{try{localStorage.setItem(rkey(),String(v))}catch(e){}};
+CHAT.pick=0;CHAT.div=0;
+const _cl1811=chatLine;chatLine=function(m){let s=_cl1811(m);try{const me=window.ONL?ONL.slot:0,rx=m.rx||{};let chips='';
+  RX.forEach((e,k)=>{const L=rx[k]||rx[String(k)];if(L&&L.length)chips+=`<button class="${L.includes(me)?'me':''}" onclick="chatReact(${m.id},${k})" title="${L.length}">${e} ${L.length}</button>`});
+  chips+=CHAT.pick===m.id?RX.map((e,k)=>`<button onclick="chatReact(${m.id},${k})">${e}</button>`).join('')+`<button class="cx-add" onclick="chatPick(0)">✕</button>`:`<button class="cx-add" onclick="chatPick(${m.id})" aria-label="React">☺+</button>`;
+  const i=s.lastIndexOf('</div>');if(i>0)s=s.slice(0,i)+`<div class="cx-rx">${chips}</div>`+s.slice(i);
+  if(CHAT.div&&m.id===CHAT.div)s='<div class="chat-new">New messages</div>'+s}catch(e){}return s};
+window.chatPick=id=>{CHAT.pick=id;chatRender()};
+window.chatReact=(id,e)=>{CHAT.pick=0;MPX.send({t:'react',id,e});chatRender()};
+const _ct1811=chatToggle;chatToggle=function(){const opening=!CHAT.open,lr=getRead();if(opening){const me=window.ONL?ONL.slot:0,f=CHAT.log.find(q=>q.id>lr&&q.s!==me);CHAT.div=f?f.id:0}
+  _ct1811();if(opening){const last=CHAT.log.length?CHAT.log[CHAT.log.length-1].id:0;if(last)setRead(last);setTimeout(()=>{const d=document.querySelector('#chatl .chat-new');if(d)d.scrollIntoView({block:'start'})},30)}else{CHAT.div=0;CHAT.pick=0}};
+const _ca1811=chatAdd;chatAdd=function(m,live){_ca1811(m,live);if(CHAT.open&&m&&m.id)setRead(m.id)};
+const _si1811=window.srvInit;window.srvInit=function(I){_si1811&&_si1811(I);try{const lr=getRead(),me=ONL.slot;CHAT.unread=(I.chat||[]).filter(q=>q.id>lr&&q.s!==me).length;chatBtn()}catch(e){}};
+const _sm1811=window.srvMsg;window.srvMsg=function(m){
+  if(m.t=='isle'){const f=NET.wait.isle;if(f){NET.wait.isle=null;f(m)}return}
+  if(m.t=='react'){const q=CHAT.log.find(x=>x.id===m.id);if(q){q.rx=m.rx||{};if(CHAT.open)chatRender()}return}
+  return _sm1811&&_sm1811(m)};
+
+/* ---------- 4. joining a running island late: a fair head start ----------
+   The gap to the other rulers' kingdom index sets the size: a higher capital, mines on the resource tiles of the
+   new realm, a stronghold, coins, materials, a small army and a chest. Capped so it never beats the leaders. */
+window.lateBoost=function(){if(!S||!S.on||!window.ONL||S.realm=='c'||S.lateB)return;
+  const oth=Object.keys(ONL.sc||{}).filter(s=>+s!==ONL.slot).map(s=>+(ONL.sc[s].s||0)).filter(v=>v>0);if(!oth.length)return;
+  const avg=oth.reduce((a,b)=>a+b,0)/oth.length,gap=avg-((scoreOf()||{}).s||0);if(gap<60)return;
+  const f=Math.min(1,Math.sqrt(gap/900)),mine=[];S.tiles.forEach((t,i)=>{if(t.o==1)mine.push(i)});if(!mine.length)return;S.lateB={at:Date.now(),f:+f.toFixed(2)};
+  const cap=S.tiles.find(t=>t.o==1&&t.b==1);if(cap)cap.l=Math.max(cap.l||1,1+Math.round(7*f));
+  /* mines: resource tiles inside the realm first, then resource tiles right next to it (claimed in a chain) */
+  const want=1+Math.round(3*f),ml=1+Math.round(5*f),val={D:5,G:4,S:3,m:2,f:1};let made=0;
+  const cand=mine.filter(i=>{const t=S.tiles[i];return!t.b&&MR[t.t]}).sort((a,b)=>(val[S.tiles[b].t]||0)-(val[S.tiles[a].t]||0));
+  for(const i of cand){if(made>=want)break;const t=S.tiles[i];t.b=2;t.l=ml;made++}
+  if(made<want){const seen=new Set(mine);for(const i of mine){if(made>=want)break;const x=i%N,y=(i/N)|0;for(const [a,b] of D4){if(made>=want)break;const X=x+a,Y=y+b;if(!ok(X,Y))continue;const j=Y*N+X,t=S.tiles[j];if(seen.has(j)||t.o||!MR[t.t]||(t.t=='w'))continue;seen.add(j);t.o=1;t.b=2;t.l=ml;made++}}}
+  const g=mine.map(i=>S.tiles[i]).find(t=>!t.b&&t.t=='g');if(g&&f>.25){g.b=3;g.l=1+Math.round(4*f)}
+  const coins=Math.round(500+avg*35*f),wd=Math.round(80+cap0()*.6*f),sv=Math.round(10+50*f),gd=Math.round(3+18*f);
+  S.coins+=coins;S.res.wood=(S.res.wood||0)+wd;S.res.stone=(S.res.stone||0)+wd;S.res.silver=(S.res.silver||0)+sv;S.res.gold=(S.res.gold||0)+gd;
+  S.army.inf=(S.army.inf||0)+Math.round(10+40*f);S.army.arc=(S.army.arc||0)+Math.round(6+25*f);if(f>.5)S.army.cav=(S.army.cav||0)+Math.round(20*f);
+  try{const gx=window.__gx;if(gx)gx.chestAdd(f>.65?2:1,1)}catch(e){}
+  try{chron('🎁',`Late-comer's boon: a head start to catch up with the island (×${f.toFixed(2)})`)}catch(e){}last='';render();hud();save();try{MPX.upSave()}catch(e){}
+  notice('🎁 Late-comer\'s boon',`<div class="mu" style="text-align:center">The other rulers have a head start, so your realm gets one too:</div><div class="dp-next"><div><span>🏰 Capital</span><b>level ${cap?cap.l:1}</b></div><div><span>⛏️ Mines on your resource tiles</span><b>${made} × level ${ml}</b></div>${g&&g.b==3?`<div><span>🛡️ Stronghold</span><b>level ${g.l}</b></div>`:''}<div><span>🪙 Coins</span><b>${fm(coins)}</b></div><div><span>🪵🪨 Wood and stone</span><b>${fm(wd)} each</b></div><div><span>🥈 / 🥇</span><b>${sv} / ${gd}</b></div><div><span>⚔️ Army</span><b>+${Math.round(10+40*f)} infantry, +${Math.round(6+25*f)} archers</b></div></div><div class="mu" style="text-align:center;margin-top:8px">Enough for a real chance — the rest is up to you. Good luck!</div>`)};
+const cap0=()=>{try{return cap()}catch(e){return 300}};
+
+/* ---------- 5. the daily gift pops up in the middle of the screen once a day ---------- */
+function dailyPop(force){let I;try{I=window.qDailyInfo&&qDailyInfo()}catch(e){return}if(!I||!S||!S.tiles)return;let seen='';try{seen=localStorage.getItem('cl-dpop')||''}catch(e){}
+  if(!force&&(I.got||seen===I.today))return;if(!force&&(vis('dm')||vis('cho')||ovOpen())){setTimeout(()=>dailyPop(force),4000);return}
+  try{localStorage.setItem('cl-dpop',I.today)}catch(e){}const el=document.createElement('div');el.className='u-ov';el.id='dpop';document.body.appendChild(el);
+  const short=o=>I.txt(o).slice(0,3).map(x=>x.replace(/<[^>]+>/g,'💠')).join(' ');
+  const paint=()=>{const J=qDailyInfo(),nx=J.got?J.d.streak+1:J.next,base=Math.floor((Math.max(1,J.got?J.d.streak:nx)-1)/7)*7;let days='';
+    for(let i=1;i<=7;i++){const day=base+i,got=J.got?day<=J.d.streak:day<nx,now=!J.got&&day===nx;days+=`<div class="dp-day ${got?'got':''} ${now?'now':''}">Day ${day}<b>${got?'✔':J.ic(day)}</b><small>${short(J.rw(day))}</small></div>`}
+    const nexts=[1,2,3].map(k=>J.got?J.d.streak+k:nx+k).map(day=>`<div><span>Day ${day}</span><span>${short(J.rw(day))}</span></div>`).join('');
+    el.innerHTML=`<div class="u-card"><h2>${J.got?'✔ Gift claimed!':'🎁 Your daily gift'}</h2><div class="sub">${J.got?`Day ${J.d.streak} of your streak · the next gift opens in ${J.left}`:J.d.gift===J.yest&&J.d.streak?`Keep your <b>${J.d.streak}-day streak</b> alive — day ${nx} is ready`:'Come back every day: each day of the streak gives a bigger gift'}</div>
+     <div class="dp-week">${days}</div>${J.got?'':`<div style="text-align:center;font-weight:800;margin:6px 0">Today: ${I.chips(J.rw(nx))}</div>`}
+     <div class="mu" style="margin-top:6px">Coming next:</div><div class="dp-next">${nexts}</div>
+     <div class="u-btns">${J.got?'<button class="buy" data-x>Close</button>':'<button data-x>Later</button><button class="buy" data-c>🎁 Claim day '+nx+'</button>'}</div></div>`};
+  paint();el.addEventListener('click',e=>{const t=e.target.closest('button');if(e.target===el||(t&&t.hasAttribute('data-x'))){el.remove();return}if(t&&t.hasAttribute('data-c')){try{qGift()}catch(x){}paint()}})}
+window.dailyPop=dailyPop;
+setTimeout(()=>dailyPop(),2800);
+{let day=new Date().toDateString();setInterval(()=>{const d=new Date().toDateString();if(d!==day){day=d;dailyPop()}},6e4)}
+
+/* ---------- 6a. getting a chest: it pops up; open it now, or collect it and watch it fly to the Menu ---------- */
+const GOT={q:[],on:0};let BULK=null;
+window.chestGot=function(t,n){GOT.q.push([t,n]);if(!GOT.on){GOT.on=1;setTimeout(gotNext,350)}};
+function gotNext(){const g=window.__gx;if(!g||!GOT.q.length){GOT.on=0;return}if(vis('cho')||BULK||ovOpen()){setTimeout(gotNext,1200);return}
+  const t=GOT.q[0][0];let n=0;GOT.q=GOT.q.filter(e=>{if(e[0]===t){n+=e[1];return false}return true});const T=g.TR[t];
+  const el=document.createElement('div');el.className='u-ov';el.id='gxgot';el.innerHTML=`<div class="u-card"><div class="mu" style="color:${g.RCOL[t]};font-weight:800">${T.r}</div><img src="${g.chestURL(t)}" alt=""><h2>You got ${n>1?n+' × ':'a '}${T.n}!</h2><div class="sub">${T.info}</div><div class="u-btns"><button data-k>📥 Collect</button><button class="buy" data-o>✨ Open now</button></div></div>`;
+  document.body.appendChild(el);sfxS('gem');try{navigator.vibrate&&navigator.vibrate(20)}catch(e){}
+  el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.hasAttribute('data-o')){el.remove();try{openCh(t)}catch(x){}setTimeout(gotNext,900);return}
+    if(b.hasAttribute('data-k')){const img=el.querySelector('img'),r=img.getBoundingClientRect(),tg=$u('mnb')||document.querySelector('#hud .top');el.remove();
+      const f=document.createElement('img');f.src=img.src;f.className='gx-fly';f.style.cssText+=`left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;document.body.appendChild(f);
+      const tr=tg?tg.getBoundingClientRect():{left:innerWidth-40,top:innerHeight-40,width:20,height:20};
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{f.style.transform=`translate(${tr.left+tr.width/2-r.left-r.width/2}px,${tr.top+tr.height/2-r.top-r.height/2}px) scale(.16) rotate(20deg)`;f.style.opacity='.35'}));
+      setTimeout(()=>{f.remove();if(tg){tg.classList.remove('u-pulse');void tg.offsetWidth;tg.classList.add('u-pulse')}sfxS('claim');try{qBadges(true)}catch(x){}setTimeout(gotNext,350)},780)}})}
+
+/* ---------- 6b. opening many chests: green prizes first, then purple, then red; the totals count up chest by chest ---------- */
+const UN_IC={inf:'🗡️',arc:'🏹',cav:'🐎',sie:'🏰'},ORD=['coins','wood','stone','silver','gold','diamond','gems','inf','arc','cav','sie'];
+window.gxBulk=function(ti,n){const g=window.__gx;if(!g)return;if(!S)return toast('Start a game first');if(BULK)return;const M=g.M,list=[];
+  if(ti>=0){const k=Math.min(n,M.chests[ti]|0);for(let i=0;i<k;i++)list.push(ti)}
+  else{let left=n;for(let t=0;t<g.TR.length&&left>0;t++){const k=Math.min(left,M.chests[t]|0);for(let i=0;i<k;i++)list.push(t);left-=k}}
+  if(!list.length)return toast('No chests to open');
+  const cnt={};list.forEach(t=>cnt[t]=(cnt[t]||0)+1);for(const t in cnt)g.chestAdd(+t,-cnt[t]);
+  const res=list.map(t=>g.roll(t,true));try{hud();save()}catch(e){}
+  /* order: prize level (green, purple, red), then chest tier */
+  const steps=res.map(r=>({r,lv:r.lv|0,ti:r.ti|0})).sort((a,b)=>a.lv-b.lv||a.ti-b.ti);
+  bulkRun(steps,list.length)};
+function bulkRun(steps,N0){const g=window.__gx,el=document.createElement('div');el.className='u-ov';el.id='gxbulk';document.body.appendChild(el);
+  const kinds=new Set();steps.forEach(s=>s.r.forEach(it=>{if(it.k&&ORD.includes(it.k))kinds.add(it.k)}));const keys=ORD.filter(k=>kinds.has(k));
+  const icon=k=>k=='coins'?'🪙':k=='gems'?'<i class="gm"></i>':UN_IC[k]||ICON[k]||'';
+  el.innerHTML=`<div class="bk-h"><b>Opening ${N0} chest${N0>1?'s':''}</b><button data-s>⏩ Skip</button></div><div class="bk-phase" id="bkph"></div><div class="bk-stage"><img id="bkimg" alt=""><div class="bk-n" id="bkn"></div></div><div class="bk-lv" id="bklv"></div><div class="bk-tal">${keys.map(k=>`<div class="bk-c" data-k="${k}"><span>${icon(k)}</span><b>0</b></div>`).join('')}</div><div class="bk-sum" id="bksum" hidden></div>`;
+  BULK={el,steps,i:0,val:{},tw:{},lvN:[0,0,0],skip:false,cos:[]};keys.forEach(k=>{BULK.val[k]=0});
+  const base=N0<=5?720:N0<=15?420:N0<=30?260:Math.max(70,7000/N0),PH=['Prizes','GREAT PRIZES','JACKPOTS'];let lastLv=-1;
+  el.querySelector('[data-s]').onclick=()=>{BULK.skip=true};
+  const tick=()=>{if(!BULK)return;const now=performance.now();
+    for(const k in BULK.tw){const w=BULK.tw[k],p=Math.min(1,(now-w.t0)/w.d),e=1-Math.pow(1-p,3),v=w.a+(w.b-w.a)*e,c=el.querySelector(`.bk-c[data-k="${k}"] b`);if(c)c.textContent=fm(v);if(p>=1)delete BULK.tw[k]}
+    BULK.raf=requestAnimationFrame(tick)};BULK.raf=requestAnimationFrame(tick);
+  const step=()=>{if(!BULK)return;if(BULK.skip){while(BULK.i<steps.length)apply(steps[BULK.i++],0);return finish()}
+    if(BULK.i>=steps.length)return finish();const s=steps[BULK.i++],d=base*(s.lv==2?2.3:s.lv==1?1.5:1);
+    if(s.lv!==lastLv){lastLv=s.lv;const ph=$u('bkph');ph.textContent=PH[s.lv];el.style.setProperty('--pc',g.PL[s.lv].col);ph.classList.remove('flash');void ph.offsetWidth;ph.classList.add('flash');sfxS(s.lv==2?'chJack':s.lv==1?'chUp2':'chUp1')}
+    const im=$u('bkimg');im.src=g.chestURL(s.ti);im.style.setProperty('--d',Math.min(.45,d/1000)+'s');im.classList.remove('pop');void im.offsetWidth;im.classList.add('pop');
+    $u('bkn').textContent=`${BULK.i} / ${steps.length} · ${g.TR[s.ti].n}`;if(d>=110)sfxS('chTick');apply(s,d*.85);setTimeout(step,d)};
+  const apply=(s,d)=>{BULK.lvN[s.lv]++;$u('bklv').innerHTML=BULK.lvN.map((c,i)=>c?`<i style="--c:${g.PL[i].col}">${c} × ${g.PL[i].n}</i>`:'').join('');
+    const add={};s.r.forEach(it=>{if(it.k&&it.n&&BULK.val[it.k]!=null)add[it.k]=(add[it.k]||0)+it.n;else if(!it.k||!it.n)BULK.cos.push(it)});
+    const now=performance.now();for(const k in add){const a=BULK.val[k],b=a+add[k];BULK.val[k]=b;
+      const c=el.querySelector(`.bk-c[data-k="${k}"]`);if(!c)continue;
+      if(d>0){const cur=BULK.tw[k];BULK.tw[k]={a:cur?cur.a+(cur.b-cur.a)*Math.min(1,(now-cur.t0)/cur.d):a,b,t0:now,d:Math.max(60,d)};c.classList.add('hit');setTimeout(()=>c.classList.remove('hit'),Math.max(80,d*.8));
+        if(steps.length<=40){const pl=document.createElement('i');pl.className='bk-pl';pl.textContent='+'+fm(add[k]);c.appendChild(pl);setTimeout(()=>pl.remove(),700)}}
+      else{delete BULK.tw[k];c.querySelector('b').textContent=fm(b)}}};
+  const finish=()=>{if(!BULK||BULK.done)return;BULK.done=1;for(const k in BULK.val){delete BULK.tw[k];const c=el.querySelector(`.bk-c[data-k="${k}"] b`);if(c)c.textContent=fm(BULK.val[k])}
+    $u('bkph').textContent='All opened!';el.querySelector('[data-s]').remove();sfxS('cho3');try{navigator.vibrate&&navigator.vibrate([25,30,40])}catch(e){}
+    const left=Object.values(g.M.chests).reduce((a,b)=>a+(b>0?b:0),0),sum=$u('bksum');sum.hidden=false;el.classList.add('done');
+    sum.innerHTML=`<div class="mi"><b>🎁 Your haul</b>${keys.map(k=>`<div class="mf"><span>${icon(k)} ${k=='coins'?'Coins':k=='gems'?'Gems':UN_IC[k]?({inf:'Infantry',arc:'Archers',cav:'Cavalry',sie:'Siege engines'})[k]:k[0].toUpperCase()+k.slice(1)}</span><b>+${fm(BULK.val[k])}</b></div>`).join('')}${BULK.cos.length?`<div class="mf"><span>✨ Cosmetics</span><b>${BULK.cos.map(c=>String(c.tx||'').replace(/<[^>]+>/g,'')).join(', ')}</b></div>`:''}<div class="mu">Everything is already in your treasury, storage and army.</div></div>
+      <div class="u-btns"><button class="buy" data-x>Collect</button>${left?`<button data-m>Open ${Math.min(left,N0)} more</button>`:''}</div>`;
+    sum.querySelector('[data-x]').onclick=close;const mm=sum.querySelector('[data-m]');if(mm)mm.onclick=()=>{close();setTimeout(()=>gxBulk(-1,N0),60)}};
+  const close=()=>{if(!BULK)return;cancelAnimationFrame(BULK.raf);BULK=null;el.remove();try{hud();if(vis('tre'))treTab('ch');qBadges(true)}catch(e){}};
+  setTimeout(step,250)}
 })();
 </script>
 </body></html>

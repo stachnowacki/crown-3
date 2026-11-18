@@ -4,6 +4,7 @@
 //   redeploys and crashes; attacks against offline players are queued and delivered when they return
 // - automatic, verified, compressed backups with retention; admin API to list, create and restore them
 // - serves www/ (the game) and public/ (install page, optional crownlands.apk)
+// - offline island snapshots that other players can visit: DATA_DIR/snaps/<account>.json.gz (+ cloud key snap:<account>)
 //
 // Environment (all optional):
 //   PORT                      HTTP port (Render sets this)
@@ -22,14 +23,18 @@ const PORT = process.env.PORT || 8080, DATA = process.env.DATA_DIR || __dirname;
 const DBF = path.join(DATA, 'accounts.json'), RF = path.join(DATA, 'rooms.json');
 const BK = path.join(DATA, 'backups'), ARCH = path.join(DATA, 'archive');
 const ROOTS = [path.join(__dirname, 'www'), path.join(__dirname, 'public')];
-const NCOL = 128, MAXP = 7, NT = 56 * 56 + NCOL * NCOL, DAY = 864e5, UNITS = ['inf', 'arc', 'cav', 'sie'];
+// Map layout (update 18.11): the home island is 126x126 (was 56x56) and the shared New Land 404x404 (was 128x128).
+// Tile index = home y*HN+x, then the New Land from HN*HN on. Islands saved with the old layout are migrated on load
+// (their old map sits in the middle of the bigger one: +OFFH / +OFFC on both axes), so no realm is lost.
+const HN = 126, NCOL = 404, OFFH = 35, OFFC = 138, HT = HN * HN, MAXP = 7, NT = HT + NCOL * NCOL, DAY = 864e5, UNITS = ['inf', 'arc', 'cav', 'sie'];
+const PROTO = 2;   // clients older than this use the old tile layout and must reload
 // Conquest shield: after a realm loses land to another player, nobody may conquer from it for a while.
 // Longer when the victim is offline (they cannot defend) and x3 when a city or stronghold fell.
 const SHIELD_ONLINE = 8 * 60e3, SHIELD_OFFLINE = 25 * 60e3, SHIELD_BIG = 3;
-const START = [null, [28, 43], [12, 15], [44, 15], [45, 33], [12, 34]];   // must match the client's start positions (slots 1-5)
+const START = [null, [28, 43], [12, 15], [44, 15], [45, 33], [12, 34]].map(p => p && [p[0] + OFFH, p[1] + OFFH]);   // must match the client's start positions (slots 1-5)
 // Slots 6-7, and anyone who joins after the start, have no fixed start: their game picks a spot on the real terrain
 // (free land first, then claimed land with the fewest buildings) and sends it as a 'spawn' message; it is kept as p.sp.
-const SCHEMA = 3, SCORE_MAX = 1500;
+const SCHEMA = 4, SCORE_MAX = 1e15;   // v4: the kingdom index has no ceiling any more
 /*@@CORE7@@*/
 /* ===== CORE7: shared by the server and the game. Pure functions, no DOM, no Node APIs.
    The server runs this to decide the world; the offline game runs the same code locally. ===== */
@@ -158,6 +163,19 @@ function migrateAccounts(o) {
   o.v = Math.max(from, SCHEMA);
   return o;
 }
+/* v4: the bigger islands. Old home index (56x56) and New Land index (128x128) move to the middle of the new maps. */
+const OLD_HT = 56 * 56;
+function remapIdx(i) { if (!Number.isInteger(i) || i < 0) return i;
+  if (i < OLD_HT) { const x = i % 56, y = (i / 56) | 0; return (y + OFFH) * HN + x + OFFH; }
+  const j = i - OLD_HT; if (j >= 128 * 128) return -1; const x = j % 128, y = (j / 128) | 0; return HT + (y + OFFC) * NCOL + x + OFFC; }
+function migrateLayout(r) {
+  if (Array.isArray(r.tiles)) r.tiles = r.tiles.map(e => Array.isArray(e) ? [remapIdx(e[0]), e[1]] : e).filter(e => !Array.isArray(e) || e[0] >= 0);
+  for (const p of r.pl || []) { if (!p || typeof p !== 'object') continue;
+    if (Array.isArray(p.sp)) p.sp = [p.sp[0] + OFFH, p.sp[1] + OFFH];
+    if (Array.isArray(p.pend)) for (const h of p.pend) if (h && Number.isInteger(h.i)) h.i = remapIdx(h.i); }
+  for (const m of r.chat || []) if (m && m.loc) { const d = m.loc.r === 'c' ? OFFC : OFFH; m.loc.x += d; m.loc.y += d; }
+  r.mv = 2; log('info', `island ${r.code}: map enlarged (realms kept, moved to the middle of the bigger island)`);
+}
 function migrateRooms(list) {
   for (const r of list) {
     if (!r || typeof r !== 'object') continue;
@@ -170,6 +188,7 @@ function migrateRooms(list) {
       if (!('sc' in p)) p.sc = null;
       if (!Array.isArray(p.mids)) p.mids = [];        // v3: ids of battle messages already applied
     }
+    if (!r.mv) migrateLayout(r);
     if ((r.v || 1) < SCHEMA) r.v = SCHEMA;
   }
   return list;
@@ -277,14 +296,14 @@ const rooms = new Map();
 function seed(r) { // every player's starting land belongs to them from the start, so it is protected too
   for (const p of r.pl) { const st = p.sp || (!p.late && START[p.s]); if (!st) continue; const [sx, sy] = st;
     for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) if (x * x + y * y <= 9) {
-      const i = (sy + y) * 56 + sx + x; if (!r.tiles.has(i)) r.tiles.set(i, [p.s, x === 0 && y === 0 ? 1 : 0, 1, 0]); } }
+      const i = (sy + y) * HN + sx + x; if (!r.tiles.has(i)) r.tiles.set(i, [p.s, x === 0 && y === 0 ? 1 : 0, 1, 0]); } }
 }
 const liveRoom = r => ({ ...r, v: r.v || SCHEMA, shield: r.shield || {}, tiles: new Map(r.tiles), pl: r.pl.map(p => ({ ...p, ws: null, mids: Array.isArray(p.mids) ? p.mids : [], tal: p.tal && 'inf' in p.tal ? { h: p.tal } : p.tal })) });
 function loadRooms(list) { rooms.clear(); for (const r of migrateRooms(list)) { const room = liveRoom(r); if (room.started) seed(room); rooms.set(r.code, room); } }
 try { loadRooms(JSON.parse(fs.readFileSync(RF, 'utf8'))); log('info', `loaded ${rooms.size} islands, ${Object.keys(db.users).length} accounts`); }
 catch (e) { if (e.code !== 'ENOENT') log('error', 'rooms load failed: ' + e.message); }
 let dirty = 0;
-const snapRoom = r => ({ v: Math.max(r.v || 0, SCHEMA), code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield || {},
+const snapRoom = r => ({ v: Math.max(r.v || 0, SCHEMA), mv: r.mv || 2, code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield || {},
     tiles: [...r.tiles], mkt: r.mkt, chat: (r.chat || []).slice(-80), cid: r.cid || 0,
     pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last || 0, sp: p.sp || null, late: p.late ? 1 : 0, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc || null, fx: p.fx, mids: (p.mids || []).slice(-300) })) });
 const snapshotRooms = () => [...rooms.values()].map(snapRoom);
@@ -406,6 +425,24 @@ function mkStep(m) {   // pacing matches the offline market: slower drift, calme
 const mkPub = m => { const o = { t: 'mkt', price: {}, mk: {}, hist: m.hist, news: m.news, feed: m.feed }; for (const r of MRES) { o.price[r] = +m.price[r].toFixed(3); o.mk[r] = Math.round(m.mk[r]); } return o; };
 setInterval(() => { for (const r of rooms.values()) { if (!r.started || !r.pl.some(p => p.ws)) continue; if (!r.mkt) r.mkt = mkNew(); mkStep(r.mkt); if (r.mkt.tk % 2 == 0) { const o = mkPub(r.mkt); r.pl.forEach(p => send(p.ws, o)); } } }, 1000);
 
+/* ---------- island snapshots (visit other players' offline islands) ----------
+   One gzip file per account in DATA/snaps, mirrored to the cloud as "snap:<id>". Kept outside accounts.json so the
+   account data stays small. A snapshot is display data only (terrain + owners + buildings): nothing in it is trusted. */
+const RX = ['👍', '👎', '❤️', '😢', '🙏'];
+const SNAPS = path.join(DATA, 'snaps'); try { fs.mkdirSync(SNAPS, { recursive: true }); } catch (e) {}
+const snapMem = new Map(), snapMeta = {};
+try { for (const f of fs.readdirSync(SNAPS)) if (f.endsWith('.json.gz')) snapMeta[f.slice(0, -8)] = { at: fs.statSync(path.join(SNAPS, f)).mtimeMs }; } catch (e) {}
+const snapOk = d => { const ok1 = r => r && typeof r === 'object' && Number.isInteger(r.n) && r.n >= 8 && r.n <= 512 && typeof r.t === 'string' && r.t.length === r.n * r.n && (r.x == null || Array.isArray(r.x));
+  return ok1(d.h) && (d.c == null || ok1(d.c)); };
+const hasSnap = id => !!snapMeta[id] || !!(db.users[id] && db.users[id].snAt);
+const online = id => { for (const c of wss.clients) if (c.u === id && c.readyState === 1) return true; return false; };
+function putSnap(id, j) { snapMeta[id] = { at: Date.now() }; if (db.users[id] && !db.users[id].snAt) { db.users[id].snAt = Date.now(); saveDb(); } snapMem.set(id, j); if (snapMem.size > 40) snapMem.delete(snapMem.keys().next().value);
+  enqueue('snap:' + id, () => fsp.writeFile(path.join(SNAPS, id + '.json.gz'), zlib.gzipSync(j))); remote.push('snap:' + id, j); }
+async function getSnap(id) { if (snapMem.has(id)) return snapMem.get(id);
+  try { const j = zlib.gunzipSync(await fsp.readFile(path.join(SNAPS, id + '.json.gz'))).toString(); snapMem.set(id, j); return j; } catch (e) {}
+  if (remote.enabled) { try { const j = await remote.pull('snap:' + id); if (j) { snapMeta[id] = snapMeta[id] || { at: Date.now() }; snapMem.set(id, j); return j; } } catch (e) {} }
+  return null; }
+
 /* ---------- helpers ---------- */
 const hash = (p, s) => crypto.scryptSync(p, s, 32).toString('hex');
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
@@ -429,6 +466,7 @@ function attach(ws) { // connect a signed-in user to the island they used most r
   let best = null, bp = null;
   for (const r of rooms.values()) { const p = r.pl.find(q => q.u === ws.u); if (p && (!best || (p.last || 0) > (bp.last || 0))) { best = r; bp = p; } }
   if (!best) return;
+  if ((ws.pv | 0) < PROTO) return send(ws, { t: 'err', m: OLD_CLIENT, reload: 1 });
   if (bp.ws && bp.ws !== ws) { try { send(bp.ws, { t: 'kicked', m: 'Your realm was opened on another device.' }); bp.ws.room = null; bp.ws.close(); } catch (e) {} log('info', `session replaced by a newer connection: room ${best.code} slot ${bp.s}`); }
   bp.ws = ws; ws.room = best; bp.last = Date.now(); log('info', `player (re)connected: room ${best.code} slot ${bp.s}`);
   send(ws, roomMsg(best, bp, true)); bp.pend = []; touch(best); bc(best);
@@ -445,7 +483,9 @@ function leave(ws) {
 const newCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do { c = Array.from({ length: 6 }, () => A[crypto.randomInt(A.length)]).join(''); } while (rooms.has(c)); return c; };
 const CAPS = { ack: 1, px: 1, kicked: 1, world: 1 };
 
+const OLD_CLIENT = 'Crownlands was updated (bigger islands). Please reload the game to continue.';
 function auth(ws, m) {
+  ws.pv = m.pv | 0;   // an old page is still signed in (its key is kept), but it cannot enter an island until it reloads
   if (m.t === 'resume') {
     const u = db.keys[m.k]; if (!u || !db.users[u]) return send(ws, { t: 'auth', ok: 0, err: 'Session expired' });
     ws.u = u; send(ws, { t: 'auth', ok: 1, name: dname(u), key: m.k, st: storageInfo(), caps: CAPS }); send(ws, wView(u)); if (m.lb) return; return attach(ws);
@@ -480,11 +520,13 @@ function checkSave(d) {
   return null;
 }
 /* score is a 0-1300 index; it cannot jump faster than real progress allows */
-function okScore(prev, s, now) { const el = prev && prev.at ? (now - prev.at) / 60e3 : 1e9; return !prev || s <= (prev.s || 0) + 25 + 40 * el; }
+/* the index has no ceiling; it may grow by a fixed amount plus a share of itself per minute */
+const scoreCap = (prev, now) => { const el = Math.max(0, (now - prev.at) / 60e3), b = prev.s || 0; return Math.floor(b + 25 + 40 * el + b * Math.min(3, .02 * el)); };
+function okScore(prev, s, now) { return !prev || !prev.at || s <= scoreCap(prev, now); }
 const tit = v => typeof v === 'string' && /^[A-Za-z' ]{1,28}$/.test(v) ? v : '';
 const seen = (p, mid) => { if (typeof mid !== 'string' || mid.length > 40) return false; p.mids = p.mids || []; if (p.mids.includes(mid)) return true; p.mids.push(mid); if (p.mids.length > 400) p.mids.splice(0, p.mids.length - 300); return false; };
-const nb = (i, f) => { if (i < 3136) { const x = i % 56, y = (i / 56) | 0; return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => { const X = x + a, Y = y + b; return X >= 0 && Y >= 0 && X < 56 && Y < 56 && f(Y * 56 + X); }); }
-  const j = i - 3136, x = j % NCOL, y = (j / NCOL) | 0; return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => { const X = x + a, Y = y + b; return X >= 0 && Y >= 0 && X < NCOL && Y < NCOL && f(3136 + Y * NCOL + X); }); };
+const nb = (i, f) => { if (i < HT) { const x = i % HN, y = (i / HN) | 0; return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => { const X = x + a, Y = y + b; return X >= 0 && Y >= 0 && X < HN && Y < HN && f(Y * HN + X); }); }
+  const j = i - HT, x = j % NCOL, y = (j / NCOL) | 0; return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => { const X = x + a, Y = y + b; return X >= 0 && Y >= 0 && X < NCOL && Y < NCOL && f(HT + Y * NCOL + X); }); };
 
 
 /* ---------- v4: world events, season claims. State lives inside the accounts data, so the existing backups,
@@ -542,6 +584,7 @@ function handle(ws, m) {
   if (!ws.u) return;
   if (m.t === 'we' || m.t === 'wec' || m.t === 'wecl' || m.t === 'scl') return w7Handle(ws, m);
   const r = ws.room, me = r && r.pl.find(p => p.u === ws.u);
+  if ((ws.pv | 0) < PROTO && !['lb', 'gscore', 'leave'].includes(m.t)) { if (!ws.oldWarn) { ws.oldWarn = 1; send(ws, { t: 'err', m: OLD_CLIENT, reload: 1 }); } return; }
   switch (m.t) {
     case 'create': {
       leave(ws); const code = newCode();
@@ -561,13 +604,13 @@ function handle(ws, m) {
     }
     case 'start': if (r && !r.started && r.host === ws.u && r.pl.length >= 2) { r.started = true; seed(r); touch(r); r.pl.forEach(p => send(p.ws, roomMsg(r, p, true))); log('info', `island started: ${r.code} (${r.pl.length} players)`); } else if (r && r.host === ws.u) send(ws, { t: 'err', m: 'Need at least 2 players' }); return;
     case 'spawn': { // a realm with no land on the home island gets a starting circle (radius 3) where its game chose
-      if (!r || !r.started || !me || !num(m.c, 0, 3135) || !Array.isArray(m.d)) return bad(ws, 'spawn');
+      if (!r || !r.started || !me || !num(m.c, 0, HT - 1) || !Array.isArray(m.d)) return bad(ws, 'spawn');
       const now = Date.now(); if (me.spAt && now - me.spAt < 3000) return; me.spAt = now;
-      for (const [i, v] of r.tiles) if (i < 3136 && v[0] === me.s) return send(ws, { t: 'spawnok', had: 1 });   // already has land
-      const cx = m.c % 56, cy = (m.c / 56) | 0, held = i => { const c = r.tiles.get(i); return c && c[0] && c[0] !== me.s && c[1]; };
-      if (cx < 3 || cy < 3 || cx > 52 || cy > 52 || held(m.c)) return send(ws, { t: 'spawnno' });
+      for (const [i, v] of r.tiles) if (i < HT && v[0] === me.s) return send(ws, { t: 'spawnok', had: 1 });   // already has land
+      const cx = m.c % HN, cy = (m.c / HN) | 0, held = i => { const c = r.tiles.get(i); return c && c[0] && c[0] !== me.s && c[1]; };
+      if (cx < 3 || cy < 3 || cx > HN - 4 || cy > HN - 4 || held(m.c)) return send(ws, { t: 'spawnno' });
       const set = new Set([m.c]);
-      for (const i of m.d.slice(0, 40)) { if (!num(i, 0, 3135)) continue; const x = i % 56, y = (i / 56) | 0; if ((x - cx) ** 2 + (y - cy) ** 2 <= 9) set.add(i); }
+      for (const i of m.d.slice(0, 40)) { if (!num(i, 0, HT - 1)) continue; const x = i % HN, y = (i / HN) | 0; if ((x - cx) ** 2 + (y - cy) ** 2 <= 9) set.add(i); }
       const ok = [];
       for (const i of set) { if (held(i)) continue;            // other players' buildings are never taken
         const v = [me.s, i === m.c ? 1 : 0, 1, 0]; r.tiles.set(i, v); ok.push([i, ...v]); }
@@ -577,7 +620,7 @@ function handle(ws, m) {
     case 'leave': return leave(ws);
     case 'trade': { // a trade at the island's shared market; filled along the price curve like the offline market
       if (!r || !r.started || !me) return; if (!r.mkt) r.mkt = mkNew(); const m0 = r.mkt, res = String(m.r), n = Math.floor(+m.n);
-      if (!MRES.includes(res) || !(n >= 1 && n <= 50000) || (m.side !== 'buy' && m.side !== 'sell')) return bad(ws, 'trade');
+      if (!MRES.includes(res) || !(n >= 1 && n <= 1e12) || (m.side !== 'buy' && m.side !== 'sell')) return bad(ws, 'trade');
       ws.tids = ws.tids || new Set(); if (m.id != null) { if (ws.tids.has(m.id)) return; ws.tids.add(m.id); if (ws.tids.size > 200) ws.tids = new Set([...ws.tids].slice(-100)); }
       const mid = m0.price[res]; let px;
       if (m.side === 'sell') { const imp = Math.min(.3, n * MI[res] * .5); px = mid * (1 - imp / 2); m0.mk[res] = Math.min(MM0[res] * 3, m0.mk[res] + n); m0.price[res] = cl(mid * (1 - imp), MB[res] * .35, MB[res] * 2.8); }
@@ -587,20 +630,20 @@ function handle(ws, m) {
     }
     case 'score': { // my island's progress score (shown in the island ranking and the world ranking)
       if (!r || !r.started || !me || !m.s || typeof m.s !== 'object') return; const now = Date.now(); if (me.scAt && now - me.scAt < 8000) return; me.scAt = now;
-      let s = cl(Math.floor(+m.s.s) || 0, 0, SCORE_MAX); const p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 100)) : null;
-      if (!okScore(me.sc, s, now)) { bad(ws, 'score jump'); s = Math.floor((me.sc.s || 0) + 25 + 40 * (now - me.sc.at) / 60e3); }
+      let s = cl(Math.floor(+m.s.s) || 0, 0, SCORE_MAX); const p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 1e12)) : null;
+      if (!okScore(me.sc, s, now)) { bad(ws, 'score jump'); s = scoreCap(me.sc, now); }
       me.sc = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now, ti: tit(m.s.ti) }; const u = db.users[ws.u]; if (u) { u.is = { s, p, d: me.sc.d, at: now, ti: me.sc.ti }; saveDb(); } bc(r); touch(r); return;
     }
     case 'gscore': { // an offline (solo) island of a logged-in player
       const u = db.users[ws.u]; if (!u || !m.s || typeof m.s !== 'object') return; const now = Date.now(); if (ws.gsAt && now - ws.gsAt < 8000) return; ws.gsAt = now;
-      let s = cl(Math.floor(+m.s.s) || 0, 0, SCORE_MAX); const p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 100)) : null;
-      if (u.gs && !okScore(u.gs, s, now)) { bad(ws, 'solo score jump'); s = Math.floor((u.gs.s || 0) + 25 + 40 * (now - u.gs.at) / 60e3); }
+      let s = cl(Math.floor(+m.s.s) || 0, 0, SCORE_MAX); const p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 1e12)) : null;
+      if (u.gs && !okScore(u.gs, s, now)) { bad(ws, 'solo score jump'); s = scoreCap(u.gs, now); }
       u.gs = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now, ti: tit(m.s.ti) }; saveDb(); return;
     }
     case 'lb': { // world ranking: every account's best island
-      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs, b = u.is; const best = !a ? (b ? [b, 'online'] : null) : !b ? [a, 'solo'] : (b.s > a.s ? [b, 'online'] : [a, 'solo']); if (best && best[0].s > 0) rows.push({ id, n: u.name || id, s: Math.min(SCORE_MAX, best[0].s), m: best[1], p: best[0].p, d: best[0].d, ti: best[0].ti || '' }); }
+      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs, b = u.is; const best = !a ? (b ? [b, 'online'] : null) : !b ? [a, 'solo'] : (b.s > a.s ? [b, 'online'] : [a, 'solo']); if (best && best[0].s > 0) rows.push({ id, n: u.name || id, s: Math.min(SCORE_MAX, best[0].s), m: best[1], p: best[0].p, d: best[0].d, ti: best[0].ti || '', vi: hasSnap(id) ? 1 : 0, on: online(id) ? 1 : 0 }); }
       rows.sort((x, y) => y.s - x.s); const mine = rows.findIndex(x => x.id === ws.u);
-      send(ws, { t: 'lb', top: rows.slice(0, 50).map(({ id, ...q }) => q), total: rows.length, me: mine < 0 ? null : { rank: mine + 1, s: rows[mine].s, m: rows[mine].m } }); return;
+      send(ws, { t: 'lb', top: rows.slice(0, 50), total: rows.length, me: mine < 0 ? null : { rank: mine + 1, s: rows[mine].s, m: rows[mine].m } }); return;
     }
     case 'fx': { // my look (picture, nickname effect, realm colour, building aura) so everyone in the room sees it
       if (!r || !me || !m.fx || typeof m.fx !== 'object') return; const now = Date.now(); if (me.fxAt && now - me.fxAt < 1500) return; me.fxAt = now;
@@ -610,12 +653,32 @@ function handle(ws, m) {
     case 'chat': {
       if (!r || !r.started || !me) return; const now = Date.now(); if (me.chAt && now - me.chAt < 900) return; me.chAt = now;
       const text = String(m.m || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200); if (!text) return;
-      let loc = null; if (m.loc && typeof m.loc === 'object' && (m.loc.r === 'h' || m.loc.r === 'c') && num(m.loc.x, 0, 127) && num(m.loc.y, 0, 127)) loc = { r: m.loc.r, x: m.loc.x, y: m.loc.y, t: String(m.loc.t || '').slice(0, 40) };
+      let loc = null; if (m.loc && typeof m.loc === 'object' && (m.loc.r === 'h' || m.loc.r === 'c') && num(m.loc.x, 0, NCOL - 1) && num(m.loc.y, 0, NCOL - 1)) loc = { r: m.loc.r, x: m.loc.x, y: m.loc.y, t: String(m.loc.t || '').slice(0, 40) };
       const msg = { id: r.cid = (r.cid || 0) + 1, s: me.s, n: dname(me.u), m: text, at: now }; if (loc) msg.loc = loc;
       if (m.fx && typeof m.fx === 'object') { const fx = {}; for (const [k, mx] of [['pf', 13], ['nf', 9], ['mf', 8]]) { const q = m.fx[k]; if (Number.isInteger(q) && q >= 0 && q < mx) fx[k] = q; } if (Object.keys(fx).length) msg.fx = fx; }
       if (me.fx) { msg.fx = msg.fx || {}; for (const k of ['pf', 'nf']) if (me.fx[k] != null) msg.fx[k] = me.fx[k]; }
       (r.chat = r.chat || []).push(msg); if (r.chat.length > 120) r.chat.splice(0, r.chat.length - 120);
       r.pl.forEach(p => send(p.ws, { t: 'chat', msg })); touch(r); return;
+    }
+    case 'react': { // an emoji reaction on a chat message: 0 thumbs up, 1 thumbs down, 2 heart, 3 crying, 4 please. Tapping again removes it.
+      if (!r || !r.started || !me || !num(m.id, 1, 1e9) || !num(m.e, 0, RX.length - 1)) return bad(ws, 'react');
+      const now = Date.now(); if (me.rxAt && now - me.rxAt < 250) return; me.rxAt = now;
+      const msg = (r.chat || []).find(q => q.id === m.id); if (!msg) return;
+      const rx = msg.rx = msg.rx && typeof msg.rx === 'object' ? msg.rx : {}, k = String(m.e), L = rx[k] = Array.isArray(rx[k]) ? rx[k] : [], at = L.indexOf(me.s);
+      if (at >= 0) L.splice(at, 1); else L.push(me.s);
+      if (!L.length) delete rx[k]; if (!Object.keys(rx).length) delete msg.rx;
+      r.pl.forEach(p => send(p.ws, { t: 'react', id: msg.id, rx: msg.rx || {} })); touch(r); return;
+    }
+    case 'gsnap': { // a compact picture of the player's offline island, so other players can visit it (read only)
+      const u = db.users[ws.u]; if (!u || !m.d || typeof m.d !== 'object') return; const now = Date.now(); if (ws.snAt && now - ws.snAt < 60e3) return;
+      let j = ''; try { j = JSON.stringify(m.d); } catch (e) { return bad(ws, 'snapshot'); }
+      if (j.length > 900000 || !snapOk(m.d)) return bad(ws, 'snapshot'); ws.snAt = now; putSnap(ws.u, j); return;
+    }
+    case 'visit': { // read someone's offline island
+      const id = String(m.id || '').toLowerCase(); if (!db.users[id]) return send(ws, { t: 'isle', id, no: 1 });
+      const now = Date.now(); if (ws.viAt && now - ws.viAt < 1500) return; ws.viAt = now;
+      getSnap(id).then(j => send(ws, j ? { t: 'isle', id, n: dname(id), d: JSON.parse(j), at: (snapMeta[id] || {}).at || 0, sc: (db.users[id].gs || {}).s || 0, p: (db.users[id].gs || {}).p || null } : { t: 'isle', id, no: 1 })).catch(() => send(ws, { t: 'isle', id, no: 1 }));
+      return;
     }
     case 'save': { // the player's own realm (coins, army, research...) so it survives switching the phone off
       if (!r || !r.started || !me || !m.d || typeof m.d !== 'object') return;
@@ -640,7 +703,7 @@ function handle(ws, m) {
           if (!cq) { badT.push([i, ...cur]); continue; }        // lost a race: resync the sender
           if (po >= 1 && po <= MAXP && (r.shield[po] || 0) > now) { badT.push([i, ...(cur || [po, pb, 1, 0])]); blocked = po; continue; }
           conq.set(po, Math.max(conq.get(po) || 0, pb === 1 || pb === 3 ? SHIELD_BIG : 1));
-        } else if (!po && i < 3136 && !cq) { claims.push([i, o, b, l, w]); continue; }   // a neutral claim on the home island: must touch the realm
+        } else if (!po && i < HT && !cq) { claims.push([i, o, b, l, w]); continue; }   // a neutral claim on the home island: must touch the realm
         r.tiles.set(i, [o, b, l, w || 0]); ok.push([i, o, b, l, w || 0]);
       }
       /* claims are accepted in chains (a tile next to one claimed in the same batch is fine) */
