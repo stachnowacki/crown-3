@@ -1613,7 +1613,7 @@ let LAST=[],retry=0;const SHD={};   // SHD[global slot] = time until which that 
 const E=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sig=t=>(t.o|0)+(t.b|0)*16+(t.l|0)*1024+(t.w|0)*65536;   /* update 18.11: a number (owner|building|level|walls) instead of a string: no garbage on 163k-tile maps */
 const L=s=>s==ONL.slot?1:s==1?ONL.slot:s;            // global slot <-> local owner id (a swap, so it is its own inverse)
-const wsend=o=>{if(o&&(o.t=='auth'||o.t=='resume'))o.pv=2;if(MP.ws&&MP.ws.readyState==1)MP.ws.send(JSON.stringify(o))};   /* pv: tile layout version (update 18.11) */
+const wsend=o=>{if(o&&(o.t=='auth'||o.t=='resume'))o.pv=2;else if(MP.oldSrv&&o&&o.t!='leave')return;if(MP.ws&&MP.ws.readyState==1)MP.ws.send(JSON.stringify(o))};   /* pv: tile layout version (update 18.11) */
 
 /* ---------- connection ---------- */
 function conn(cb){
@@ -1625,13 +1625,13 @@ function conn(cb){
     else if(MP.open){MP.err='Cannot reach the server';ui()}}}
 
 function onMsg(e){let m;try{m=JSON.parse(e.data)}catch(x){return}
-  if(m.t=='auth'){if(m.ok){MP.name=m.name;MP.key=m.key;MP.st=m.st||null;MP.caps=m.caps||{};localStorage.setItem('cl-key',m.key);MP.err='';if(MP.v=='auth')MP.v='home';if(MP.want&&!MP.room){wsend({t:'join',code:MP.want});MP.want=''}}
+  if(m.t=='auth'){if(m.ok){MP.oldSrv=!(m.caps&&m.caps.map>=2);if(MP.oldSrv)MP.err='This server has not been updated for the bigger islands yet. Online islands open again as soon as it is — nothing on them is changed meanwhile.';MP.name=m.name;MP.key=m.key;MP.st=m.st||null;MP.caps=m.caps||{};localStorage.setItem('cl-key',m.key);MP.err='';if(MP.v=='auth')MP.v='home';if(MP.want&&!MP.room){wsend({t:'join',code:MP.want});MP.want=''}}
     else{MP.err=m.err||'Login failed';MP.key='';MP.v='auth';localStorage.removeItem('cl-key')}ui()}
   else if(m.t=='err'){MP.err=m.m;if(S&&S.on)toast(m.m);ui()}
   else if(m.t=='world'||m.t=='wecok'||m.t=='weclok'||m.t=='sclok'){try{window.X7&&X7.msg(m)}catch(x){console.error(x)}}
   else if(m.t=='ack'){try{window.obxAck&&obxAck(m.mid)}catch(x){}}
   else if(m.t=='kicked'){MP.room=null;toast('🔒 '+(m.m||'Your realm was opened on another device.')+' Reload to play here again.')}
-  else if(m.t=='room'){MP.room=m;
+  else if(m.t=='room'){if(MP.oldSrv){ui();return}MP.room=m;
     if(m.started){if(!window.ONL)startOn(m);else{ONL.act=m.pl.map(p=>p.s);m.pl.forEach(p=>{ONL.names[p.s]=p.n;ONL.off[p.s]=!p.on;const k=L(p.s);if(k!=1&&S){OWN[k].n=p.n;if(S.ai&&!S.ai[k])S.ai[k]={c:0,inf:0,arc:0,cav:0,sie:0}}});if(m.init){syncOut();applyInit(m.init)}}badge();if(m.init){try{window.obxFlush&&obxFlush()}catch(x){}}}
     else{MP.v='lobby';MP.open=1}
     try{window.srvRoom&&window.srvRoom(m)}catch(e){console.error(e)}
@@ -5133,9 +5133,9 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)try{SPR.cle
 #gxbulk .bk-h{display:flex;align-items:center;gap:8px;width:min(620px,100%)}#gxbulk .bk-h b{font-size:18px;flex:1}
 .bk-phase{font-size:24px;font-weight:900;letter-spacing:1px;color:var(--pc,#38ff8c);text-shadow:0 0 18px var(--pc,#38ff8c);text-align:center;min-height:32px}
 .bk-phase.flash{animation:bkF .5s ease}@keyframes bkF{0%{transform:scale(1.6);opacity:.2}}
-.bk-stage{position:relative;width:170px;height:170px;display:flex;align-items:center;justify-content:center}
+.bk-stage{position:relative;width:200px;height:200px;display:flex;align-items:center;justify-content:center}
 .bk-stage:before{content:'';position:absolute;inset:6px;border-radius:50%;background:radial-gradient(circle,var(--pc,#38ff8c) 0%,transparent 68%);opacity:.55}
-.bk-stage img{width:150px;height:150px;position:relative}.bk-stage img.pop{animation:bkP var(--d,.3s) ease-out}
+.bk-stage canvas{width:200px;height:200px;position:relative}.bk-stage canvas.pop{animation:bkP var(--d,.3s) ease-out}
 @keyframes bkP{0%{transform:scale(.5) translateY(30px);opacity:.3}55%{transform:scale(1.12)}100%{transform:scale(1)}}
 .bk-n{position:absolute;bottom:-4px;left:0;right:0;text-align:center;font-weight:800;font-size:13px;color:#cfe3f5}
 .bk-tal{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;width:min(620px,100%)}
@@ -5230,7 +5230,7 @@ function srvCall(msgs,want,cb){const c=MPX.srv();if(!c.key||!/^wss?:\/\/.{3,}/.t
   let ws,done=false;try{ws=new WebSocket(c.url)}catch(e){return cb&&cb(null,'Cannot reach the server')}
   const fin=(v,e)=>{if(done)return;done=true;clearTimeout(to);try{ws.close()}catch(x){}cb&&cb(v,e)},to=setTimeout(()=>fin(null,'The server did not answer'),12000);
   ws.onopen=()=>ws.send(JSON.stringify({t:'resume',k:c.key,lb:1,pv:2}));ws.onerror=()=>fin(null,'Cannot reach the server');
-  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}if(m.t=='auth'){if(!m.ok)return fin(null,'Log in again through Online play');msgs.forEach(q=>ws.send(JSON.stringify(q)));if(!want)setTimeout(()=>fin(true),500)}else if(want&&m.t==want)fin(m)}}
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}if(m.t=='auth'){if(!m.ok)return fin(null,'Log in again through Online play');if(!(m.caps&&m.caps.map>=2))return fin(null,'The server has not been updated yet: visiting islands needs the new server.');msgs.forEach(q=>ws.send(JSON.stringify(q)));if(!want)setTimeout(()=>fin(true),500)}else if(want&&m.t==want)fin(m)}}
 /* what other players see of your offline island: terrain, realms and buildings (no resources, no armies) */
 function snapOf(){const one=(tl,n)=>{const a=new Array(n*n),x=[];for(let i=0;i<n*n;i++){const t=tl[i];let ti=TTC.indexOf(t.t);if(ti<0)ti=0;a[i]=String.fromCharCode(48+ti*4+(t.r?1:0)+(t.z?2:0));if(t.o||t.b)x.push([i,t.o|0,t.b|0,t.l|0])}return{n,t:a.join(''),x}};
   const h=S.realm=='c'?S.rl&&S.rl.h:S,c=S.realm=='c'?S:S.rl&&S.rl.c,o={};if(!h||!h.tiles)return null;o.h=one(h.tiles,h.n||sideOf(h));if(c&&c.tiles)o.c=one(c.tiles,c.n||sideOf(c));
@@ -5376,17 +5376,29 @@ window.gxBulk=function(ti,n){const g=window.__gx;if(!g)return;if(!S)return toast
 function bulkRun(steps,N0){const g=window.__gx,el=document.createElement('div');el.className='u-ov';el.id='gxbulk';document.body.appendChild(el);
   const kinds=new Set();steps.forEach(s=>s.r.forEach(it=>{if(it.k&&ORD.includes(it.k))kinds.add(it.k)}));const keys=ORD.filter(k=>kinds.has(k));
   const icon=k=>k=='coins'?'🪙':k=='gems'?'<i class="gm"></i>':UN_IC[k]||ICON[k]||'';
-  el.innerHTML=`<div class="bk-h"><b>Opening ${N0} chest${N0>1?'s':''}</b><button data-s>⏩ Skip</button></div><div class="bk-phase" id="bkph"></div><div class="bk-stage"><img id="bkimg" alt=""><div class="bk-n" id="bkn"></div></div><div class="bk-lv" id="bklv"></div><div class="bk-tal">${keys.map(k=>`<div class="bk-c" data-k="${k}"><span>${icon(k)}</span><b>0</b></div>`).join('')}</div><div class="bk-sum" id="bksum" hidden></div>`;
+  el.innerHTML=`<div class="bk-h"><b>Opening ${N0} chest${N0>1?'s':''}</b><button data-s>⏩ Skip</button></div><div class="bk-phase" id="bkph"></div><div class="bk-stage"><canvas id="bkcv"></canvas><div class="bk-n" id="bkn"></div></div><div class="bk-lv" id="bklv"></div><div class="bk-tal">${keys.map(k=>`<div class="bk-c" data-k="${k}"><span>${icon(k)}</span><b>0</b></div>`).join('')}</div><div class="bk-sum" id="bksum" hidden></div>`;
   BULK={el,steps,i:0,val:{},tw:{},lvN:[0,0,0],skip:false,cos:[]};keys.forEach(k=>{BULK.val[k]=0});
   const base=N0<=5?720:N0<=15?420:N0<=30?260:Math.max(70,7000/N0),PH=['Prizes','GREAT PRIZES','JACKPOTS'];let lastLv=-1;
   el.querySelector('[data-s]').onclick=()=>{BULK.skip=true};
-  const tick=()=>{if(!BULK)return;const now=performance.now();
+  /* the chest on stage: its lid flies open for every chest, and the light inside fades from one prize colour to the next */
+  const cv3=$u('bkcv'),dp3=Math.min(2,devicePixelRatio||1);cv3.width=200*dp3;cv3.height=200*dp3;const c3=cv3.getContext('2d');
+  const hx3=h=>{h=String(h).replace('#','');return[0,2,4].map(i=>parseInt(h.slice(i,i+2),16)||0)},mix3=(a,b,k)=>{const A=hx3(a),B=hx3(b);return'#'+A.map((v,i)=>Math.round(v+(B[i]-v)*k).toString(16).padStart(2,'0')).join('')};
+  const CH3={ti:steps.length?steps[0].ti:0,t0:0,d:300,ca:g.PL[0].col,cb:g.PL[0].col,ct:0,pt:[]};BULK.ch=CH3;
+  const drawStage=now=>{c3.setTransform(dp3,0,0,dp3,0,0);c3.clearRect(0,0,200,200);const k=Math.min(1,(now-CH3.t0)/Math.max(80,CH3.d*.45)),lid=CH3.t0?Math.min(1.08,1+2.7*Math.pow(k-1,3)+1.7*Math.pow(k-1,2)):0;
+    const kc=Math.min(1,(now-CH3.ct)/320),col=mix3(CH3.ca,CH3.cb,kc*kc*(3-2*kc)),tm=now/1000;
+    if(lid>0){const gr=c3.createRadialGradient(100,112,4,100,112,90);gr.addColorStop(0,col+'cc');gr.addColorStop(1,col+'00');c3.globalCompositeOperation='lighter';c3.globalAlpha=Math.min(1,lid);c3.fillStyle=gr;c3.fillRect(0,0,200,200);
+      c3.save();c3.translate(100,112);c3.rotate(tm*.6);c3.globalAlpha=.35*Math.min(1,lid);c3.fillStyle=col;for(let i=0;i<10;i++){c3.rotate(.628);c3.beginPath();c3.moveTo(0,0);c3.lineTo(-7,-85);c3.lineTo(7,-85);c3.fill()}c3.restore();c3.globalCompositeOperation='source-over';c3.globalAlpha=1}
+    try{g.drawChest(c3,CH3.ti,104,146,96,Math.max(0,lid),tm,col)}catch(e){}
+    for(let i=CH3.pt.length-1;i>=0;i--){const p=CH3.pt[i];p.l-=.016;if(p.l<=0){CH3.pt.splice(i,1);continue}p.vy+=.12;p.x+=p.vx;p.y+=p.vy;c3.globalAlpha=Math.min(1,p.l);c3.fillStyle=p.c;c3.fillRect(p.x-1.5,p.y-1.5,3,3)}c3.globalAlpha=1};
+  const tick=()=>{if(!BULK)return;const now=performance.now();drawStage(now);
     for(const k in BULK.tw){const w=BULK.tw[k],p=Math.min(1,(now-w.t0)/w.d),e=1-Math.pow(1-p,3),v=w.a+(w.b-w.a)*e,c=el.querySelector(`.bk-c[data-k="${k}"] b`);if(c)c.textContent=fm(v);if(p>=1)delete BULK.tw[k]}
     BULK.raf=requestAnimationFrame(tick)};BULK.raf=requestAnimationFrame(tick);
   const step=()=>{if(!BULK)return;if(BULK.skip){while(BULK.i<steps.length)apply(steps[BULK.i++],0);return finish()}
     if(BULK.i>=steps.length)return finish();const s=steps[BULK.i++],d=base*(s.lv==2?2.3:s.lv==1?1.5:1);
     if(s.lv!==lastLv){lastLv=s.lv;const ph=$u('bkph');ph.textContent=PH[s.lv];el.style.setProperty('--pc',g.PL[s.lv].col);ph.classList.remove('flash');void ph.offsetWidth;ph.classList.add('flash');sfxS(s.lv==2?'chJack':s.lv==1?'chUp2':'chUp1')}
-    const im=$u('bkimg');im.src=g.chestURL(s.ti);im.style.setProperty('--d',Math.min(.45,d/1000)+'s');im.classList.remove('pop');void im.offsetWidth;im.classList.add('pop');
+    {const now=performance.now(),cur=mix3(CH3.ca,CH3.cb,Math.min(1,(now-CH3.ct)/320)),nc=g.PL[s.lv].col;CH3.ti=s.ti;CH3.t0=now;CH3.d=d;if(nc!==CH3.cb){CH3.ca=cur;CH3.cb=nc;CH3.ct=now}
+   const n=Math.min(30,6+s.lv*10);for(let i=0;i<n&&CH3.pt.length<120;i++){const a=Math.random()*6.28,v=1+Math.random()*3.2;CH3.pt.push({x:100,y:112,vx:Math.cos(a)*v,vy:Math.sin(a)*v-2,l:.6+Math.random()*.7,c:Math.random()<.4?'#fff':nc})}}
+   const im=cv3;im.style.setProperty('--d',Math.min(.45,d/1000)+'s');im.classList.remove('pop');void im.offsetWidth;im.classList.add('pop');
     $u('bkn').textContent=`${BULK.i} / ${steps.length} · ${g.TR[s.ti].n}`;if(d>=110)sfxS('chTick');apply(s,d*.85);setTimeout(step,d)};
   const apply=(s,d)=>{BULK.lvN[s.lv]++;$u('bklv').innerHTML=BULK.lvN.map((c,i)=>c?`<i style="--c:${g.PL[i].col}">${c} × ${g.PL[i].n}</i>`:'').join('');
     const add={};s.r.forEach(it=>{if(it.k&&it.n&&BULK.val[it.k]!=null)add[it.k]=(add[it.k]||0)+it.n;else if(!it.k||!it.n)BULK.cos.push(it)});

@@ -481,7 +481,7 @@ function leave(ws) {
   touch(r); bc(r);
 }
 const newCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do { c = Array.from({ length: 6 }, () => A[crypto.randomInt(A.length)]).join(''); } while (rooms.has(c)); return c; };
-const CAPS = { ack: 1, px: 1, kicked: 1, world: 1 };
+const CAPS = { ack: 1, px: 1, kicked: 1, world: 1, map: 2 };   // map: 2 = the bigger-island tile layout (update 18.11)
 
 const OLD_CLIENT = 'Crownlands was updated (bigger islands). Please reload the game to continue.';
 function auth(ws, m) {
