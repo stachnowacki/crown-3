@@ -34,7 +34,7 @@ const SHIELD_ONLINE = 8 * 60e3, SHIELD_OFFLINE = 25 * 60e3, SHIELD_BIG = 3;
 const START = [null, [28, 43], [12, 15], [44, 15], [45, 33], [12, 34]].map(p => p && [p[0] + OFFH, p[1] + OFFH]);   // must match the client's start positions (slots 1-5)
 // Slots 6-7, and anyone who joins after the start, have no fixed start: their game picks a spot on the real terrain
 // (free land first, then claimed land with the fewest buildings) and sends it as a 'spawn' message; it is kept as p.sp.
-const SCHEMA = 4, SCORE_MAX = 1e15;   // v4: the kingdom index has no ceiling any more
+const SCHEMA = 5, SCORE_MAX = 1e15;   // v4: the kingdom index has no ceiling any more; v5: accounts that played online are marked (w11)
 /*@@CORE7@@*/
 /* ===== CORE7: shared by the server and the game. Pure functions, no DOM, no Node APIs.
    The server runs this to decide the world; the offline game runs the same code locally. ===== */
@@ -158,6 +158,10 @@ function migrateAccounts(o) {
   if (from < 3) {   // v3: leaderboard scores are an index (max ~1300); keep old values but clamp absurd ones
     for (const id in o.users) { const u = o.users[id]; if (!u || typeof u !== 'object') continue;
       for (const k of ['is', 'gs']) if (u[k] && typeof u[k] === 'object' && +u[k].s > SCORE_MAX) u[k].s = SCORE_MAX; }
+  }
+  if (from < 5) {   // v5 (update 20.11): gems, chests and cosmetics became offline-only. Every account that has played an online
+    // island is marked once (u.w11); its game devices reset their treasury the next time they log in (auth reply w11).
+    for (const id in o.users) { const u = o.users[id]; if (u && typeof u === 'object' && u.is) u.w11 = 1; }
   }
   if (from < SCHEMA) log('info', `migration: accounts schema ${from} -> ${SCHEMA} (${Object.keys(o.users).length} accounts kept)`);
   o.v = Math.max(from, SCHEMA);
@@ -302,6 +306,9 @@ const liveRoom = r => ({ ...r, v: r.v || SCHEMA, shield: r.shield || {}, tiles: 
 function loadRooms(list) { rooms.clear(); for (const r of migrateRooms(list)) { const room = liveRoom(r); if (room.started) seed(room); rooms.set(r.code, room); } }
 try { loadRooms(JSON.parse(fs.readFileSync(RF, 'utf8'))); log('info', `loaded ${rooms.size} islands, ${Object.keys(db.users).length} accounts`); }
 catch (e) { if (e.code !== 'ENOENT') log('error', 'rooms load failed: ' + e.message); }
+/* v5 (update 20.11), once: members of any existing island are marked too, even if they never sent an island score */
+if (!db.w11r) { let n = 0; for (const r of rooms.values()) for (const p of r.pl || []) { const u = p && db.users[p.u]; if (u && !u.w11) { u.w11 = 1; n++; } }
+  db.w11r = Date.now(); saveDb(); log('info', `update 20.11: ${n} more online players marked for the treasury reset`); }
 let dirty = 0;
 const snapRoom = r => ({ v: Math.max(r.v || 0, SCHEMA), mv: r.mv || 2, code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield || {},
     tiles: [...r.tiles], mkt: r.mkt, chat: (r.chat || []).slice(-80), cid: r.cid || 0,
@@ -501,7 +508,7 @@ function auth(ws, m) {
   ws.pv = m.pv | 0;   // an old page is still signed in (its key is kept), but it cannot enter an island until it reloads
   if (m.t === 'resume') {
     const u = db.keys[m.k]; if (!u || !db.users[u]) return send(ws, { t: 'auth', ok: 0, err: 'Session expired' });
-    ws.u = u; send(ws, { t: 'auth', ok: 1, name: dname(u), key: m.k, st: storageInfo(), caps: CAPS }); send(ws, wView(u)); if (m.lb) return; return attach(ws);
+    ws.u = u; send(ws, { t: 'auth', ok: 1, name: dname(u), key: m.k, st: storageInfo(), caps: CAPS, w11: db.users[u].w11 ? 1 : 0 }); send(ws, wView(u)); if (m.lb) return; return attach(ws);
   }
   const name = String(m.u || '').trim(), pw = String(m.p || ''), id = name.toLowerCase();
   if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return send(ws, { t: 'auth', ok: 0, err: 'Name: 3-16 letters, digits or _' });
@@ -517,7 +524,7 @@ function auth(ws, m) {
     if (!u || !crypto.timingSafeEqual(Buffer.from(u.h, 'hex'), Buffer.from(hash(pw, u.salt), 'hex'))) { authFails[fk].push(n); return send(ws, { t: 'auth', ok: 0, err: 'Wrong name or password' }); }
   }
   const key = crypto.randomBytes(18).toString('hex'); db.keys[key] = id; saveDb();
-  ws.u = id; send(ws, { t: 'auth', ok: 1, name: dname(id), key, st: storageInfo(), caps: CAPS }); send(ws, wView(id)); attach(ws);
+  ws.u = id; send(ws, { t: 'auth', ok: 1, name: dname(id), key, st: storageInfo(), caps: CAPS, w11: db.users[id].w11 ? 1 : 0 }); send(ws, wView(id)); attach(ws);
 }
 const authFails = {};
 setInterval(() => { const n = Date.now(); for (const k in authFails) if (!authFails[k].some(t => n - t < 10 * 60e3)) delete authFails[k]; }, 10 * 60e3);
@@ -693,7 +700,7 @@ function handle(ws, m) {
       m0.feed.push({ n: dname(me.u), s: m.side, r: res, q: n, at: Date.now() }); if (m0.feed.length > 8) m0.feed.shift();
       send(ws, { t: 'tr', id: m.id, r: res, side: m.side, n, mid: +mid.toFixed(3), px: +px.toFixed(4) }); const o = mkPub(m0); r.pl.forEach(p => send(p.ws, o)); touch(r); return;
     }
-    case 'score': { // my island's progress score (shown in the island ranking and the world ranking)
+    case 'score': { // my online island's progress score: the island ranking only (update 20.11: never the world ranking)
       if (!r || !r.started || !me || !m.s || typeof m.s !== 'object') return; const now = Date.now(); if (me.scAt && now - me.scAt < 8000) return; me.scAt = now;
       let s = cl(Math.floor(+m.s.s) || 0, 0, SCORE_MAX); const p = Array.isArray(m.s.p) ? m.s.p.slice(0, 10).map(v => cl(Math.floor(+v) || 0, 0, 1e12)) : null;
       if (!okScore(me.sc, s, now)) { bad(ws, 'score jump'); s = scoreCap(me.sc, now); }
@@ -705,8 +712,8 @@ function handle(ws, m) {
       if (u.gs && !okScore(u.gs, s, now)) { bad(ws, 'solo score jump'); s = scoreCap(u.gs, now); }
       u.gs = { s, p, d: num(m.s.d, 0, 4) ? m.s.d : 1, at: now, ti: tit(m.s.ti) }; saveDb(); return;
     }
-    case 'lb': { // world ranking: every account's best island
-      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs, b = u.is; const best = !a ? (b ? [b, 'online'] : null) : !b ? [a, 'solo'] : (b.s > a.s ? [b, 'online'] : [a, 'solo']); if (best && best[0].s > 0) rows.push({ id, n: u.name || id, ct: ctit(id) || '', s: Math.min(SCORE_MAX, best[0].s), m: best[1], p: best[0].p, d: best[0].d, ti: best[0].ti || '', vi: hasSnap(id) ? 1 : 0, on: online(id) ? 1 : 0 }); }
+    case 'lb': { // world ranking: every account's OFFLINE (solo) island. Update 20.11: online island scores (u.is) do not count here
+      const rows = []; for (const id in db.users) { const u = db.users[id], a = u.gs; const best = a ? [a, 'solo'] : null; if (best && best[0].s > 0) rows.push({ id, n: u.name || id, ct: ctit(id) || '', s: Math.min(SCORE_MAX, best[0].s), m: best[1], p: best[0].p, d: best[0].d, ti: best[0].ti || '', vi: hasSnap(id) ? 1 : 0, on: online(id) ? 1 : 0 }); }
       rows.sort((x, y) => y.s - x.s); const mine = rows.findIndex(x => x.id === ws.u);
       send(ws, { t: 'lb', top: rows.slice(0, 50), total: rows.length, me: mine < 0 ? null : { rank: mine + 1, s: rows[mine].s, m: rows[mine].m } }); return;
     }

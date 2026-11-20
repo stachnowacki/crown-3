@@ -1664,7 +1664,7 @@ function conn(cb){
     else if(MP.open){MP.err='Cannot reach the server';ui()}}}
 
 function onMsg(e){let m;try{m=JSON.parse(e.data)}catch(x){return}
-  if(m.t=='auth'){if(m.ok){MP.oldSrv=!(m.caps&&m.caps.map>=2);if(MP.oldSrv)MP.err='This server has not been updated for the bigger islands yet. Online islands open again as soon as it is — nothing on them is changed meanwhile.';MP.name=m.name;MP.key=m.key;MP.st=m.st||null;MP.caps=m.caps||{};localStorage.setItem('cl-key',m.key);MP.err='';if(MP.v=='auth')MP.v='home';if(MP.want&&!MP.room){wsend({t:'join',code:MP.want});MP.want=''}}
+  if(m.t=='auth'){try{window.w11Auth&&w11Auth(m)}catch(x){}if(m.ok){MP.oldSrv=!(m.caps&&m.caps.map>=2);if(MP.oldSrv)MP.err='This server has not been updated for the bigger islands yet. Online islands open again as soon as it is — nothing on them is changed meanwhile.';MP.name=m.name;MP.key=m.key;MP.st=m.st||null;MP.caps=m.caps||{};localStorage.setItem('cl-key',m.key);MP.err='';if(MP.v=='auth')MP.v='home';if(MP.want&&!MP.room){wsend({t:'join',code:MP.want});MP.want=''}}
     else{MP.err=m.err||'Login failed';MP.key='';MP.v='auth';localStorage.removeItem('cl-key')}ui()}
   else if(m.t=='err'){MP.err=m.m;if(S&&S.on)toast(m.m);ui()}
   else if(m.t=='world'||m.t=='wecok'||m.t=='weclok'||m.t=='sclok'){try{window.X7&&X7.msg(m)}catch(x){console.error(x)}}
@@ -2879,12 +2879,14 @@ function scoreOf(){let tiles=0,dev=0,inc=0,fort=0,mil=0,wealth=0;const realms=[S
   return{s,p:f.map(v=>Math.round(v)),pts:pts.map(v=>Math.round(v)),raw:{tiles:Math.round(tiles),inc:+inc.toFixed(1),dev,mil:Math.round(mil),fort:Math.round(fort),wealth:Math.round(wealth),techs,conq:Math.round(conq)},d:S.diff==null?1:S.diff,dm}}
 const RK={isl:[],world:null,me:null,total:0,bonus:0,tier:5,lbErr:'',lbAt:0};
 const MEDAL=['🥇','🥈','🥉'];
-const ISL_B=[.06,.04,.03,.02,.01],ISL_T=[0,1,2,3,4];
+/* update 20.11: the WORLD ranking (offline islands only) is the one that pays: a big income bonus on the offline island and a
+   daily chest with treasury chests and gems. Online islands only have their small island ranking and never give chests or gems. */
+const ISL_B=[.02,.01,.005,0,0],ISL_T=[3,4,5,5,5],ISL_MAX=.02,WORLD_MAX=.3;
 function worldTier(r){return r==1?0:r<=3?1:r<=10?2:r<=25?3:r<=50?4:5}
-function worldBonus(r){return r==1?.08:r<=3?.06:r<=10?.04:r<=25?.02:0}
+function worldBonus(r){return r==1?.3:r<=3?.22:r<=10?.15:r<=25?.09:r<=50?.05:r<=100?.02:0}
 function islandRank(){if(!(S.on&&window.ONL&&ONL.sc))return null;const arr=Object.keys(ONL.sc).map(s=>({s:+s,v:ONL.sc[s].s||0})).sort((a,b)=>b.v-a.v||a.s-b.s);const i=arr.findIndex(q=>q.s==ONL.slot);return i<0?null:{rank:i+1,n:arr.length,arr}}
-function rkRecalc(){const ir=islandRank();let b=0,t=5;if(ir&&ir.n>=2){b+=ISL_B[ir.rank-1]||0;t=Math.min(t,ISL_T[ir.rank-1]??5)}
-  if(RK.me&&RK.me.rank){b+=worldBonus(RK.me.rank);t=Math.min(t,worldTier(RK.me.rank))}RK.bonus=Math.min(.1,b);RK.tier=t;window.RKB=RK.bonus;RK.ir=ir}
+function rkRecalc(){const ir=islandRank();let b=0,t=5;if(S&&S.on){if(ir&&ir.n>=2){b=ISL_B[ir.rank-1]||0;t=ISL_T[ir.rank-1]??5}b=Math.min(ISL_MAX,b)}
+  else{if(RK.me&&RK.me.rank){b=worldBonus(RK.me.rank);t=worldTier(RK.me.rank)}b=Math.min(WORLD_MAX,b)}RK.bonus=b;RK.tier=t;window.RKB=RK.bonus;RK.ir=ir}
 window.srvRoom=function(m){if(!window.ONL)return;ONL.sc=ONL.sc||{};m.pl.forEach(p=>{ONL.sc[p.s]={s:p.sc||0,p:p.sp||null,n:p.n,on:p.on}});rkRecalc();chatBtn()};
 function sendScore(){const sc=scoreOf();RK.mine=sc;if(S.on&&window.ONL)MPX.send({t:'score',s:{s:sc.s,p:sc.p,d:sc.d,ti:sc.ti}});else lbSubmit(sc)}
 /* the world ranking uses a short-lived second connection when you play offline */
@@ -2894,7 +2896,7 @@ function lbConn(cb){const c=MPX.srv();if(!c.key||!/^wss?:\/\/.{3,}/.test(c.url))
   const done=ok=>{LB.busy=0;try{ws.close()}catch(e){}cb&&cb(ok)};const to=setTimeout(()=>{RK.lbErr='The server did not answer';done(false)},9000);
   ws.onopen=()=>ws.send(JSON.stringify({t:'resume',k:c.key,lb:1,pv:2}));ws.onerror=()=>{clearTimeout(to);RK.lbErr='Cannot reach the server';done(false)};
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
-    if(m.t=='auth'){if(!m.ok){clearTimeout(to);RK.lbErr='Session expired — log in again through the Online menu.';return done(false)}ws.send(JSON.stringify({t:'gscore',s:scoreOf()}));ws.send(JSON.stringify({t:'lb'}))}
+    if(m.t=='auth'){try{window.w11Auth&&w11Auth(m)}catch(x){}if(!m.ok){clearTimeout(to);RK.lbErr='Session expired — log in again through the Online menu.';return done(false)}ws.send(JSON.stringify({t:'gscore',s:scoreOf()}));ws.send(JSON.stringify({t:'lb'}))}
     else if(m.t=='lb'){clearTimeout(to);lbGot(m);done(true)}}}
 function lbSubmit(sc){if(S.on)return;const c=MPX.srv();if(!c.key)return;lbConn(null)}
 function lbGot(m){RK.world=m.top||[];RK.total=m.total||0;RK.me=m.me;RK.lbErr='';RK.lbAt=Date.now();rkRecalc();hud();if(SH=='rank')renderSheet()}
@@ -2911,10 +2913,12 @@ window.srvMsg=function(m){
   if(m.t=='lb'){lbGot(m);return}};
 window.srvInit=function(I){if(I.mkt)srvMsg(I.mkt);if(I.chat){CHAT.log=I.chat.slice(-80);CHAT.seen=CHAT.log.length?CHAT.log[CHAT.log.length-1].id:0;chatRender()}};
 /* rewards: a small income bonus plus a daily chest, bigger near the top but never zero */
-const CH_MULT=[2.2,1.8,1.5,1.25,1.1,1],CH_DIA=[3,2,1,0,0,0];
+const CH_MULT=[6,4.5,3.2,2.2,1.6,1],CH_DIA=[12,7,4,2,1,0],
+ CH_TR=[[4,3],[3,1],[2,1],[1,1],[0,1],null],CH_GM=[25,12,6,3,1,0];   /* world rank chest extras: [treasury chest, count] and gems */
 function chestReady(){return !S.rw||Date.now()-S.rw.at>20*36e5}
-function chestLoot(){const t=RK.tier,m=CH_MULT[t]*rwK(),inc=Math.max(5,S.inc||5);return{coins:Math.round(inc*600*m),wood:Math.round(120*m),stone:Math.round(90*m),silver:Math.round(10*m),diamond:CH_DIA[t]}}
-function claimChest(){if(!chestReady())return;const l=chestLoot();S.coins+=l.coins;for(const k of['wood','stone','silver','diamond'])S.res[k]=(S.res[k]||0)+l[k];S.rw={at:Date.now()};toast('🎁 Daily chest: 🪙'+compactAmount(l.coins)+' 🪵'+l.wood+' 🪨'+l.stone+' 🥈'+l.silver+(l.diamond?' 💎'+l.diamond:''));chron('🎁','Opened the daily rank chest');buzz();save();hud();renderSheet()}
+function chestLoot(){const on=!!S.on,t=RK.tier,m=(on?.5:CH_MULT[t])*rwK(),inc=Math.max(5,S.inc||5);return{coins:Math.round(inc*600*m),wood:Math.round(120*m),stone:Math.round(90*m),silver:Math.round(10*m),diamond:on?0:CH_DIA[t],tr:on?null:CH_TR[t],gm:on?0:CH_GM[t]}}
+const lootTxt=l=>`🪙${compactAmount(l.coins)} 🪵${l.wood} 🪨${l.stone} 🥈${l.silver}${l.diamond?' 💎'+l.diamond:''}${l.tr&&window.__gx?' 📦'+(l.tr[1]>1?l.tr[1]+'× ':'')+__gx.TR[l.tr[0]].n:''}${l.gm?' 💠'+l.gm+' gems':''}`;
+function claimChest(){if(!chestReady())return;const l=chestLoot();S.coins+=l.coins;for(const k of['wood','stone','silver','diamond'])S.res[k]=(S.res[k]||0)+l[k];S.rw={at:Date.now()};if(!S.on){const g=window.__gx;if(g){if(l.tr)g.chestAdd(l.tr[0],l.tr[1]);if(l.gm)g.addGems(l.gm,true)}}toast('🎁 Daily chest: '+lootTxt(l));chron('🎁','Opened the daily rank chest');buzz();save();hud();renderSheet()}
 /* update 18.11: what each part of the kingdom adds to the index, biggest first, with the cheapest next step */
 const SC_HOW=['Claim land (each tile counts; New Land tiles ×1.3)','Raise income: cities, mines on rich veins, ports, markets','Build and upgrade buildings','Recruit and keep an army','Strongholds, city walls and watchtowers','Keep coins and resources in the treasury','Research the development tree and finish Great Works','Win battles and sail voyages'];
 const SC_RAW=r=>[r.tiles+' tiles',r.inc+'/s income',r.dev+' building levels',r.mil+' army strength',r.fort+' fortification',compactAmount(r.wealth)+' wealth',r.techs+' research',r.conq+' conquest pts'];
@@ -2928,15 +2932,16 @@ function vRank(){const sc=RK.mine=scoreOf();rkRecalc();const on=S.on&&window.ONL
   h+=`<div class="mi ready"><div class="mh"><b>Your kingdom index</b><em style="font-size:20px">${compactAmount(sc.s)}</em></div><div class="mu">The kingdom index has no ceiling: it keeps growing with your realm. Every part below adds points; the longest bars are where your index comes from, the short ones are your cheapest way up.${sc.dm!=1?` Difficulty bonus ×${sc.dm}.`:''}</div>${scBreak(sc)}</div>`;
   if(tab=='isl'){const ir=RK.ir;h+=`<div class="mi"><b>🏝️ Island ranking</b>`;
     if(!ir)h+=`<div class="mu">Scores appear a few seconds after everyone is online.</div>`;else{h+=ir.arr.map((q,i)=>{const p=ONL.sc[q.s],mine=q.s==ONL.slot,nm=escH(p.n||('Player '+q.s)),b=ir.n>=2?(ISL_B[i]||0):0;return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${nm}${p.ct?'<span class="ctit">'+escH(p.ct)+'</span>':''}${p.on?'':' <small class="mu">(away)</small>'}${b?` <small class="ok">+${Math.round(b*100)}% income</small>`:''}</span><b>${compactAmount(q.v)}</b></div>`}).join('');if(ir.n<2)h+=`<div class="mu">Island rewards start when at least two players are on the island.</div>`}h+=`</div>`}
-  else{h+=`<div class="mi"><b>🌍 World ranking</b> <small class="mu">best island of every logged-in account — solo or online</small>`;
+  else{h+=`<div class="mi"><b>🌍 World ranking</b> <small class="mu">the offline island of every logged-in account — online islands do not count here</small>`;
     if(RK.lbErr)h+=`<div class="bad">${RK.lbErr}</div>`;
     if(RK.world){h+=RK.world.slice(0,30).map((q,i)=>{const mine=RK.me&&q.s==RK.me.s&&q.m==RK.me.m&&(RK.me.rank==i+1);return`<div class="mf" style="${mine?'color:#ffd23f':''}"><span>${MEDAL[i]||'#'+(i+1)} ${escH(q.n)}${q.ct?'<span class="ctit">'+escH(q.ct)+'</span>':''}${q.ti?' <small class="mu">· '+escH(q.ti)+'</small>':''} <small class="mu">${q.m=='solo'?'🏝️ solo':'⚔️ online'}</small>${q.on?' <small class="ok">● online</small>':''}${q.vi&&q.id&&!mine?` <button class="q-sm vis-b" onclick="visitIsland('${escH(q.id)}','${escH(q.n).replace(/'/g,'')}')">Visit</button>`:''}</span><b>${compactAmount(q.s)}</b></div>`}).join('');
       if(RK.me&&RK.me.rank>30)h+=`<div class="mf" style="color:#ffd23f"><span>#${RK.me.rank} You</span><b>${compactAmount(RK.me.s)}</b></div>`;h+=`<div class="mu">${RK.total} players ranked</div>`}
     else if(!RK.lbErr)h+=`<div class="mu">Loading…</div>`;h+=`<button style="width:100%;margin-top:6px" onclick="lbRefresh()">↻ Refresh</button></div>`}
   const b=Math.round(RK.bonus*100),l=chestLoot();
-  h+=`<div class="mi"><b>🎁 Rewards</b><div class="mu">${b?`Your rank gives <b class="ok">+${b}% coin income</b> right now.`:'Rank in the top places to earn a coin-income bonus.'} Island: 🥇+6% 🥈+4% 🥉+3% · 4th +2% · 5th +1%. World: top 1 +8%, top 3 +6%, top 10 +4%, top 25 +2% (bonuses add up to a maximum of +10%).</div>
-   <div class="mu">Everyone gets a daily chest; higher ranks open a bigger one (up to ×2.2 and diamonds for the top 3).</div>
-   <button style="width:100%;margin-top:6px" ${chestReady()?'':'disabled'} onclick="claimChest()">Open daily chest<small>${chestReady()?`🪙${compactAmount(l.coins)} 🪵${l.wood} 🪨${l.stone} 🥈${l.silver}${l.diamond?' 💎'+l.diamond:''}`:'Ready in '+Math.ceil((20*36e5-(Date.now()-S.rw.at))/36e5)+' h'}</small></button></div>`;
+  h+=`<div class="mi"><b>🎁 Rewards</b><div class="mu">${b?`Your rank gives <b class="ok">+${b}% coin income</b> ${on?'on this online island':'on your offline island'} right now.`:on?'Online islands only give a small bonus.':'Climb the world ranking to earn a big coin-income bonus.'}</div>
+   <div class="mu"><b>🌍 World ranking (offline island) — the big prizes:</b> income top 1 +30%, top 3 +22%, top 10 +15%, top 25 +9%, top 50 +5%, top 100 +2%. Daily chest up to ×6 with diamonds, treasury chests (up to 3 Royal Chests) and up to 25 gems.</div>
+   <div class="mu"><b>🏝️ Online island ranking — small:</b> 🥇+2% 🥈+1% 🥉+0.5% income on the online island only, and a small daily chest with no treasury chests or gems. Online scores never count in the world ranking.</div>
+   <button style="width:100%;margin-top:6px" ${chestReady()?'':'disabled'} onclick="claimChest()">Open daily chest<small>${chestReady()?lootTxt(l):'Ready in '+Math.ceil((20*36e5-(Date.now()-S.rw.at))/36e5)+' h'}</small></button></div>`;
   if(!on)h+=`<div class="mu">Solo islands are ranked in the World tab as long as you are logged in (Menu → Online play).</div>`+`<div class="mi"><b>🌍 World ranking</b>${RK.lbErr?`<div class="bad">${RK.lbErr}</div>`:''}</div>`;
   return['🏆 Ranking & rewards',h]}
 setInterval(()=>{if(!S)return;if(S.on&&window.ONL&&MPX.open())sendScore();else if(!S.on&&MPX.srv().key&&Date.now()-(RK.subAt||0)>120000){RK.subAt=Date.now();sendScore();lbRefresh()}},20000);
@@ -3048,11 +3053,15 @@ function pfHTML(i,big){if(i===12)return`<span class="pf pfd${big?' pfb':''}">♛
 window.gxFx=()=>({pf:eq('pf'),nf:eq('nf'),mf:eq('mf')});
 /* ---------- gems ---------- */
 const GEMA=[0,1,3];
-function addGems(n,quiet){if(!n)return;M.gems+=n;SV();const b=$$('gemn');if(b){b.textContent=fmt(M.gems);const g=b.parentNode;g.classList.remove('pop');void g.offsetWidth;g.classList.add('pop')}if(!quiet)fly('+'+n+' '+GI,'gemb','#d6a3ff');sfx('gem');if($$('tre')&&$$('tre').style.display=='flex')treR()}
-window.gemAch=i=>{const g=GEMA[i];if(g)addGems(g,true);const t=wpick([[93,7],[62,35,3],[0,70,27,2.7,.3]][i]);chestAdd(t,1);return` — ${g?'+'+g+' gems · ':''}${TR[t].n}`};
-window.gemTxt=i=>i==null?'Silver +1 gem · Gold +3 gems · random chest':`${GEMA[i]?'+'+GEMA[i]+' gems · ':''}random chest`;
+/* update 20.11: gems, chests and cosmetics are EARNED only on the offline island. Online islands can spend and open them, but
+   never give them - the one exception is the top (Gold) tier of an account achievement, which each account earns only once.
+   force=1 is for things that are not earning: opening a chest you already own, admin gifts. */
+const ONLX=()=>!!(S&&S.on);   /* S is a top-level let: it is NOT window.S */window.gxOnlineEarn=()=>!ONLX();
+function addGems(n,quiet,force){if(!n)return;if(n>0&&ONLX()&&!force)return;M.gems+=n;SV();const b=$$('gemn');if(b){b.textContent=fmt(M.gems);const g=b.parentNode;g.classList.remove('pop');void g.offsetWidth;g.classList.add('pop')}if(!quiet)fly('+'+n+' '+GI,'gemb','#d6a3ff');sfx('gem');if($$('tre')&&$$('tre').style.display=='flex')treR()}
+window.gemAch=i=>{if(ONLX()&&i<2)return' — no gems or chests on online islands (only Gold achievements give them)';const g=GEMA[i];if(g)addGems(g,true,1);const t=wpick([[93,7],[62,35,3],[0,70,27,2.7,.3]][i]);chestAdd(t,1,1);return` — ${g?'+'+g+' gems · ':''}${TR[t].n}`};
+window.gemTxt=i=>i==null?'Silver +1 gem · Gold +3 gems · random chest'+(ONLX()?' (online islands: Gold only)':''):`${GEMA[i]?'+'+GEMA[i]+' gems · ':''}random chest`;
 function wpick(w){let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<w.length;i++){if((r-=w[i])<0)return i}return 0}
-function chestAdd(t,n){M.chests[t]=(M.chests[t]|0)+n;SV();if(n>0&&!chestAdd.quiet)try{window.chestGot&&window.chestGot(t,n)}catch(e){}}
+function chestAdd(t,n,force){if(n>0&&ONLX()&&!force)return;M.chests[t]=(M.chests[t]|0)+n;SV();if(n>0&&!chestAdd.quiet)try{window.chestGot&&window.chestGot(t,n)}catch(e){}}
 /* ---------- loot ---------- */
 function roll(ti){const T=TR[ti],B=Math.max(5,S.inc||5)*600,out=[],c=cap(),lv=wpick(LW[ti]),K=PL[lv].k,sp=[[.8,1.2],[.9,1.35],[1,1.6]][lv];
  const co=Math.max(Math.round(300*(1+ti*2)*(1+lv)),Math.round(B*T.mul*K*rnd(sp[0],sp[1])));S.coins+=co;out.push({ic:'🪙',tx:fmt(co),r:ti,k:'coins',n:co});
@@ -3063,10 +3072,10 @@ function roll(ti){const T=TR[ti],B=Math.max(5,S.inc||5)*600,out=[],c=cap(),lv=wp
  ks.forEach(k=>{const a=Math.max(Math.round(FLR[k]*(1+ti*1.6)*(1+lv)*cf),Math.round(c*Math.min(1,T.rf*(1+.9*lv))*rnd(.8,1.1)));S.res[k]=(S.res[k]||0)+a;out.push({ic:ICON[k],tx:fmt(a),r:ti,k,n:a})});
  {const d=Math.round(ri(T.ds[0],T.ds[1])*K)+(lv?ri(lv,lv*(2+ti)):0);if(d){S.res.diamond=(S.res.diamond||0)+d;out.push({ic:'💎',tx:d,r:Math.max(ti,2),k:'diamond',n:d})}}
  T.ar.forEach(([k,a,b,p])=>{if(Math.random()<Math.min(1,p+.25*lv)){const n=Math.max(1,Math.round(ri(a,b)*K));S.army[k]=(S.army[k]||0)+n;out.push({ic:({inf:'🗡️',arc:'🏹',cav:'🐎',sie:'🏰'})[k],tx:n+' '+({inf:'infantry',arc:'archers',cav:'cavalry',sie:'siege'})[k],r:ti,k,n,u:1})}});
- if(Math.random()<T.gm[0]+.3*lv){const g=Math.max(1,Math.round(ri(Math.max(1,T.gm[1]),Math.max(3,T.gm[2]))*(lv?K*.8:1)));addGems(g,true);out.push({ic:GI,tx:g+' gems',r:Math.max(ti,3),big:1,k:'gems',n:g})}
+ if(Math.random()<T.gm[0]+.3*lv){const g=Math.max(1,Math.round(ri(Math.max(1,T.gm[1]),Math.max(3,T.gm[2]))*(lv?K*.8:1)));addGems(g,true,1);out.push({ic:GI,tx:g+' gems',r:Math.max(ti,3),big:1,k:'gems',n:g})}
  if(Math.random()<T.co[0]+.18*lv){const mx=Math.min(3,Math.floor(T.co[1])+(lv==2?1:0)),lo=Math.max(0,mx-1),pool=CAT.filter(x=>!own(x.id)&&x.r<=mx&&x.r>=lo);
   if(pool.length){const x=pool[ri(0,pool.length-1)];M.cos.own[x.id]=1;SV();out.push({ic:x.t=='rc'?`<i class="pf" style="--rc:${x.v}">&nbsp;</i>`:x.t=='pf'?x.v:x.t=='au'?'✨':x.v,tx:x.n+' · '+CRN[x.r],r:x.r+2,big:1})}
-  else{const g=ri(3,8)*(1+lv);addGems(g,true);out.push({ic:GI,tx:g+' gems',r:3,k:'gems',n:g})}}
+  else{const g=ri(3,8)*(1+lv);addGems(g,true,1);out.push({ic:GI,tx:g+' gems',r:3,k:'gems',n:g})}}
  out.lv=lv;out.ti=ti;S.army=S.army;if(!roll.quiet){hud();save()}return out}
 /* ---------- chest drawing ---------- */
 function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
@@ -3139,14 +3148,14 @@ const _mc=misClaim;misClaim=function(id,side){const b=S.st.missions||0;_mc(id,si
 /* ---------- gem quests ---------- */
 const GQ=[['Land Baron','Gain 1,500 tiles in total','gained',1500,15,0],['Master Builder','Construct 1,200 buildings','built',1200,20,1],['Grand Merchant','Make 1,500 trades','trades',1500,25,0],['Warlord','Win 400 battles','won',400,40,2],['Iron Wall','Repel 300 attacks','repelled',300,40,0],['Army of Legends','Train 3,000 units','trained',3000,50,2],['Quest Master','Complete 250 missions','missions',250,60,2],['Dedicated Ruler','Play on 14 different days','days',14,80,3],['Eternal Crown','Play on 40 different days','days',40,250,4]];
 const gqv=k=>k=='days'?M.days.length:S?astat(k):(META.base[k]||0);
-function gqClaim(i){const q=GQ[i];if(M.gq[i]||gqv(q[2])<q[3])return;M.gq[i]=1;if(q[5]>0||q[5]===0)chestAdd(q[5],1);addGems(q[4]);SV();sfx('ach');treR()}
+function gqClaim(i){const q=GQ[i];if(M.gq[i]||gqv(q[2])<q[3])return;if(ONLX())return toast('💠 Treasury goals are claimed on your offline island');M.gq[i]=1;if(q[5]>0||q[5]===0)chestAdd(q[5],1);addGems(q[4]);SV();sfx('ach');treR()}
 /* ---------- gems → advantages ---------- */
 const OFF=[['💰','Coin purse','6 gems',6,()=>{const c=Math.max(5,S.inc||5)*600*4;S.coins+=c;return '+'+fmt(c)+' coins'}],['📦','Material crate','10 gems',10,()=>{const c=cap();['wood','stone','silver','gold'].forEach(k=>S.res[k]=Math.min(c,(S.res[k]||0)+Math.round(c*.5)));return 'Materials +50% of storage'}],['💎','Diamond pouch','14 gems',14,()=>{S.res.diamond=(S.res.diamond||0)+6;return '+6 diamonds'}],['⚔️','War band','12 gems',12,()=>{S.army.inf+=30;S.army.arc+=15;S.army.cav+=8;return '+30 infantry, 15 archers, 8 cavalry'}]];
 function offer(i){const o=OFF[i];if(!S)return toast('Start a game first');if(M.gems<o[3])return toast('Not enough gems');M.gems-=o[3];const t=o[4]();SV();hud();save();fly(t,'gemb','#d6a3ff');treR()}
 /* ---------- shop / equip ---------- */
 function buyCos(id){const c=CID[id];if(own(id)||M.gems<CP[c.r])return toast('Not enough gems');M.gems-=CP[c.r];M.cos.own[id]=1;SV();sfx('gem');treR()}
 function equip(id){const c=CID[id];if(!own(id))return;if(eq(c.t)===c.i)delete M.cos.eq[c.t];else M.cos.eq[c.t]=c.i;SV();if(c.t=='rc')applyRc(1);treR()}
-function buyCh(t){const p=TR[t].p;if(!p||M.gems<p)return toast('Not enough gems');M.gems-=p;chestAdd(t,1);sfx('gem');SV();treR()}
+function buyCh(t){const p=TR[t].p;if(!p||M.gems<p)return toast('Not enough gems');M.gems-=p;chestAdd(t,1,1);sfx('gem');SV();treR()}
 function applyRc(force){const i=eq('rc');if(i==null){if(force&&META.col!=null){OWN[1].c=COLS[META.col||0];CHK.clear();SPR.clear()}return}const c=i==8?'#0c0c14':CID['rc'+i].v;if(OWN[1].c!=c||force){OWN[1].c=c;CHK.clear();SPR.clear()}}
 const _sc=setCol;setCol=function(i){delete M.cos.eq.rc;_sc(i)};
 Object.assign(window,{gxBuy:buyCh,gxCos:buyCos,gxEq:equip,gxGq:gqClaim,gxOff:offer,treTab:t=>{TT=t;treR()}});
@@ -3185,11 +3194,11 @@ let pc=null,pr={};setInterval(()=>{if(!S||document.hidden)return;if(pc!=null){co
 const FXM={},AUO=[],ORG={};let lastFx='';
 const rcCol=i=>i==8?'#0c0c14':CID['rc'+i]&&CID['rc'+i].v;
 function myFx(){const o={};for(const k of['pf','nf','rc','au'])if(Number.isInteger(M.cos.eq[k]))o[k]=M.cos.eq[k];return o}
-function syncFx(force){if(!(window.S&&S.on&&window.MPX&&MPX.open()))return;const j=JSON.stringify(myFx());if(!force&&j==lastFx)return;lastFx=j;MPX.send({t:'fx',fx:myFx()})}
+function syncFx(force){if(!(S&&S.on&&window.MPX&&MPX.open()))return;   /* S is a top-level let, not window.S (this never ran before 20.11) */const j=JSON.stringify(myFx());if(!force&&j==lastFx)return;lastFx=j;MPX.send({t:'fx',fx:myFx()})}
 function applyOthers(){if(!window.ONL||!S||!S.on)return;let ch=0;AUO.length=0;for(const sl in FXM){const s=+sl;if(s===ONL.slot)continue;const k=MPX.L(s),f=FXM[sl];if(!OWN[k])continue;const c=f&&f.rc!=null?rcCol(f.rc):null;
   if(c){if(!ORG[k])ORG[k]=OWN[k].c;if(OWN[k].c!=c){OWN[k].c=c;ch=1}}else if(ORG[k]){if(OWN[k].c!=ORG[k]){OWN[k].c=ORG[k];ch=1}delete ORG[k]}
   AUO[k]=f&&f.au!=null?f.au:null}if(ch){CHK.clear();SPR.clear()}}
-const _sr=window.srvRoom;window.srvRoom=function(m){_sr&&_sr(m);try{(m.pl||[]).forEach(p=>{FXM[p.s]=p.fx||null});applyOthers();const me=(m.pl||[]).find(p=>p.s===m.slot),j=JSON.stringify(myFx());if(me&&JSON.stringify(me.fx||{})!==j&&j!='{}'||me&&!me.fx&&j!='{}'){lastFx='';syncFx(1)}}catch(e){}};
+const _sr=window.srvRoom;window.srvRoom=function(m){_sr&&_sr(m);try{(m.pl||[]).forEach(p=>{FXM[p.s]=p.fx||null});applyOthers();const me=(m.pl||[]).find(p=>p.s===m.slot),j=JSON.stringify(myFx());if(me&&JSON.stringify(me.fx||{})!==j){lastFx='';syncFx(1)}}catch(e){}};
 /* aura is painted by the map renderer BEFORE the building sprites (window.AUH hook), so it glows on the ground and
    behind the building instead of covering it. Glows are cached sprites: a few drawImage calls per building, no gradients per frame. */
 const AUS=new Map();
@@ -3220,8 +3229,8 @@ if(window.MPX){const _s=MPX.send;MPX.send=function(o){if(o&&o.t=='chat'){const f
 const _cl=chatLine;chatLine=function(m){let s=_cl(m),f=m.fx;if(m.s===(window.ONL&&ONL.slot)&&window.gxFx){const q=gxFx();f=Object.assign({},f,q)}if(!f)return s;const ok=(k,n)=>Number.isInteger(f[k])&&f[k]>=0&&f[k]<n;if(ok('mf',9))s=s.replace('<div style="align-self','<div class="mfx'+f.mf+'" style="align-self');if(ok('nf',9))s=s.replace('<b style="color:','<b class="nfx nfx'+f.nf+'" style="color:');if(ok('pf',13))s=s.replace('<div style="font-size:12px">','<div style="font-size:12px">'+pfHTML(f.pf));return s};
 addEventListener('keydown',e=>{if(e.key=='Escape'&&O)gxClose()});
 window.gxDevHtml=function(){const e=t=>M.cos.eq[t],B=(l,f,on)=>`<button class="${on?'on':''}" onclick="${f}">${l}</button>`;return`<h4>${GI} Gems · ${fmt(M.gems)}</h4><div class="g g4">${[10,100,1000,10000].map(n=>B('+'+n,`gxDev('g',${n})`)).join('')}</div><div class="g">${B('Reset gems',"gxDev('g',0)")}</div><h4>Chests (x = owned)</h4><div class="g">${TR.map((t,i)=>B('+1 '+t.n.replace(' Chest','')+' ('+(M.chests[i]|0)+')',`gxDev('c',${i})`)).join('')}${B('+1 of each',"gxDev('c',-1)")}${B('+10 Wooden',"gxDev('c',-2)")}</div><h4>Black developer effects</h4><div class="g">${B('Nickname',"gxDev('e','nf')",e('nf')==8)}${B('Picture',"gxDev('e','pf')",e('pf')==12)}${B('Island',"gxDev('e','au')",e('au')==5)}${B('Chat bubble',"gxDev('e','mf')",e('mf')==8)}${B('All on',"gxDev('e','all')")}${B('All off',"gxDev('e','off')")}</div>`};
-window.gxDev=function(k,v){if(!isDev())return;const E=M.cos.eq;if(k=='g'){if(v==0){M.gems=0;SV()}else addGems(v,true)}
- else if(k=='c'){if(v==-1)TR.forEach((t,i)=>chestAdd(i,1));else if(v==-2)chestAdd(0,10);else chestAdd(v,1)}
+window.gxDev=function(k,v){if(!isDev())return;const E=M.cos.eq;if(k=='g'){if(v==0){M.gems=0;SV()}else addGems(v,true,1)}
+ else if(k=='c'){if(v==-1)TR.forEach((t,i)=>chestAdd(i,1,1));else if(v==-2)chestAdd(0,10,1);else chestAdd(v,1,1)}
  else{const on=(t,i)=>E[t]==i,set=(t,i)=>{E[t]=i},del=t=>{delete E[t]};
   if(v=='nf')on('nf',8)?del('nf'):set('nf',8);else if(v=='pf')on('pf',12)?del('pf'):set('pf',12);else if(v=='mf')on('mf',8)?del('mf'):set('mf',8);else if(v=='rc')on('rc',8)?del('rc'):set('rc',8);else if(v=='au'){if(on('au',5)){del('au');del('rc')}else{set('au',5);set('rc',8)}}
   else if(v=='all'){set('nf',8);set('pf',12);set('mf',8);set('au',5);set('rc',8)}else{del('nf');del('pf');del('mf');del('au');del('rc')}SV();applyRc(1)}
@@ -3237,6 +3246,19 @@ const _hudT=hud;hud=function(){_hudT();const h=$$('hud');if(!h||!S)return;
  const fx=h.querySelector('.fxr');if(fx){const d=document.createElement('span');d.className='gx-dif';d.textContent='🎚️ '+DF().n;fx.insertBefore(d,fx.firstChild);
   fx.querySelectorAll('span').forEach(sp=>{const t=sp.textContent;if(t.startsWith('⚔️'))sp.onclick=()=>openSheet('army');else if(t.startsWith('🎓'))sp.onclick=()=>openDev();else if(!sp.classList.contains('gx-dif'))sp.onclick=()=>openSheet('chron')})}};
 window.gxSrc=srcGo;
+/* update 20.11: one-time reset. Nothing recorded where a gem, chest or cosmetic came from, so every device of an account that
+   has played an online island (the server marks those accounts: auth reply w11) starts its treasury again: gems, unopened
+   chests, profile pictures, nickname/message effects, realm colours, auras and season emblems. From now on all of them are
+   earned on the offline island only. A device that was never logged in cannot have played online and is left untouched. */
+try{if(!META.w11&&!localStorage.getItem('cl-key')){META.w11=1;saveMeta()}}catch(e){}
+window.w11Auth=function(m){if(!m||!m.ok||META.w11||m.w11==null)return;   /* w11==null: a server without this update, ask again later */
+ META.w11=1;if(!m.w11){saveMeta();return}
+ const had=M.gems+Object.values(M.chests).reduce((a,b)=>a+(b>0?b:0),0)+Object.keys(M.cos.own).length;
+ M.gems=0;M.chests={};const keep=M.cos.eq.pf===12&&isDev();M.cos.own={};M.cos.eq=keep?{pf:12}:{};if(META.x7&&META.x7.emb)META.x7.emb={};SV();
+ const b=$$('gemn');if(b)b.textContent='0';try{hud()}catch(e){}if($$('tre')&&$$('tre').style.display=='flex')treR();
+ if(had)setTimeout(()=>{try{toast('💠 Treasury reset: gems, chests and styles are now earned on your offline island only — online islands no longer give them.')}catch(e){}},1500)};
+/* the online island's own copies of season banners, emblems and season titles go as well (offline saves keep theirs) */
+setInterval(()=>{try{if(!(S&&S.on)||S.w11c)return;const x=S.x7;if(x){x.dec={};x.emb={};if(x.ti)for(const k in x.ti)if(k.indexOf('s_')===0){if(S.title===x.ti[k].n)S.title='';if(x.shown===k)x.shown='';delete x.ti[k]}}S.w11c=1}catch(e){}},3000);
 window.__gx={M,TR,CAT,PL,RCOL,roll:(ti,q)=>{roll.quiet=!!q;try{return roll(ti)}finally{roll.quiet=false}},addGems,GQ,chestAdd,chestURL:ti=>chestURL(ti),drawChest:(...a)=>drawChest(...a),wpick:w=>wpick(w),LW};
 setTimeout(()=>{try{hud()}catch(e){}},50);
 })();
@@ -4043,9 +4065,9 @@ const unread=()=>{const x=S&&S.x7;return x?x.notif.filter(n=>!n.r).length:0};
 function mkRw(sc,rf,o){o=o||{};const cp=CP(),r={};const f=Math.min(.3,rf||0);
  if(f>0){r.wood=Math.round(cp*f);r.stone=Math.round(cp*f);if(o.m){r.silver=Math.round(cp*f*.5);r.gold=Math.round(cp*f*.28)}if(o.d)r.diamond=Math.max(1,Math.round(cp*f*.06))}
  const k=rwK();for(const q in r)r[q]=Math.max(1,Math.round(r[q]*k));
- return{c:sc?Math.round(secs(sc)*k):0,res:r,g:o.g||0,sp:o.sp||0}}
+ return{c:sc?Math.round(secs(sc)*k):0,res:r,g:S&&S.on?0:(o.g||0),sp:o.sp||0}}   /* update 20.11: no gems on online islands */
 function grant(rw){if(!rw)return;S.coins+=rw.c||0;for(const k of RES)if(rw.res&&rw.res[k])S.res[k]=Math.max(S.res[k],Math.min(CP(),S.res[k]+rw.res[k]));
- if(rw.g){META.gems=(META.gems|0)+rw.g;try{saveMeta()}catch(e){}const b=document.getElementById('gemn');if(b)b.textContent=fm(META.gems)}
+ if(rw.g&&!S.on){META.gems=(META.gems|0)+rw.g;try{saveMeta()}catch(e){}const b=document.getElementById('gemn');if(b)b.textContent=fm(META.gems)}
  if(rw.score)S.score=(S.score||0)+rw.score}
 const afford=c=>{if(!c)return true;if((c.coins||0)>S.coins)return false;for(const k of RES)if((c[k]||0)>S.res[k])return false;return true};
 const spend=c=>{if(!c)return;S.coins-=c.coins||0;for(const k of RES)S.res[k]-=c[k]||0};
@@ -4125,7 +4147,7 @@ function trackReward(t,th){const tier=X().sn?X().sn.tier:0;
  if(t.k=='rare')return Object.assign(mkRw(700,.1,{m:1}),{cos:'emblem'});
  if(t.k=='final')return Object.assign(mkRw(1500,.16,{m:1,d:tier>1,g:t.g}),{cos:'final',ti:th.ti});
  return Object.assign(mkRw(500,.07,{m:1,g:t.g}),{pr:1})}
-const rwText=(t,th)=>{const r=trackReward(t,th);return rstr(r.c,r.res,r.g)+(r.cos=='banner'?' · 🚩 Season banner':r.cos=='emblem'?` · 🏅 ${th.em}`:r.cos=='final'?` · 🏷️ ${th.ti} · 🎖️ Season pennant`:'')+(r.pr?' · ⭐ Prestige point':'')};
+const rwText=(t,th)=>{const r=trackReward(t,th);return rstr(r.c,r.res,r.g)+(S.on?'':r.cos=='banner'?' · 🚩 Season banner':r.cos=='emblem'?` · 🏅 ${th.em}`:r.cos=='final'?` · 🏷️ ${th.ti} · 🎖️ Season pennant`:'')+(r.pr?' · ⭐ Prestige point':'')};
 let PEND={};
 function claimMs(sid,mid){const x=X(),cur=C0.seasonFor(nowMs());let sn=x.sn&&x.sn.id==sid?x.sn:null,arch=null;if(!sn)arch=x.sh.find(h=>h.id==sid);
  const t=C0.TRACK.find(q=>q.id==mid);if(!t)return;const th=C0.seasonAt(sn?sn.idx:arch?arch.idx:cur.idx);
@@ -4137,9 +4159,10 @@ function finishMs(sid,mid,dup){const x=X(),sn=x.sn&&x.sn.id==sid?x.sn:null,arch=
  const th=C0.seasonAt(sn?sn.idx:arch?arch.idx:0);if(sn){if(sn.cl[mid])return;sn.cl[mid]=1}else if(arch){if(arch.cl.includes(mid))return;arch.cl.push(mid)}else return;
  if(dup){note('ℹ️','That season reward was already claimed on this account.',{quiet:1});return}
  const r=trackReward(t,th);grant(r);
- if(r.cos=='banner'){x.dec[sid+'b']=1}
- if(r.cos=='emblem'){x.emb[sid]=1;META7().emb[sid]=1}
- if(r.cos=='final'){x.emb[sid]=1;META7().emb[sid]=1;x.dec[sid+'p']=1;giveTitle('s_'+th.k,th.ti,true);grantPr(2,'season')}
+ /* update 20.11: season banners, emblems, pennants and titles are offline-only cosmetics */
+ if(r.cos=='banner'&&!S.on){x.dec[sid+'b']=1}
+ if(r.cos=='emblem'&&!S.on){x.emb[sid]=1;META7().emb[sid]=1}
+ if(r.cos=='final'){if(!S.on){x.emb[sid]=1;META7().emb[sid]=1;x.dec[sid+'p']=1;giveTitle('s_'+th.k,th.ti,true)}grantPr(2,'season')}
  if(r.pr)grantPr(1,'bonus');
  note('🎁',`Claimed: ${trackName(t)} — ${rstr(r.c,r.res,r.g)}`,{k:'claim',big:1});try{save()}catch(e){}}
 
@@ -4339,7 +4362,7 @@ const EV7=[
    {t:'Leave it alone',d:'Nothing happens'}]},
  {id:'treasure',cat:'exp',ic:'🗺️',n:'Lost treasure',w:1.6,len:'short',cd:7200,ok:()=>V.tiles>8,
   txt:'An old map found in a merchant’s chest marks a hidden hoard.',
-  opts:E=>[{t:'Dig it up',d:`Pay ${costStr({coins:cc(E,150)})}: 70% treasure (rarely a gem), 30% nothing`,cost:{coins:cc(E,150)},run:()=>{if(roll()<.7){S.coins+=cc(E,700);if(roll()<.1){META.gems=(META.gems|0)+2;return'Treasure, and two gems among it.'}return'You found the hoard.'}return'The spot was empty.'}},
+  opts:E=>[{t:'Dig it up',d:`Pay ${costStr({coins:cc(E,150)})}: 70% treasure (rarely a gem), 30% nothing`,cost:{coins:cc(E,150)},run:()=>{if(roll()<.7){S.coins+=cc(E,700);if(roll()<.1&&!S.on){META.gems=(META.gems|0)+2;return'Treasure, and two gems among it.'}return'You found the hoard.'}return'The spot was empty.'}},
    {t:'Sell the map',d:'Free: receive a modest sum',run:()=>{S.coins+=cc(E,150)}}]},
  {id:'caravan2',cat:'exp',ic:'🎪',n:'A mysterious caravan',w:1.4,len:'short',cd:7200,ok:()=>V.cities>0,
   txt:'A veiled caravan from far away offers sealed crates and strange knowledge.',
@@ -4923,7 +4946,7 @@ function goalData(){const g=V6(),rd=[],act=[],done=[];if(!g)return{rd,act,done};
  for(const m of g.MST){const l=g.mstLv(m.k),fin=g.mstDone(m),v=m.v(),gg=fin?v:m.g(l),it={t:'mst',m,l,v,g:gg};if(fin)done.push(it);else if(g.mstReady(m))rd.push(it);else act.push(it)}
  act.sort((a,b)=>b.v/Math.max(1,b.g)-a.v/Math.max(1,a.g));return{rd,act,done}}
 const mstChest=l=>l<3?0:l<8?1:2;   /* rebalance: from level 12 a milestone has a 4% chance to upgrade to a Golden Chest */
-function chestGive(t){const g=GX();if(!g)return;g.chestAdd(t,1);if(!window.chestGot)setTimeout(()=>toast('📦 '+g.TR[t].n+' added — open it in the Treasury (Menu)'),900)}
+function chestGive(t){const g=GX();if(!g||(S&&S.on))return;g.chestAdd(t,1);if(!window.chestGot)setTimeout(()=>toast('📦 '+g.TR[t].n+' added — open it in the Treasury (Menu)'),900)}
 const chestName=t=>{const g=GX();return g?g.TR[t].n:'Chest'};
 {const _ms=window.mstClaim;window.mstClaim=function(k){const g=V6(),l0=g.mstLv(k);_ms(k);if(g.mstLv(k)>l0){chestGive(l0>=12&&Math.random()<.04?3:mstChest(l0));try{X7.pts(4,'ms')}catch(e){}}qRender(false);qBadges(true)};
  const _so=window.sobClaim;window.sobClaim=function(id){const had=!!(S.sob&&S.sob[id]);_so(id);if(!had&&S.sob&&S.sob[id]){chestGive(Math.random()<.1?3:2);try{X7.pts(6,'ms')}catch(e){}}qRender(false);qBadges(true)}}
@@ -4980,7 +5003,7 @@ function giftRw(day){const i=(day-1)%7,wk=Math.floor((day-1)/7),k=1+.35*Math.min
  if(i===6&&wk>=1)o.ch=2;if(i===6&&wk>=3)o.ch=3;if(i===4&&wk>=2)o.ch=1;return o}
 /* the daily pop-up (end of the file) reads the streak through this */
 window.qDailyInfo=()=>{const d=dq();return{d,today:today(),yest:yesterday(),next:streakNext(d),got:d.gift===today(),rw:giftRw,txt:rwTxt,chips:rwChips,ic:i=>GIFT[(i-1)%7].ic,left:hms(toMidnight())}};
-const rwTxt=o=>[o.c?`🪙${fm(o.c)}`:'',...Object.keys(o.res||{}).filter(k=>o.res[k]>0).map(k=>`${ICON[k]}${fm(o.res[k])}`),o.ch!=null?`📦 ${chestName(o.ch)}`:'',o.gm?`${GI}${o.gm}`:''].filter(Boolean);
+const rwTxt=o=>[o.c?`🪙${fm(o.c)}`:'',...Object.keys(o.res||{}).filter(k=>o.res[k]>0).map(k=>`${ICON[k]}${fm(o.res[k])}`),o.ch!=null&&!S.on?`📦 ${chestName(o.ch)}`:'',o.gm&&!S.on?`${GI}${o.gm}`:''].filter(Boolean);
 const rwChips=o=>`<div class="q-rw">${rwTxt(o).map(t=>`<span class="${t.startsWith('📦')?'ch':''}">${t}</span>`).join('')}</div>`;
 function grantQ(o){S.coins+=o.c||0;for(const k of RES)if(o.res&&o.res[k])S.res[k]=(S.res[k]||0)+o.res[k];
  if(o.ch!=null)chestGive(o.ch);if(o.gm){const g=GX();if(g)g.addGems(o.gm,true)}}
@@ -5051,14 +5074,14 @@ function vTasks(){const T=taskData();let h='';
  h+=T.act.length?T.act.map(m=>card({ic:CI[m.cat],t:m.name,step:stepOf(m),em:m.cat,d:m.desc,v:V[m.key]||0,g:m.goal,lab:m.lab,rw:rwOf(m.rw),btn:goB(m.hl==='home'?'':m.hl)})).join(''):`<p class="mu" style="padding:6px 12px">${T.ready.length?'Claim the rewards above to unlock the next steps.':'Every task is finished — Quests, Goals and Wonders carry on from here.'}</p>`;
  return h+doneBox('task',T.done.length,T.done.map(m=>`<div class="q-li">${CI[m.cat]} ${m.name}<small>${m.cat}</small></div>`).join(''))}
 function vQuests(){let h='';const ready=[],rest=[];
- (S.side||[]).forEach((q,i)=>{const v=qProg(q),rd=v>=q.g;const c=card({ic:'🎲',t:q.n,em:rd?'Ready!':'Quest',v,g:q.g,ready:rd,d:'Progress counts from when the quest appeared.',rw:rwOf(q.rw).replace('</div>','<span class="ch">📦 30% chest chance</span></div>'),btn:rd?claimB(`qQuest(${i})`):(goB(SIDEHL[q.k])+`<button class="q-sm" onclick="qSwap(${i})">🔄 Swap</button>`)});(rd?ready:rest).push(c)});
+ (S.side||[]).forEach((q,i)=>{const v=qProg(q),rd=v>=q.g;const c=card({ic:'🎲',t:q.n,em:rd?'Ready!':'Quest',v,g:q.g,ready:rd,d:'Progress counts from when the quest appeared.',rw:rwOf(q.rw).replace('</div>',S.on?'</div>':'<span class="ch">📦 30% chest chance</span></div>'),btn:rd?claimB(`qQuest(${i})`):(goB(SIDEHL[q.k])+`<button class="q-sm" onclick="qSwap(${i})">🔄 Swap</button>`)});(rd?ready:rest).push(c)});
  if(ready.length)h+=`<div class="q-sec hot">Ready to claim</div>`+ready.join('');
  h+=`<div class="q-sec">Active quests · ${(S.side||[]).length}/3</div>`+rest.join('');
  if((S.side||[]).length<3){const w=Math.max(0,(S.sideAt||0)-S.time);h+=`<p class="mu" style="padding:6px 12px">${w>0?`A new quest arrives in ${mmss(w)}.`:'A new quest arrives in a moment.'}</p>`}
  return h+`<p class="mu" style="padding:2px 12px 8px">Quests never run out and grow with your kingdom. You can swap one every 5 minutes.</p>`}
 function vGoals(){const G=goalData(),g=V6();if(!g)return'<p class="mu" style="padding:12px">Loading…</p>';let h='';
- const one=(it,rd)=>{if(it.t==='sob'){const o=it.o;return card({ic:o.ic,t:o.n,em:rd?'Ready!':'Objective',d:o.d,v:it.v,g:it.g,ready:rd,rw:rwOf(g.sobRw(o),1).replace('</div>',`<span class="ch">📦 ${chestName(2)} · 10% ${chestName(3)}</span></div>`),btn:rd?claimB(`sobClaim('${o.id}')`):''})}
-  const m=it.m,rom=['I','II','III','IV','V','VI','VII','VIII','IX','X'][it.l]||String(it.l+1);return card({ic:m.ic,t:m.n+' '+rom,em:rd?'Ready!':'Milestone',v:it.v,g:it.g,lab:m.lab,ready:rd,rw:rwOf(g.mstRw(m),1).replace('</div>',`<span class="ch">📦 ${chestName(mstChest(it.l))}</span></div>`),btn:rd?claimB(`mstClaim('${m.k}')`):''})};
+ const one=(it,rd)=>{if(it.t==='sob'){const o=it.o;return card({ic:o.ic,t:o.n,em:rd?'Ready!':'Objective',d:o.d,v:it.v,g:it.g,ready:rd,rw:rwOf(g.sobRw(o),1).replace('</div>',S.on?'</div>':`<span class="ch">📦 ${chestName(2)} · 10% ${chestName(3)}</span></div>`),btn:rd?claimB(`sobClaim('${o.id}')`):''})}
+  const m=it.m,rom=['I','II','III','IV','V','VI','VII','VIII','IX','X'][it.l]||String(it.l+1);return card({ic:m.ic,t:m.n+' '+rom,em:rd?'Ready!':'Milestone',v:it.v,g:it.g,lab:m.lab,ready:rd,rw:rwOf(g.mstRw(m),1).replace('</div>',S.on?'</div>':`<span class="ch">📦 ${chestName(mstChest(it.l))}</span></div>`),btn:rd?claimB(`mstClaim('${m.k}')`):''})};
  if(G.rd.length)h+=`<div class="q-sec hot">Ready to claim</div>`+G.rd.map(it=>one(it,1)).join('');
  const sob=G.act.filter(i=>i.t==='sob'),mst=G.act.filter(i=>i.t==='mst');
  if(mst.length)h+=`<div class="q-sec">Milestones · endless, rewards grow with your realm</div>`+mst.map(it=>one(it,0)).join('');
@@ -5079,7 +5102,7 @@ function qRender(reset){const el=$q('mis');if(!el||!misOpen||!S)return;const c=c
  const tabs=TABS.map(([k,i,n])=>{const b=c[k]||0;return`<button class="${qTab===k?'on':''}${b?' q-hot':''}" onclick="setTab('${k}')"><span class="qi">${i}</span>${n}${b?`<i>${b}</i>`:''}</button>`}).join('');
  const t=TIER[qTab],pips=t[0]?`<span class="q-pips">${[1,2,3,4].map(i=>`<i class="${i<=t[0]?'on':''}"></i>`).join('')}</span>`:'<span>📅</span>';
  const body={daily:vDaily,task:vTasks,quest:vQuests,goal:vGoals,won:vWonders}[qTab]();
- const h=`<div class="mh q-head"><b>🎯 Missions</b><span class="mu">⭐${fm(S.score)}${S.title?' · 🏷️'+S.title:''}</span><button onclick="closeMis()" style="margin-left:auto;text-align:center" aria-label="Close">✕</button></div><div class="tabs q-tabs">${tabs}</div><div class="q-tier">${pips}<span>${t[1]}</span></div><div id="mlist">${body}</div>`;
+ const h=`<div class="mh q-head"><b>🎯 Missions</b><span class="mu">⭐${fm(S.score)}${S.title?' · 🏷️'+S.title:''}</span><button onclick="closeMis()" style="margin-left:auto;text-align:center" aria-label="Close">✕</button></div><div class="tabs q-tabs">${tabs}</div><div class="q-tier">${pips}<span>${t[1]}</span></div>${S.on?'<div class="q-tier" style="color:#ffcf80"><span>🏝️</span><span>Online island: missions give coins and materials only. 📦 Chests and 💠 gems are earned on your offline island.</span></div>':''}<div id="mlist">${body}</div>`;
  if(reset||!$q('mlist')){el.innerHTML=h;lastMis=h;const n=$q('mlist');if(n)n.scrollTop=0}else if(h!==lastMis){lastMis=h;morph(el,h)}}
 renderMis=function(){qRender(false)};
 setTab=function(t){qTab=TMAP[t]||t;if(!TIER[qTab])qTab='task';qRender(true)};
@@ -5529,7 +5552,7 @@ const _sm7=window.srvMsg;window.srvMsg=function(m){
 function agift(g){S.agIds=Array.isArray(S.agIds)?S.agIds:[];if(!S.agIds.includes(g.id)){S.agIds.push(g.id);if(S.agIds.length>80)S.agIds.splice(0,S.agIds.length-60);
   const set=g.mode=='set',ad=(o,k,v)=>{if(v==null)return;o[k]=Math.max(0,set?v:(o[k]||0)+v)},got=[];
   if(g.c!=null){ad(S,'coins',g.c);got.push('🪙'+fm(g.c))}for(const k in g.res||{}){ad(S.res,k,g.res[k]);got.push(ICON[k]+fm(g.res[k]))}for(const k in g.army||{}){ad(S.army,k,g.army[k]);got.push(fm(g.army[k])+' '+k)}
-  try{const gx=window.__gx;if(gx){if(g.gm){if(set)gx.M.gems=Math.max(0,g.gm);else if(g.gm>0)gx.addGems(g.gm,true);else gx.M.gems=Math.max(0,gx.M.gems+g.gm);got.push(g.gm+' gems')}if(g.ch){gx.chestAdd(g.ch[0],g.ch[1]);got.push(g.ch[1]+'× '+gx.TR[g.ch[0]].n)}}}catch(e){}
+  try{const gx=window.__gx;if(gx){if(g.gm){if(set)gx.M.gems=Math.max(0,g.gm);else if(g.gm>0)gx.addGems(g.gm,true,1);else gx.M.gems=Math.max(0,gx.M.gems+g.gm);got.push(g.gm+' gems')}if(g.ch){gx.chestAdd(g.ch[0],g.ch[1],1);got.push(g.ch[1]+'× '+gx.TR[g.ch[0]].n)}}}catch(e){}
   hud();last='';render();try{MPX.upSave()}catch(e){}try{chron('🛠️','An admin ('+g.from+') '+(set?'set':'sent')+': '+got.join(' '))}catch(e){}toast('🛠️ Admin '+(set?'set':'gift')+': '+got.join(' '))}
  MPX.send({t:'agok',id:g.id})}
 })();
