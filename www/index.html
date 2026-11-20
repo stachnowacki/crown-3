@@ -1643,7 +1643,7 @@ drawPort=function(c,t,mx,my,ts,tm,x,y,oc,face,icon){tm=tm==null?1:tm;const l=lv(
 (()=>{
 window.ONL=null;
 /* >>> Set this to your server before building the phone app, e.g. 'wss://play.example.com' <<< */
-const SERVER_URL='';
+const SERVER_URL='wss://179-67-201-109.sslip.io';
 const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())||/^(capacitor|file):$/.test(location.protocol)||(location.hostname=='localhost'&&!location.port);
 const HOME=SERVER_URL||(!NATIVE&&location.protocol.startsWith('http')?location.origin.replace(/^http/,'ws'):'');
 const APP=HOME.replace(/^ws/,'http');
