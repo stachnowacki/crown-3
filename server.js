@@ -28,13 +28,18 @@ const ROOTS = [path.join(__dirname, 'www'), path.join(__dirname, 'public')];
 // (their old map sits in the middle of the bigger one: +OFFH / +OFFC on both axes), so no realm is lost.
 const HN = 126, NCOL = 404, OFFH = 35, OFFC = 138, HT = HN * HN, MAXP = 7, NT = HT + NCOL * NCOL, DAY = 864e5, UNITS = ['inf', 'arc', 'cav', 'sie'];
 const PROTO = 2;   // clients older than this use the old tile layout and must reload
-// Conquest shield: after a realm loses land to another player, nobody may conquer from it for a while.
-// Longer when the victim is offline (they cannot defend) and x3 when a city or stronghold fell.
-const SHIELD_ONLINE = 8 * 60e3, SHIELD_OFFLINE = 25 * 60e3, SHIELD_BIG = 3;
+// Resistance (update att, replaces the old conquest shield, so claims stay dynamic): every tile a realm loses to another
+// player raises that realm's resistance (x3 for a city, stronghold or port, x1.5 while its ruler is offline); it halves every
+// 2 hours. Clients turn it into stronger defenders (up to x3.5, x1.5 more while the ruler is away), so grinding one realm down
+// gets harder with every tile. An offline ruler's last city cannot be conquered at all (the 'last bastion').
+const WR_HALF = 2 * 36e5, WR_BIG = 3, WR_AWAY = 1.5;
+// Building elixirs (update att): one active elixir per building, at most 2 hours; kept per island in r.bx {index: [slot, id, until]}.
+const BXIDS = new Set(['plenty', 'brew', 'stone', 'bastion', 'harvest', 'alch', 'drag']), BX_MAX = 2 * 36e5;
+const bxLive = r => { const n = Date.now(), o = {}; for (const k in r.bx || {}) { const v = r.bx[k]; if (Array.isArray(v) && v[2] > n) o[k] = v; } return o; };
 const START = [null, [28, 43], [12, 15], [44, 15], [45, 33], [12, 34]].map(p => p && [p[0] + OFFH, p[1] + OFFH]);   // must match the client's start positions (slots 1-5)
 // Slots 6-7, and anyone who joins after the start, have no fixed start: their game picks a spot on the real terrain
 // (free land first, then claimed land with the fewest buildings) and sends it as a 'spawn' message; it is kept as p.sp.
-const SCHEMA = 5, SCORE_MAX = 1e15;   // v4: the kingdom index has no ceiling any more; v5: accounts that played online are marked (w11)
+const SCHEMA = 6, SCORE_MAX = 1e15;   // v4: the kingdom index has no ceiling any more; v5: accounts that played online are marked (w11); v6: islands keep resistance (wr) and building elixirs (bx), shields are gone
 /*@@CORE7@@*/
 /* ===== CORE7: shared by the server and the game. Pure functions, no DOM, no Node APIs.
    The server runs this to decide the world; the offline game runs the same code locally. ===== */
@@ -184,6 +189,9 @@ function migrateRooms(list) {
   for (const r of list) {
     if (!r || typeof r !== 'object') continue;
     if (!('shield' in r) || typeof r.shield !== 'object' || r.shield === null) r.shield = {};
+    if ((r.v || 1) < 6) r.shield = {};                // v6: conquest shields are replaced by resistance
+    if (!r.wr || typeof r.wr !== 'object' || Array.isArray(r.wr)) r.wr = {};
+    if (!r.bx || typeof r.bx !== 'object' || Array.isArray(r.bx)) r.bx = {};
     if (!Array.isArray(r.chat)) r.chat = [];
     if (!Array.isArray(r.pl)) r.pl = [];
     for (const p of r.pl) { if (!p || typeof p !== 'object') continue;
@@ -302,7 +310,7 @@ function seed(r) { // every player's starting land belongs to them from the star
     for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) if (x * x + y * y <= 9) {
       const i = (sy + y) * HN + sx + x; if (!r.tiles.has(i)) r.tiles.set(i, [p.s, x === 0 && y === 0 ? 1 : 0, 1, 0]); } }
 }
-const liveRoom = r => ({ ...r, v: r.v || SCHEMA, shield: r.shield || {}, tiles: new Map(r.tiles), pl: r.pl.map(p => ({ ...p, ws: null, mids: Array.isArray(p.mids) ? p.mids : [], tal: p.tal && 'inf' in p.tal ? { h: p.tal } : p.tal })) });
+const liveRoom = r => ({ ...r, v: r.v || SCHEMA, shield: r.shield || {}, wr: r.wr || {}, bx: r.bx || {}, tiles: new Map(r.tiles), pl: r.pl.map(p => ({ ...p, ws: null, mids: Array.isArray(p.mids) ? p.mids : [], tal: p.tal && 'inf' in p.tal ? { h: p.tal } : p.tal })) });
 function loadRooms(list) { rooms.clear(); for (const r of migrateRooms(list)) { const room = liveRoom(r); if (room.started) seed(room); rooms.set(r.code, room); } }
 try { loadRooms(JSON.parse(fs.readFileSync(RF, 'utf8'))); log('info', `loaded ${rooms.size} islands, ${Object.keys(db.users).length} accounts`); }
 catch (e) { if (e.code !== 'ENOENT') log('error', 'rooms load failed: ' + e.message); }
@@ -310,7 +318,7 @@ catch (e) { if (e.code !== 'ENOENT') log('error', 'rooms load failed: ' + e.mess
 if (!db.w11r) { let n = 0; for (const r of rooms.values()) for (const p of r.pl || []) { const u = p && db.users[p.u]; if (u && !u.w11) { u.w11 = 1; n++; } }
   db.w11r = Date.now(); saveDb(); log('info', `update 20.11: ${n} more online players marked for the treasury reset`); }
 let dirty = 0;
-const snapRoom = r => ({ v: Math.max(r.v || 0, SCHEMA), mv: r.mv || 2, code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield || {},
+const snapRoom = r => ({ v: Math.max(r.v || 0, SCHEMA), mv: r.mv || 2, code: r.code, host: r.host, seed: r.seed, diff: r.diff, started: r.started, at: r.at, shield: r.shield || {}, wr: r.wr || {}, bx: bxLive(r),
     tiles: [...r.tiles], mkt: r.mkt, chat: (r.chat || []).slice(-80), cid: r.cid || 0,
     pl: r.pl.map(p => ({ s: p.s, u: p.u, last: p.last || 0, sp: p.sp || null, late: p.late ? 1 : 0, save: p.save, tal: p.tal, pend: p.pend, sc: p.sc || null, fx: p.fx, mids: (p.mids || []).slice(-300), gifts: Array.isArray(p.gifts) && p.gifts.length ? p.gifts : undefined })), terr: r.terr && Object.keys(r.terr).length ? r.terr : undefined });
 const snapshotRooms = () => [...rooms.values()].map(snapRoom);
@@ -475,7 +483,7 @@ const bad = (ws, what) => logOnce('bad:' + ws.u + what, 'warn', `invalid action 
 function roomMsg(r, p, init) {
   const o = { t: 'room', code: r.code, host: dname(r.host), isHost: r.host === p.u, slot: p.s, seed: r.seed, diff: r.diff, started: r.started,
     pl: r.pl.map(q => ({ s: q.s, n: dname(q.u), ct: ctit(q.u), on: !!q.ws, sc: q.sc ? q.sc.s : 0, sp: q.sc ? q.sc.p : null, fx: q.fx || null })) };
-  if (init && r.started) { if (!r.mkt) r.mkt = mkNew(); o.init = { mkt: mkPub(r.mkt), chat: (r.chat || []).slice(-50), shield: r.shield || {}, save: p.save || null, snap: [...r.tiles].map(([i, v]) => [i, ...v]), pend: p.pend || [],
+  if (init && r.started) { if (!r.mkt) r.mkt = mkNew(); o.init = { mkt: mkPub(r.mkt), chat: (r.chat || []).slice(-50), shield: r.shield || {}, wr: r.wr || {}, bx: bxLive(r), save: p.save || null, snap: [...r.tiles].map(([i, v]) => [i, ...v]), pend: p.pend || [],
     tal: Object.fromEntries(r.pl.filter(q => q !== p && q.tal).map(q => [q.s, q.tal])), terr: r.terr || {} }; }
   return o;
 }
@@ -657,7 +665,7 @@ function handle(ws, m) {
   switch (m.t) {
     case 'create': {
       leave(ws); const code = newCode();
-      const nr = { code, host: ws.u, seed: crypto.randomInt(1, 2 ** 31), diff: num(m.diff, 0, 4) ? m.diff : 1, started: false, at: Date.now(), shield: {}, tiles: new Map(), pl: [{ s: 1, u: ws.u, ws, last: Date.now(), mids: [] }] };
+      const nr = { code, host: ws.u, seed: crypto.randomInt(1, 2 ** 31), diff: num(m.diff, 0, 4) ? m.diff : 1, started: false, at: Date.now(), shield: {}, wr: {}, bx: {}, tiles: new Map(), pl: [{ s: 1, u: ws.u, ws, last: Date.now(), mids: [] }] };
       rooms.set(code, nr); ws.room = nr; log('info', `island created: ${code}`); persist(); return bc(nr);
     }
     case 'join': {
@@ -763,8 +771,10 @@ function handle(ws, m) {
     }
     case 'tiles': { // [index, owner(global slot), building, level, walls, conquest?]  conquest = 1 + previous building + 20 * previous owner
       if (!r || !r.started || !me || !Array.isArray(m.d)) return;
-      const ok = [], badT = [], conq = new Map(), now = Date.now(); r.shield = r.shield || {}; let blocked = 0;
+      const ok = [], badT = [], conq = new Map(), now = Date.now(); r.wr = r.wr || {}; r.bx = r.bx || {}; let bastion = 0;
       const owner = i => { const c = r.tiles.get(i); return c ? c[0] : 0; }, claims = [];
+      const away = s => { const v = r.pl.find(p => p.s === s); return !v || !v.ws; }, cityN = new Map();
+      const cities = s => { if (!cityN.has(s)) { let n = 0; for (const v of r.tiles.values()) if (v[0] === s && v[1] === 1) n++; cityN.set(s, n); } return cityN.get(s); };
       for (const e of m.d.slice(0, 400)) {
         if (!Array.isArray(e)) continue; const [i, o, b, l, w, cq] = e;
         if (!num(i, 0, NT - 1) || o !== me.s || !num(b, 0, 12) || !num(l, 0, 40) || !num(w || 0, 0, 3) || !num(cq || 0, 0, 200)) { bad(ws, 'tile values'); continue; }
@@ -773,10 +783,13 @@ function handle(ws, m) {
         if (!po && cq) { po = Math.floor((cq - 1) / 20); pb = (cq - 1) % 20; }
         if (po && po !== me.s) {                               // this is a conquest
           if (!cq) { badT.push([i, ...cur]); continue; }        // lost a race: resync the sender
-          if (po >= 1 && po <= MAXP && (r.shield[po] || 0) > now) { badT.push([i, ...(cur || [po, pb, 1, 0])]); blocked = po; continue; }
-          conq.set(po, Math.max(conq.get(po) || 0, pb === 1 || pb === 3 ? SHIELD_BIG : 1));
+          const wasCity = pb === 1 || !!(cur && cur[0] === po && cur[1] === 1);
+          if (po >= 1 && po <= MAXP && wasCity && away(po) && cities(po) - (cur && cur[0] === po && cur[1] === 1 ? 1 : 0) <= 0) {   // the last bastion
+            badT.push([i, ...(cur || [po, 1, 1, 0])]); bastion = po; continue; }
+          if (wasCity && cur && cur[0] === po && cur[1] === 1) cityN.set(po, cities(po) - 1);
+          conq.set(po, (conq.get(po) || 0) + (pb === 1 || pb === 3 || pb === 4 ? WR_BIG : 1) * (away(po) ? WR_AWAY : 1));
         } else if (!po && i < HT && !cq) { claims.push([i, o, b, l, w]); continue; }   // a neutral claim on the home island: must touch the realm
-        r.tiles.set(i, [o, b, l, w || 0]); ok.push([i, o, b, l, w || 0]);
+        r.tiles.set(i, [o, b, l, w || 0]); ok.push([i, o, b, l, w || 0]); if (r.bx[i] && r.bx[i][0] !== o) delete r.bx[i];
       }
       /* claims are accepted in chains (a tile next to one claimed in the same batch is fine) */
       let left = claims, prog = true;
@@ -784,19 +797,25 @@ function handle(ws, m) {
         for (const c of left) { if (nb(c[0], j => owner(j) === me.s)) { r.tiles.set(c[0], [c[1], c[2], c[3], c[4] || 0]); ok.push([c[0], c[1], c[2], c[3], c[4] || 0]); prog = true; } else next.push(c); }
         left = next; }
       if (left.length) { bad(ws, 'claim not touching the realm'); for (const c of left) badT.push([c[0], 0, 0, 0, 0]); }
-      for (const [po, mult] of conq) {                         // start (or extend) the victim's shield
-        const v = r.pl.find(p => p.s === po); if (!v) continue; const until = now + (v && v.ws ? SHIELD_ONLINE : SHIELD_OFFLINE) * mult;
-        if (until > (r.shield[po] || 0)) { r.shield[po] = until; r.pl.forEach(p => send(p.ws, { t: 'shield', s: po, until })); }
+      for (const [po, add] of conq) {                          // the victim's resistance grows (it halves every WR_HALF)
+        if (!r.pl.some(p => p.s === po)) continue; const w = r.wr[po], v = (Array.isArray(w) ? (+w[0] || 0) * Math.pow(.5, (now - (+w[1] || now)) / WR_HALF) : 0) + add;
+        r.wr[po] = [Math.round(Math.min(500, v) * 100) / 100, now]; r.pl.forEach(p => send(p.ws, { t: 'wr', s: po, v: r.wr[po][0], at: now }));
       }
       if (ok.length) { others(r, ws, { t: 'tiles', d: ok }); touch(r); }
       if (badT.length) send(ws, { t: 'tiles', d: badT });
-      if (blocked) send(ws, { t: 'err', m: '\u{1F6E1} That realm is shielded for ' + Math.ceil((r.shield[blocked] - now) / 6e4) + ' more min' });
+      if (bastion) send(ws, { t: 'err', m: '\u{1F3F0} The last city of a ruler who is away cannot fall until they return' });
       return;
     }
     case 'tally': if (r && r.started && me && m.u && typeof m.u === 'object') {
       const u = {}; for (const k of UNITS) u[k] = Math.max(0, Math.min(9999, Math.floor(+m.u[k]) || 0)); const rr = m.r === 'c' ? 'c' : 'h';
       me.tal = me.tal && !('inf' in me.tal) ? me.tal : {}; me.tal[rr] = u; others(r, ws, { t: 'tally', from: me.s, r: rr, u }); persist();
     } return;
+    case 'bx': { // a building elixir (update att): only on the sender's own building, one at a time, at most BX_MAX
+      if (!r || !r.started || !me || !num(m.i, 0, NT - 1) || typeof m.id !== 'string' || !BXIDS.has(m.id) || !Number.isInteger(m.u)) return bad(ws, 'bx');
+      const cur = r.tiles.get(m.i), now = Date.now(); if (!cur || cur[0] !== me.s || !cur[1] || m.u <= now || m.u > now + BX_MAX + 6e4) return bad(ws, 'bx');
+      r.bx = r.bx || {}; const old = r.bx[m.i]; if (Array.isArray(old) && old[0] === me.s && old[2] > now) return;
+      r.bx[m.i] = [me.s, m.id, m.u]; others(r, ws, { t: 'bx', i: m.i, s: me.s, id: m.id, u: m.u }); touch(r); return;
+    }
     case 'hit': case 'siege': { // relay to the target; queue it if they are offline. Each id is applied once.
       if (!r || !r.started || !me || !num(m.to, 1, MAXP) || !num(m.i, 0, NT - 1)) return bad(ws, m.t);
       if (m.mid != null) { if (seen(me, m.mid)) return send(ws, { t: 'ack', mid: m.mid }); send(ws, { t: 'ack', mid: m.mid }); }
